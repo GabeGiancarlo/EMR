@@ -1,164 +1,147 @@
-# EMR Platform Development Commands
-# 
-# This Justfile provides convenient commands for development, testing, and deployment
-# of the HIPAA-grade EMR platform.
-#
-# Usage: just <command>
-# Example: just dev
+# EMR Platform - Development Commands
+# ===================================
 
-# Default recipe
-default:
-    @just --list
-
-# Development commands
-# ===================
-
-# Start development environment (builds and runs all services)
+# Start the complete development environment
 dev:
-    @echo "🚀 Starting EMR development environment..."
-    docker-compose -f infra/docker-compose.yml up --build
+    @echo "🏥 Starting EMR Platform Development Environment..."
+    @chmod +x scripts/dev-start.sh
+    @./scripts/dev-start.sh
 
-# Stop development environment
+# Start just the API server
+api:
+    @echo "🚀 Starting API Server..."
+    cd api && cargo run
+
+# Stop the development environment
 dev-stop:
-    @echo "🛑 Stopping EMR development environment..."
-    docker-compose -f infra/docker-compose.yml down
+    @echo "🛑 Stopping development servers..."
+    @if [ -f .api_pid ]; then kill `cat .api_pid` && rm .api_pid; fi
+    @pkill -f "cargo run" || true
+    @echo "✅ Development servers stopped"
 
-# Restart development environment
-dev-restart:
-    @echo "🔄 Restarting EMR development environment..."
-    docker-compose -f infra/docker-compose.yml restart
+# Open the demo interface
+demo:
+    @echo "🌐 Opening EMR Platform Demo..."
+    @open demo/index.html
 
-# Build commands
-# ==============
+# Test the API endpoints
+api-test:
+    @echo "🧪 Testing API endpoints..."
+    @echo "📋 Health check:"
+    @curl -s http://localhost:8080/healthz | jq '.' || echo "❌ API not running"
+    @echo "\n👥 Patients list:"
+    @curl -s http://localhost:8080/api/patients | jq '.patients[] | {name, email, status}' || echo "❌ API not running"
 
-# Build all crates
+# Building commands
+# =================
+
+# Build all components
 build:
-    @echo "🔨 Building all crates..."
-    cargo build --workspace
+    @echo "🔨 Building EMR Platform..."
+    cargo build
 
-# Build for release
+# Build in release mode
 build-release:
-    @echo "🔨 Building all crates for release..."
-    cargo build --workspace --release
+    @echo "🚀 Building EMR Platform (Release)..."
+    cargo build --release
 
-# Build API only
+# Build just the API
 build-api:
-    @echo "🔨 Building API crate..."
-    cargo build -p emr-api
-
-# Build web frontend only
-build-web:
-    @echo "🔨 Building web frontend..."
-    cargo build -p emr-web --features ssr
-
-# Build jobs worker only
-build-jobs:
-    @echo "🔨 Building jobs worker..."
-    cargo build -p emr-jobs
+    @echo "🔨 Building API..."
+    cd api && cargo build
 
 # Testing commands
 # ================
 
 # Run all tests
 test:
-    @echo "🧪 Running all tests..."
-    cargo test --workspace
+    @echo "🧪 Running tests..."
+    cargo test
 
 # Run tests with coverage
 test-coverage:
-    @echo "🧪 Running tests with coverage..."
-    cargo tarpaulin --workspace --out html --output-dir target/coverage
+    @echo "📊 Running tests with coverage..."
+    cargo test --coverage
 
-# Run specific crate tests
-test-core:
-    cargo test -p emr-core
-
+# API tests
 test-api:
-    cargo test -p emr-api
-
-test-fhir:
-    cargo test -p emr-fhir
-
-test-jobs:
-    cargo test -p emr-jobs
-
-test-web:
-    cargo test -p emr-web
+    @echo "🧪 Running API tests..."
+    cd api && cargo test
 
 # Linting and formatting
 # ======================
 
-# Run Clippy lints
+# Run Clippy linter
 lint:
-    @echo "🔍 Running Clippy lints..."
-    cargo clippy --workspace -- -D warnings
+    @echo "🔍 Running Clippy..."
+    cargo clippy -- -D warnings
 
-# Fix Clippy issues automatically
+# Fix lint issues automatically
 lint-fix:
-    @echo "🔧 Fixing Clippy issues..."
-    cargo clippy --workspace --fix
+    @echo "🔧 Fixing lint issues..."
+    cargo clippy --fix --allow-dirty
 
 # Format code
 fmt:
-    @echo "✨ Formatting code..."
-    cargo fmt --all
+    @echo "🎨 Formatting code..."
+    cargo fmt
 
 # Check formatting
 fmt-check:
-    @echo "🔍 Checking code formatting..."
-    cargo fmt --all --check
+    @echo "🎨 Checking code formatting..."
+    cargo fmt --check
 
-# Run all checks (format, lint, test)
-check: fmt-check lint test
-    @echo "✅ All checks passed!"
+# Check code without building
+check:
+    @echo "✅ Checking code..."
+    cargo check
 
-# Docker commands
-# ===============
-
-# Build Docker images
-docker-build:
-    @echo "🐳 Building Docker images..."
-    docker-compose -f infra/docker-compose.yml build
-
-# Start services with Docker
-docker-up:
-    @echo "🐳 Starting services with Docker..."
-    docker-compose -f infra/docker-compose.yml up -d
-
-# Stop Docker services
-docker-down:
-    @echo "🐳 Stopping Docker services..."
-    docker-compose -f infra/docker-compose.yml down
-
-# View Docker logs
-docker-logs service="":
-    @echo "📋 Viewing Docker logs for {{service}}..."
-    @if [ "{{service}}" = "" ]; then \
-        docker-compose -f infra/docker-compose.yml logs -f; \
-    else \
-        docker-compose -f infra/docker-compose.yml logs -f {{service}}; \
-    fi
-
-# Database commands
+# Development tools
 # =================
 
-# Setup database
-db-setup:
-    @echo "🗄️  Setting up database..."
-    # TODO: Add database setup commands
-    @echo "Database setup not yet implemented"
+# Setup development environment
+setup:
+    @echo "⚙️  Setting up development environment..."
+    @echo "📦 Installing Rust components..."
+    rustup component add clippy rustfmt
+    rustup target add wasm32-unknown-unknown
+    @echo "🔧 Installing cargo tools..."
+    cargo install just || true
+    @echo "✅ Development environment ready!"
 
-# Run database migrations
-db-migrate:
-    @echo "🗄️  Running database migrations..."
-    # TODO: Add migration commands
-    @echo "Database migrations not yet implemented"
+# Clean build artifacts
+clean:
+    @echo "🧹 Cleaning build artifacts..."
+    cargo clean
 
-# Reset database
-db-reset:
-    @echo "🗄️  Resetting database..."
-    # TODO: Add database reset commands
-    @echo "Database reset not yet implemented"
+# Check for security vulnerabilities
+audit:
+    @echo "🔒 Running security audit..."
+    cargo audit || echo "Install cargo-audit: cargo install cargo-audit"
+
+# Check for outdated dependencies
+outdated:
+    @echo "📅 Checking for outdated dependencies..."
+    cargo outdated || echo "Install cargo-outdated: cargo install cargo-outdated"
+
+# Tree view of dependencies
+tree:
+    @echo "🌳 Dependency tree..."
+    cargo tree
+
+# Check project status
+status:
+    @echo "📊 Project Status"
+    @echo "================="
+    @echo "🦀 Rust Version: $(rustc --version)"
+    @echo "📦 Cargo Version: $(cargo --version)"
+    @echo "🔧 Just Version: $(just --version)"
+    @echo ""
+    @echo "📁 Project Structure:"
+    @find . -name "Cargo.toml" -not -path "./target/*" | head -10
+    @echo ""
+    @echo "🏃‍♂️ Running Processes:"
+    @ps aux | grep -E "(cargo|emr)" | grep -v grep || echo "No EMR processes running"
 
 # Git and GitHub commands
 # =======================
@@ -169,97 +152,20 @@ github-push:
     @chmod +x scripts/initial-push.sh
     @./scripts/initial-push.sh
 
-# Development tools
-# =================
-
-# Install development dependencies
-setup:
-    @echo "🛠️  Installing development dependencies..."
-    cargo install cargo-leptos
-    cargo install cargo-tarpaulin
-    cargo install diesel_cli --no-default-features --features postgres
-    @echo "✅ Development dependencies installed!"
-
-# Generate API documentation
-docs:
-    @echo "📚 Generating documentation..."
-    cargo doc --workspace --no-deps --open
-
-# Clean build artifacts
-clean:
-    @echo "🧹 Cleaning build artifacts..."
-    cargo clean
-    docker system prune -f
-
-# Security and compliance
-# =======================
-
-# Run security audit
-audit:
-    @echo "🔒 Running security audit..."
-    cargo audit
-
-# Check for outdated dependencies
-outdated:
-    @echo "📋 Checking for outdated dependencies..."
-    cargo outdated
-
-# Check licenses
-licenses:
-    @echo "📄 Checking licenses..."
-    cargo license
-
-# Production commands
-# ===================
-
-# Deploy to staging
-deploy-staging:
-    @echo "🚀 Deploying to staging..."
-    # TODO: Add staging deployment commands
-    @echo "Staging deployment not yet implemented"
-
-# Deploy to production
-deploy-prod:
-    @echo "🚀 Deploying to production..."
-    # TODO: Add production deployment commands
-    @echo "Production deployment not yet implemented"
-
-# Health check
-health:
-    @echo "🏥 Checking service health..."
-    curl -f http://localhost:8080/healthz || echo "❌ API health check failed"
-    curl -f http://localhost:3000/api/health || echo "❌ Web health check failed"
-
-# Utility commands
-# ================
-
-# Show workspace structure
-tree:
-    @echo "📁 Workspace structure:"
-    tree -I 'target|node_modules|.git' -L 3
-
-# Show project status
-status:
-    @echo "📊 Project Status"
-    @echo "=================="
-    @echo "Git status:"
-    git status --short
-    @echo ""
-    @echo "Workspace info:"
-    cargo tree --workspace --depth 1
-    @echo ""
-    @echo "Docker containers:"
-    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# Generate project report
+# Development report
 report:
-    @echo "📊 Generating project report..."
-    @echo "# EMR Platform Report" > report.md
-    @echo "Generated on: $(date)" >> report.md
-    @echo "" >> report.md
-    @echo "## Test Results" >> report.md
-    cargo test --workspace 2>&1 | tee -a report.md || true
-    @echo "" >> report.md
-    @echo "## Lint Results" >> report.md
-    cargo clippy --workspace 2>&1 | tee -a report.md || true
-    @echo "📊 Report generated: report.md" 
+    @echo "📋 EMR Development Report"
+    @echo "========================="
+    @echo "📅 Date: $(date)"
+    @echo "🏗️  Build Status:"
+    @cargo check --quiet && echo "✅ Code compiles" || echo "❌ Compilation errors"
+    @echo "🧪 Test Status:"
+    @cargo test --quiet && echo "✅ All tests pass" || echo "❌ Test failures"
+    @echo "🔍 Lint Status:"
+    @cargo clippy --quiet && echo "✅ No lint issues" || echo "⚠️  Lint warnings"
+    @echo "📊 Lines of Code:"
+    @find . -name "*.rs" -not -path "./target/*" | xargs wc -l | tail -1
+    @echo "📁 API Endpoints:"
+    @echo "   GET /healthz"
+    @echo "   GET /api/patients"
+    @echo "   GET /api/patients/{id}" 

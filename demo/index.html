@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 EMR Platform - Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-2xl font-bold text-blue-600">🏥 EMR Platform</span>
+                    <span class="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                        DEMO
+                    </span>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <button onclick="showSection('dashboard')" class="nav-btn text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                        Dashboard
+                    </button>
+                    <button onclick="showSection('patients')" class="nav-btn text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                        Patients
+                    </button>
+                    <button onclick="showSection('api')" class="nav-btn text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                        API Demo
+                    </button>
+                    <div id="status-indicator" class="flex items-center">
+                        <div class="w-3 h-3 bg-gray-400 rounded-full mr-2"></div>
+                        <span class="text-sm text-gray-600">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="section">
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold text-gray-900 mb-4">
+                    🏥 EMR Platform Demo
+                </h1>
+                <p class="text-xl text-gray-600 mb-8">
+                    HIPAA-compliant Electronic Medical Record System built with Rust
+                </p>
+                <div class="inline-flex items-center px-6 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
+                    <span class="text-blue-800 font-medium">API Server Running on localhost:8080</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+                <!-- Feature Cards -->
+                <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+                    <div class="text-3xl mb-4">👥</div>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Patient Management</h3>
+                    <p class="text-gray-600 mb-4">Secure patient records with real-time search and filtering</p>
+                    <button onclick="showSection('patients')" class="text-blue-600 hover:text-blue-800 font-medium">
+                        View Patients →
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+                    <div class="text-3xl mb-4">🚀</div>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Rust Performance</h3>
+                    <p class="text-gray-600 mb-4">Built with Rust for memory safety and blazing fast performance</p>
+                    <button onclick="checkApiHealth()" class="text-blue-600 hover:text-blue-800 font-medium">
+                        Test API →
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+                    <div class="text-3xl mb-4">🔐</div>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-3">HIPAA Compliance</h3>
+                    <p class="text-gray-600 mb-4">Enterprise-grade security with audit trails and encryption</p>
+                    <button onclick="showSection('api')" class="text-blue-600 hover:text-blue-800 font-medium">
+                        View API →
+                    </button>
+                </div>
+            </div>
+
+            <!-- System Stats -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
+                <div id="system-stats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600" id="api-status">⚡</div>
+                        <div class="text-sm text-gray-600">API Status</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600" id="response-time">--</div>
+                        <div class="text-sm text-gray-600">Response Time</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-600" id="total-patients">--</div>
+                        <div class="text-sm text-gray-600">Total Patients</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-orange-600" id="rust-version">--</div>
+                        <div class="text-sm text-gray-600">Rust Version</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Patients Section -->
+        <div id="patients-section" class="section hidden">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-900">Patient Records</h2>
+                    <p class="text-gray-600 mt-2">Manage patient information securely</p>
+                </div>
+                <button onclick="loadPatients()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                    🔄 Refresh Data
+                </button>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                <input 
+                    type="text" 
+                    id="patient-search" 
+                    placeholder="Search patients by name, email, or phone..." 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    oninput="filterPatients()"
+                >
+            </div>
+
+            <!-- Patients Table -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div id="patients-loading" class="flex justify-center items-center py-16">
+                    <div class="loading"></div>
+                    <span class="ml-4 text-gray-600">Loading patients...</span>
+                </div>
+                <div id="patients-table" class="hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Birth Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="patients-tbody" class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Demo Section -->
+        <div id="api-section" class="section hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-900">API Demonstration</h2>
+                <p class="text-gray-600 mt-2">Test the EMR API endpoints in real-time</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- API Endpoints -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Available Endpoints</h3>
+                    <div class="space-y-4">
+                        <button onclick="testEndpoint('/healthz')" class="w-full text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-medium text-gray-900">GET /healthz</div>
+                                    <div class="text-sm text-gray-600">System health check</div>
+                                </div>
+                                <div class="text-green-600">➤</div>
+                            </div>
+                        </button>
+                        <button onclick="testEndpoint('/api/patients')" class="w-full text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-medium text-gray-900">GET /api/patients</div>
+                                    <div class="text-sm text-gray-600">List all patients</div>
+                                </div>
+                                <div class="text-green-600">➤</div>
+                            </div>
+                        </button>
+                        <button onclick="testEndpoint('/api/patients/patient-001')" class="w-full text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-medium text-gray-900">GET /api/patients/{id}</div>
+                                    <div class="text-sm text-gray-600">Get specific patient</div>
+                                </div>
+                                <div class="text-green-600">➤</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- API Response -->
+                <div class="bg-gray-900 rounded-lg p-6">
+                    <h3 class="text-xl font-semibold text-white mb-4">Response</h3>
+                    <div id="api-response" class="bg-gray-800 rounded p-4 text-green-400 font-mono text-sm h-96 overflow-auto">
+                        Click an endpoint to see the response...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let allPatients = [];
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            checkApiHealth();
+            loadPatients();
+            setInterval(checkApiHealth, 30000); // Check every 30 seconds
+        });
+
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            // Show selected section
+            document.getElementById(section + '-section').classList.remove('hidden');
+            
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('text-blue-600', 'font-bold'));
+            event.target.classList.add('text-blue-600', 'font-bold');
+
+            // Load data if needed
+            if (section === 'patients' && allPatients.length === 0) {
+                loadPatients();
+            }
+        }
+
+        async function checkApiHealth() {
+            try {
+                const startTime = Date.now();
+                const response = await fetch('http://localhost:8080/healthz');
+                const endTime = Date.now();
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('status-indicator').innerHTML = `
+                        <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                        <span class="text-sm text-green-600 font-medium">API Online</span>
+                    `;
+                    document.getElementById('api-status').textContent = '✅';
+                    document.getElementById('response-time').textContent = `${endTime - startTime}ms`;
+                    document.getElementById('rust-version').textContent = data.rust_version || '--';
+                } else {
+                    throw new Error('API not responding');
+                }
+            } catch (error) {
+                document.getElementById('status-indicator').innerHTML = `
+                    <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                    <span class="text-sm text-red-600 font-medium">API Offline</span>
+                `;
+                document.getElementById('api-status').textContent = '❌';
+                document.getElementById('response-time').textContent = '--';
+            }
+        }
+
+        async function loadPatients() {
+            document.getElementById('patients-loading').classList.remove('hidden');
+            document.getElementById('patients-table').classList.add('hidden');
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/patients');
+                const data = await response.json();
+                
+                allPatients = data.patients;
+                document.getElementById('total-patients').textContent = data.total;
+                renderPatients(allPatients);
+                
+                document.getElementById('patients-loading').classList.add('hidden');
+                document.getElementById('patients-table').classList.remove('hidden');
+            } catch (error) {
+                document.getElementById('patients-loading').innerHTML = `
+                    <div class="text-center py-16">
+                        <div class="text-red-600 text-xl mb-2">❌</div>
+                        <div class="text-red-600">Failed to load patients</div>
+                        <button onclick="loadPatients()" class="mt-4 text-blue-600 hover:text-blue-800 font-medium">Try Again</button>
+                    </div>
+                `;
+            }
+        }
+
+        function renderPatients(patients) {
+            const tbody = document.getElementById('patients-tbody');
+            tbody.innerHTML = patients.map(patient => `
+                <tr class="hover:bg-gray-50 fade-in">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${patient.name}</div>
+                        <div class="text-sm text-gray-500">${patient.id}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${patient.email}</div>
+                        <div class="text-sm text-gray-500">${patient.phone}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${patient.birth_date}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${patient.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                            ${patient.status}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button onclick="viewPatient('${patient.id}')" class="text-blue-600 hover:text-blue-900 font-medium">View</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterPatients() {
+            const searchTerm = document.getElementById('patient-search').value.toLowerCase();
+            const filteredPatients = allPatients.filter(patient => 
+                patient.name.toLowerCase().includes(searchTerm) ||
+                patient.email.toLowerCase().includes(searchTerm) ||
+                patient.phone.includes(searchTerm)
+            );
+            renderPatients(filteredPatients);
+        }
+
+        async function viewPatient(id) {
+            try {
+                const response = await fetch(`http://localhost:8080/api/patients/${id}`);
+                const patient = await response.json();
+                
+                alert(`Patient Details:\n\nName: ${patient.name}\nEmail: ${patient.email}\nPhone: ${patient.phone}\nBirth Date: ${patient.birth_date}\nStatus: ${patient.status}`);
+            } catch (error) {
+                alert('Failed to load patient details');
+            }
+        }
+
+        async function testEndpoint(endpoint) {
+            document.getElementById('api-response').textContent = 'Loading...';
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(`http://localhost:8080${endpoint}`);
+                const endTime = Date.now();
+                const data = await response.json();
+                
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseTime: `${endTime - startTime}ms`,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: data
+                };
+                
+                document.getElementById('api-response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('api-response').textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html> 
