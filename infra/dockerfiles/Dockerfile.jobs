@@ -1,0 +1,96 @@
+# EMR Jobs Worker - Multi-stage Docker Build
+# This Dockerfile builds the background jobs worker service
+
+# Stage 1: Build dependencies (cached layer)
+FROM rust:1.78-slim-bullseye AS deps
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy workspace and crate manifests
+COPY Cargo.toml Cargo.lock ./
+COPY api/Cargo.toml ./api/
+COPY core/Cargo.toml ./core/
+COPY fhir/Cargo.toml ./fhir/
+COPY jobs/Cargo.toml ./jobs/
+COPY web/Cargo.toml ./web/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p api/src core/src fhir/src jobs/src web/src && \
+    echo "fn main() {}" > api/src/main.rs && \
+    echo "fn main() {}" > jobs/src/main.rs && \
+    echo "fn main() {}" > web/src/main.rs && \
+    echo "" > core/src/lib.rs && \
+    echo "" > fhir/src/lib.rs && \
+    echo "" > jobs/src/lib.rs && \
+    echo "" > web/src/lib.rs
+
+# Build dependencies (will be cached)
+RUN cargo build --release --bin emr-jobs
+
+# Stage 2: Build application
+FROM deps AS builder
+
+# Remove dummy source files
+RUN rm -rf api/src core/src fhir/src jobs/src web/src
+
+# Copy actual source code
+COPY api/src ./api/src
+COPY core/src ./core/src
+COPY fhir/src ./fhir/src
+COPY jobs/src ./jobs/src
+COPY web/src ./web/src
+
+# Build the application
+RUN cargo build --release --bin emr-jobs
+
+# Stage 3: Runtime image
+FROM debian:bullseye-slim AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libpq5 \
+    libssl1.1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 emr \
+    && mkdir -p /app/logs /app/tmp \
+    && chown -R emr:emr /app
+
+# Copy the binary from builder stage
+COPY --from=builder /app/target/release/emr-jobs /app/emr-jobs
+
+# Copy any required configuration files
+COPY jobs/config /app/config
+
+# Set proper permissions
+RUN chmod +x /app/emr-jobs
+
+# Switch to non-root user
+USER emr
+
+# Set working directory
+WORKDIR /app
+
+# Expose metrics port
+EXPOSE 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9090/health || exit 1
+
+# Set environment variables
+ENV RUST_LOG=info,emr_jobs=debug
+ENV JOBS_WORKER_MAX_WORKERS=4
+ENV JOBS_WORKER_POLL_INTERVAL=5
+
+# Run the application
+CMD ["./emr-jobs"] 

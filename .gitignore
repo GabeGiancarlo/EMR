@@ -1,0 +1,121 @@
+# EMR Platform - Git Ignore Rules
+
+# Rust
+/target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+*.local.toml
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+infra/certs/
+certs/
+
+# Docker
+.dockerignore
+
+# Node.js (for web tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Build artifacts
+dist/
+build/
+pkg/
+wasm-pack.log
+
+# Test results
+coverage/
+*.lcov
+test-results/
+playwright-report/
+
+# Backup files
+*.bak
+*.backup
+backup-*
+config-backup-*
+
+# Local development
+.local/
+local/
+*.local
+
+# Monitoring and observability
+prometheus/
+grafana/
+jaeger/
+
+# Job queue and cache
+redis-data/
+jobs-data/
+
+# Documentation build
+book/
+docs/_build/
+
+# Security
+audit-results.json
+geiger-results.json
+licenses.json
+
+# Profiling
+perf.data*
+flamegraph.svg
+
+# Large files that shouldn't be committed
+*.iso
+*.tar.gz
+*.zip
+*.7z
+
+# Development containers
+.devcontainer/.env 

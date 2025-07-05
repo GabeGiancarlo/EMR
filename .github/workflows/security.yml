@@ -1,0 +1,299 @@
+name: Security Analysis
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * 1'  # Run every Monday at 2 AM
+
+jobs:
+  # CodeQL security analysis
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['rust']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended,security-and-quality
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: codeql-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpq-dev pkg-config libssl-dev
+
+    - name: Build for CodeQL
+      run: cargo build --workspace --all-features
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
+
+  # Dependency vulnerability scanning
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: deps-scan-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install cargo-audit
+      uses: taiki-e/install-action@cargo-audit
+
+    - name: Run security audit
+      run: cargo audit --json > audit-results.json
+
+    - name: Upload audit results
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-audit-results
+        path: audit-results.json
+
+    - name: Install cargo-deny
+      uses: taiki-e/install-action@cargo-deny
+
+    - name: Run cargo deny
+      run: |
+        cargo deny check advisories
+        cargo deny check licenses
+        cargo deny check bans
+
+  # Docker image security scanning
+  docker-security:
+    name: Docker Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        service: [api, web, jobs]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: infra/dockerfiles/Dockerfile.${{ matrix.service }}
+        tags: emr-${{ matrix.service }}:security-scan
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: emr-${{ matrix.service }}:security-scan
+        format: 'sarif'
+        output: 'trivy-results-${{ matrix.service }}.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
+
+  # SAST (Static Application Security Testing)
+  sast:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: sast-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpq-dev pkg-config libssl-dev
+
+    - name: Install cargo-geiger (radiation detector for unsafe code)
+      run: cargo install cargo-geiger
+
+    - name: Run cargo-geiger
+      run: cargo geiger --all-features --workspace --output-format json > geiger-results.json
+
+    - name: Upload geiger results
+      uses: actions/upload-artifact@v4
+      with:
+        name: geiger-results
+        path: geiger-results.json
+
+    - name: Install cargo-semver-checks
+      run: cargo install cargo-semver-checks
+
+    - name: Run semver checks
+      run: cargo semver-checks check-release
+
+  # Secret scanning
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # License compliance
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: license-check-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install cargo-license
+      run: cargo install cargo-license
+
+    - name: Check licenses
+      run: |
+        cargo license --json > licenses.json
+        # Check for GPL licenses (not allowed in commercial software)
+        if cargo license --json | jq -r '.[] | select(.license | contains("GPL"))' | grep -q GPL; then
+          echo "GPL licenses found! This may not be compatible with commercial use."
+          exit 1
+        fi
+
+    - name: Upload license report
+      uses: actions/upload-artifact@v4
+      with:
+        name: license-compliance-report
+        path: licenses.json
+
+  # HIPAA compliance checks
+  hipaa-compliance:
+    name: HIPAA Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for hardcoded secrets
+      run: |
+        # Check for common secrets patterns
+        if grep -r "password\s*=" --include="*.rs" --include="*.toml" .; then
+          echo "Potential hardcoded passwords found!"
+          exit 1
+        fi
+        
+        if grep -r "secret\s*=" --include="*.rs" --include="*.toml" .; then
+          echo "Potential hardcoded secrets found!"
+          exit 1
+        fi
+
+    - name: Check for proper logging practices
+      run: |
+        # Ensure no sensitive data is logged
+        if grep -r "log.*password" --include="*.rs" .; then
+          echo "Password logging detected!"
+          exit 1
+        fi
+        
+        if grep -r "log.*ssn" --include="*.rs" .; then
+          echo "SSN logging detected!"
+          exit 1
+        fi
+
+    - name: Check for proper error handling
+      run: |
+        # Check for unwrap() calls that could expose sensitive data
+        if grep -r "\.unwrap()" --include="*.rs" . | grep -v test | grep -v example; then
+          echo "Unwrap calls found in non-test code - may expose sensitive data!"
+          exit 1
+        fi
+
+    - name: Check TLS configuration
+      run: |
+        # Ensure TLS is properly configured
+        if ! grep -r "tls" --include="*.rs" --include="*.toml" .; then
+          echo "TLS configuration not found!"
+          exit 1
+        fi
+
+    - name: Audit trail compliance
+      run: |
+        # Check for audit logging implementation
+        if ! grep -r "audit" --include="*.rs" .; then
+          echo "Audit logging not implemented!"
+          exit 1
+        fi
+
+  # Security scorecard
+  scorecard:
+    name: Security Scorecard
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Run analysis
+      uses: ossf/scorecard-action@v2.3.1
+      with:
+        results_file: results.sarif
+        results_format: sarif
+        publish_results: true
+
+    - name: Upload to code-scanning
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: results.sarif 

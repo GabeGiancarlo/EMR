@@ -1,0 +1,65 @@
+[package]
+name = "emr-jobs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Workspace dependencies
+core = { path = "../core" }
+fhir = { path = "../fhir" }
+
+# Async runtime
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+# Background jobs
+apalis = { workspace = true }
+
+# Database
+diesel = { workspace = true }
+diesel-async = { workspace = true }
+deadpool-diesel = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# HTTP client
+reqwest = { workspace = true }
+
+# Message queue
+async-nats = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Configuration
+config = { workspace = true }
+dotenvy = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Async trait support
+async-trait = { workspace = true }
+
+# Random number generation
+rand = "0.8"
+
+[lib]
+name = "emr_jobs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "jobs-worker"
+path = "src/main.rs" 

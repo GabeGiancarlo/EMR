@@ -1,0 +1,34 @@
+[package]
+name = "emr-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core domain logic for EMR platform"
+
+[dependencies]
+# From workspace
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+validator = { workspace = true }
+tracing = { workspace = true }
+
+# FHIR resources
+fhir-model = { workspace = true }
+
+# Async trait support
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+mockall = { workspace = true }
+
+[lib]
+name = "emr_core"
+path = "src/lib.rs" 

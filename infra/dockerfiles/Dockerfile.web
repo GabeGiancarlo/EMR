@@ -1,0 +1,115 @@
+# EMR Web Frontend - Multi-stage Docker Build
+# This Dockerfile builds the Leptos web application with SSR and WASM hydration
+
+# Stage 1: Build dependencies (cached layer)
+FROM rust:1.78-slim-bullseye AS deps
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wasm-pack for WASM builds
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+# Add wasm32 target for WASM builds
+RUN rustup target add wasm32-unknown-unknown
+
+# Create app directory
+WORKDIR /app
+
+# Copy workspace and crate manifests
+COPY Cargo.toml Cargo.lock ./
+COPY api/Cargo.toml ./api/
+COPY core/Cargo.toml ./core/
+COPY fhir/Cargo.toml ./fhir/
+COPY jobs/Cargo.toml ./jobs/
+COPY web/Cargo.toml ./web/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p api/src core/src fhir/src jobs/src web/src && \
+    echo "fn main() {}" > api/src/main.rs && \
+    echo "fn main() {}" > jobs/src/main.rs && \
+    echo "fn main() {}" > web/src/main.rs && \
+    echo "" > core/src/lib.rs && \
+    echo "" > fhir/src/lib.rs && \
+    echo "" > jobs/src/lib.rs && \
+    echo "" > web/src/lib.rs
+
+# Build dependencies (will be cached)
+RUN cargo build --release --bin emr-web
+
+# Stage 2: Build application
+FROM deps AS builder
+
+# Remove dummy source files
+RUN rm -rf api/src core/src fhir/src jobs/src web/src
+
+# Copy actual source code
+COPY api/src ./api/src
+COPY core/src ./core/src
+COPY fhir/src ./fhir/src
+COPY jobs/src ./jobs/src
+COPY web/src ./web/src
+
+# Copy web assets
+COPY web/style ./web/style
+COPY web/public ./web/public
+
+# Build the server binary
+RUN cargo build --release --bin emr-web
+
+# Build the WASM client
+RUN cd web && \
+    cargo build --release --target wasm32-unknown-unknown --features hydrate && \
+    wasm-pack build --target web --out-dir pkg --no-default-features --features hydrate
+
+# Stage 3: Runtime image
+FROM debian:bullseye-slim AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl1.1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 emr \
+    && mkdir -p /app/dist /app/assets \
+    && chown -R emr:emr /app
+
+# Copy the binary from builder stage
+COPY --from=builder /app/target/release/emr-web /app/emr-web
+
+# Copy WASM and static assets
+COPY --from=builder /app/web/pkg /app/dist/pkg
+COPY --from=builder /app/web/public /app/dist/public
+COPY --from=builder /app/web/style /app/dist/style
+
+# Set proper permissions
+RUN chmod +x /app/emr-web
+
+# Switch to non-root user
+USER emr
+
+# Set working directory
+WORKDIR /app
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Set environment variables
+ENV RUST_LOG=info,emr_web=debug
+ENV WEB_SERVER_HOST=0.0.0.0
+ENV WEB_SERVER_PORT=3000
+ENV LEPTOS_OUTPUT_NAME=emr-web
+ENV LEPTOS_SITE_ROOT=dist
+
+# Run the application
+CMD ["./emr-web"] 

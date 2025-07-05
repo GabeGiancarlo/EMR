@@ -1,0 +1,36 @@
+[package]
+name = "emr-fhir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FHIR integration helpers for EMR platform"
+
+[dependencies]
+# From workspace
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# FHIR resources
+fhir-model = { workspace = true }
+fhir-sdk = { workspace = true }
+
+# URL encoding
+urlencoding = { workspace = true }
+
+# Local dependencies
+emr-core = { path = "../core" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lib]
+name = "emr_fhir"
+path = "src/lib.rs" 

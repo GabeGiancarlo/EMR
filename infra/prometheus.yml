@@ -1,0 +1,61 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # EMR API metrics
+  - job_name: "emr-api"
+    static_configs:
+      - targets: ["api:8080"]
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # EMR Web metrics
+  - job_name: "emr-web"
+    static_configs:
+      - targets: ["web:3000"]
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  # EMR Jobs metrics
+  - job_name: "emr-jobs"
+    static_configs:
+      - targets: ["jobs:9090"]
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # PostgreSQL metrics (if using postgres_exporter)
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:5432"]
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+
+  # Redis metrics (if using redis_exporter)
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+
+  # NATS metrics
+  - job_name: "nats"
+    static_configs:
+      - targets: ["nats:8222"]
+    metrics_path: '/varz'
+    scrape_interval: 30s
+
+  # Node exporter for system metrics
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    scrape_interval: 30s 

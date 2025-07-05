@@ -1,0 +1,62 @@
+[package]
+name = "emr-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "EMR API server with Actix-web"
+
+[dependencies]
+# From workspace
+tokio = { workspace = true }
+actix-web = { workspace = true }
+actix-cors = { workspace = true }
+actix-files = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-actix-web = { workspace = true }
+config = { workspace = true }
+dotenvy = { workspace = true }
+validator = { workspace = true }
+reqwest = { workspace = true }
+async-nats = { workspace = true }
+url = { workspace = true }
+jsonwebtoken = { workspace = true }
+argon2 = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+
+# Database
+diesel = { workspace = true }
+diesel-async = { workspace = true }
+deadpool-diesel = { workspace = true }
+
+# Authentication
+oxide-auth = { workspace = true }
+oxide-auth-actix = { workspace = true }
+oauth2 = { workspace = true }
+
+# FHIR
+fhir-model = { workspace = true }
+fhir-sdk = { workspace = true }
+
+# Local dependencies
+emr-core = { path = "../core" }
+emr-fhir = { path = "../fhir" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+mockall = { workspace = true }
+wiremock = { workspace = true }
+
+[[bin]]
+name = "emr-api"
+path = "src/main.rs" 
