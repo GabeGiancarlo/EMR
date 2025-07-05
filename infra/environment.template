@@ -1,0 +1,114 @@
+# EMR Platform Environment Configuration
+# Copy this file to .env and update the values for your environment
+
+# Database Configuration
+DB_PASSWORD=emr_secure_password_change_in_prod
+POSTGRES_DB=emr_platform
+POSTGRES_USER=emr_user
+
+# Redis Configuration
+REDIS_PASSWORD=redis_secure_password_change_in_prod
+
+# JWT Configuration
+JWT_SECRET=change_this_in_production_to_a_secure_random_string_at_least_32_characters_long
+
+# FHIR Server Configuration
+FHIR_BASE_URL=http://kodjin:8080/fhir
+FHIR_SERVER_ENABLED=true
+
+# Monitoring Configuration
+GRAFANA_PASSWORD=admin_change_in_prod
+PROMETHEUS_ENABLED=true
+GRAFANA_ENABLED=true
+
+# TLS Configuration
+TLS_ENABLED=true
+TLS_CERT_PATH=/app/certs/server.crt
+TLS_KEY_PATH=/app/certs/server.key
+
+# Feature Flags
+FEATURE_FHIR_INTEGRATION=true
+FEATURE_PATIENT_MANAGEMENT=true
+FEATURE_ANALYTICS=true
+FEATURE_AUDIT_LOGGING=true
+FEATURE_BACKGROUND_JOBS=true
+
+# Development Settings
+RUST_LOG=info
+RUST_BACKTRACE=1
+DEVELOPMENT_MODE=true
+
+# Email Configuration (for notifications)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=noreply@emr.local
+SMTP_PASSWORD=smtp_password
+SMTP_FROM_ADDRESS=noreply@emr.local
+SMTP_FROM_NAME=EMR Platform
+
+# OAuth2 Configuration
+OAUTH2_CLIENT_ID=emr_client_id
+OAUTH2_CLIENT_SECRET=emr_client_secret
+OAUTH2_AUTHORIZATION_URL=https://auth.example.com/oauth2/authorize
+OAUTH2_TOKEN_URL=https://auth.example.com/oauth2/token
+OAUTH2_USERINFO_URL=https://auth.example.com/oauth2/userinfo
+OAUTH2_REDIRECT_URL=https://localhost:3000/auth/callback
+
+# SMART on FHIR Configuration
+SMART_ON_FHIR_ENABLED=true
+SMART_ON_FHIR_SCOPES=patient/*.read user/*.read launch openid profile
+SMART_ON_FHIR_CLIENT_ID=emr_smart_client
+SMART_ON_FHIR_CLIENT_SECRET=emr_smart_secret
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS_PER_MINUTE=100
+RATE_LIMIT_REQUESTS_PER_HOUR=1000
+
+# Session Configuration
+SESSION_SECRET=change_this_session_secret_in_production
+SESSION_TIMEOUT_MINUTES=60
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_HTTPONLY=true
+
+# CORS Configuration
+CORS_ALLOWED_ORIGINS=https://localhost:3000,https://localhost:8443
+CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With
+
+# Database Pool Configuration
+DB_POOL_MIN_SIZE=5
+DB_POOL_MAX_SIZE=20
+DB_POOL_TIMEOUT_SECONDS=30
+
+# Background Jobs Configuration
+JOBS_ENABLED=true
+JOBS_MAX_WORKERS=4
+JOBS_MAX_RETRIES=3
+JOBS_RETRY_DELAY_SECONDS=30
+JOBS_TIMEOUT_SECONDS=300
+
+# Audit Configuration
+AUDIT_ENABLED=true
+AUDIT_RETENTION_DAYS=2555  # 7 years for HIPAA compliance
+AUDIT_LOG_SENSITIVE_DATA=false
+
+# Backup Configuration
+BACKUP_ENABLED=true
+BACKUP_SCHEDULE=0 2 * * *  # Daily at 2 AM
+BACKUP_RETENTION_DAYS=90
+BACKUP_S3_BUCKET=emr-backups
+BACKUP_S3_REGION=us-west-2
+
+# Metrics and Monitoring
+METRICS_ENABLED=true
+METRICS_PORT=9090
+HEALTH_CHECK_INTERVAL_SECONDS=30
+PROMETHEUS_METRICS_PATH=/metrics
+
+# Security
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=DENY
+X_CONTENT_TYPE_OPTIONS=nosniff 

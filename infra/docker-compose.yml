@@ -1,0 +1,300 @@
+version: '3.8'
+
+# HIPAA-grade EMR Platform - Docker Compose Configuration
+# 
+# This configuration sets up all services required for local development
+# and testing of the EMR platform with proper networking and security.
+
+services:
+  # PostgreSQL 16 Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: emr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: emr_platform
+      POSTGRES_USER: emr_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-emr_secure_password_change_in_prod}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - emr-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emr_user -d emr_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # NATS JetStream Message Bus
+  nats:
+    image: nats:2.10-alpine
+    container_name: emr-nats
+    restart: unless-stopped
+    command: ["--jetstream", "--store_dir=/data", "--max_file_store=1GB"]
+    ports:
+      - "4222:4222"  # NATS port
+      - "8222:8222"  # HTTP monitoring port
+    volumes:
+      - nats_data:/data
+    networks:
+      - emr-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4222"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Redis (for caching and session storage)
+  redis:
+    image: redis:7-alpine
+    container_name: emr-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secure_password}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - emr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # EMR API Backend
+  api:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.api
+      target: runtime
+    container_name: emr-api
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://emr_user:${DB_PASSWORD:-emr_secure_password_change_in_prod}@postgres:5432/emr_platform
+      
+      # Server configuration
+      HOST: 0.0.0.0
+      PORT: 8080
+      
+      # NATS configuration
+      NATS_URL: nats://nats:4222
+      
+      # Redis configuration
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379
+      
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-change_this_in_production_to_a_secure_random_string}
+      
+      # FHIR configuration
+      FHIR_BASE_URL: ${FHIR_BASE_URL:-http://kodjin:8080/fhir}
+      
+      # Logging
+      RUST_LOG: info,emr_api=debug
+      
+      # TLS
+      TLS_CERT_PATH: /app/certs/server.crt
+      TLS_KEY_PATH: /app/certs/server.key
+    ports:
+      - "8080:8080"
+      - "8443:8443"  # HTTPS port
+    volumes:
+      - ./certs:/app/certs:ro
+    networks:
+      - emr-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # EMR Web Frontend
+  web:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.web
+      target: runtime
+    container_name: emr-web
+    restart: unless-stopped
+    environment:
+      # API configuration
+      WEB_API_BASE_URL: http://api:8080
+      
+      # Server configuration
+      WEB_SERVER_HOST: 0.0.0.0
+      WEB_SERVER_PORT: 3000
+      
+      # Authentication
+      WEB_AUTH_ENABLED: true
+      WEB_AUTH_JWT_SECRET: ${JWT_SECRET:-change_this_in_production_to_a_secure_random_string}
+      
+      # Feature flags
+      WEB_FEATURES_PATIENT_MANAGEMENT: true
+      WEB_FEATURES_FHIR_INTEGRATION: true
+      WEB_FEATURES_ANALYTICS: true
+      WEB_FEATURES_AUDIT_LOGGING: true
+      
+      # Logging
+      RUST_LOG: info,emr_web=debug
+    ports:
+      - "3000:3000"
+    networks:
+      - emr-network
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # EMR Jobs Worker
+  jobs:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.jobs
+      target: runtime
+    container_name: emr-jobs
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      JOBS_DATABASE_URL: postgresql://emr_user:${DB_PASSWORD:-emr_secure_password_change_in_prod}@postgres:5432/emr_platform
+      
+      # Redis configuration  
+      JOBS_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379
+      
+      # Worker configuration
+      JOBS_WORKER_MAX_WORKERS: 4
+      JOBS_WORKER_MAX_RETRIES: 3
+      JOBS_WORKER_RETRY_DELAY: 30
+      JOBS_WORKER_JOB_TIMEOUT: 300
+      JOBS_WORKER_POLL_INTERVAL: 5
+      
+      # Monitoring
+      JOBS_MONITORING_ENABLED: true
+      JOBS_MONITORING_METRICS_PORT: 9090
+      
+      # Logging
+      RUST_LOG: info,emr_jobs=debug
+    ports:
+      - "9090:9090"  # Metrics port
+    networks:
+      - emr-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Kodjin FHIR Server (for development/testing)
+  kodjin:
+    image: kodjinhealth/kodjin-fhir-server:latest
+    container_name: emr-kodjin
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/emr_platform
+      SPRING_DATASOURCE_USERNAME: emr_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-emr_secure_password_change_in_prod}
+      FHIR_VERSION: R4
+    ports:
+      - "8081:8080"
+    networks:
+      - emr-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - fhir-server
+
+  # Prometheus (monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: emr-prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - emr-network
+    profiles:
+      - monitoring
+
+  # Grafana (dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: emr-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin_change_in_prod}
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - emr-network
+    profiles:
+      - monitoring
+
+  # Nginx (reverse proxy and load balancer)
+  nginx:
+    image: nginx:alpine
+    container_name: emr-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/ssl/certs:ro
+    networks:
+      - emr-network
+    depends_on:
+      - api
+      - web
+    profiles:
+      - proxy
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+  nats_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# Custom network for service communication
+networks:
+  emr-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
