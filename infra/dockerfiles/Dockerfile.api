@@ -1,5 +1,5 @@
-# EMR API Backend - Multi-stage Docker Build
-# This Dockerfile builds the API service with optimal caching and minimal image size
+# Nexus API backend - multi-stage Docker build
+# This image targets the current Rust API scaffold only.
 
 # Stage 1: Build dependencies (cached layer)
 FROM rust:1.78-slim-bullseye AS deps
@@ -14,42 +14,28 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Copy workspace and crate manifests
+# Copy workspace and API manifests
 COPY Cargo.toml Cargo.lock ./
 COPY api/Cargo.toml ./api/
-COPY core/Cargo.toml ./core/
-COPY fhir/Cargo.toml ./fhir/
-COPY jobs/Cargo.toml ./jobs/
-COPY web/Cargo.toml ./web/
 
 # Create dummy source files to build dependencies
-RUN mkdir -p api/src core/src fhir/src jobs/src web/src && \
-    echo "fn main() {}" > api/src/main.rs && \
-    echo "fn main() {}" > jobs/src/main.rs && \
-    echo "fn main() {}" > web/src/main.rs && \
-    echo "" > core/src/lib.rs && \
-    echo "" > fhir/src/lib.rs && \
-    echo "" > jobs/src/lib.rs && \
-    echo "" > web/src/lib.rs
+RUN mkdir -p api/src && \
+    echo "fn main() {}" > api/src/main.rs
 
 # Build dependencies (will be cached)
-RUN cargo build --release --bin emr-api
+RUN cargo build --release -p emr-api
 
 # Stage 2: Build application
 FROM deps AS builder
 
 # Remove dummy source files
-RUN rm -rf api/src core/src fhir/src jobs/src web/src
+RUN rm -rf api/src
 
 # Copy actual source code
 COPY api/src ./api/src
-COPY core/src ./core/src
-COPY fhir/src ./fhir/src
-COPY jobs/src ./jobs/src
-COPY web/src ./web/src
 
 # Build the application
-RUN cargo build --release --bin emr-api
+RUN cargo build --release -p emr-api
 
 # Stage 3: Runtime image
 FROM debian:bullseye-slim AS runtime
@@ -61,9 +47,9 @@ RUN apt-get update && apt-get install -y \
     libssl1.1 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 emr \
+    && useradd -m -u 1000 nexus \
     && mkdir -p /app/certs \
-    && chown -R emr:emr /app
+    && chown -R nexus:nexus /app
 
 # Copy the binary from builder stage
 COPY --from=builder /app/target/release/emr-api /app/emr-api
@@ -75,7 +61,7 @@ COPY api/config /app/config
 RUN chmod +x /app/emr-api
 
 # Switch to non-root user
-USER emr
+USER nexus
 
 # Set working directory
 WORKDIR /app

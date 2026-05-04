@@ -1,215 +1,195 @@
-# 🏥 EMR Platform
+# Nexus
 
-[![CI](https://github.com/GabeGiancarlo/EMR/actions/workflows/ci.yml/badge.svg)](https://github.com/GabeGiancarlo/EMR/actions/workflows/ci.yml)
-[![Security](https://github.com/GabeGiancarlo/EMR/actions/workflows/security.yml/badge.svg)](https://github.com/GabeGiancarlo/EMR/actions/workflows/security.yml)
+## Overview
 
-A **HIPAA-compliant Electronic Medical Record (EMR) platform** built with Rust, featuring real-time development capabilities and modern web technologies.
+Nexus is a recovery-focused EMR, billing, and executive operations platform designed around the daily workflows of clinicians, billing teams, and leadership.  
+This repository currently provides an early Rust backend foundation and architecture scaffolding for that direction.
 
-## 🚀 **Current Status: LIVE & WORKING!**
+## Current Status
 
-✅ **Rust API Server** - Fully functional on `localhost:8080`  
-✅ **Interactive Demo Interface** - Beautiful web UI with real-time API integration  
-✅ **Development Environment** - Hot-reload development with simple commands  
-✅ **3 Working API Endpoints** - Health check, patients list, and individual patient data  
+The repository is in an architecture reset.
 
-## 🎯 Quick Start
+- The old static demo has been removed.
+- The old Leptos/Rust frontend has been removed.
+- Legacy script-driven startup paths have been replaced with backend-first commands.
+- The Rust API crate remains the active implementation surface.
+
+Current code includes prototype/mock behavior and is not yet production-ready.
+
+## Product Direction
+
+Nexus is being designed around three workspaces:
+
+- Clinician
+- Billing
+- Executive / Leadership
+
+These role-based workflows are the core product direction and future implementation priority.
+
+## Architecture at a Glance
+
+- **Active now:** Rust API backend (`api/`) using Actix Web.
+- **Domain seed:** `core/` contains early domain abstractions and contracts.
+- **Planned frontend:** React + TypeScript (documented decision; no active frontend in this repo yet).
+- **Persistence direction:** Postgres with migration discipline (SQLx planned).
+- **Parked areas:** `fhir/` and `jobs/` are retained as future integration/automation zones.
+- **Infrastructure:** `infra/` contains useful references, but should not be treated as production-ready.
+
+## Repository Structure
+
+- `api/` - active Rust API backend foundation.
+- `core/` - domain-layer seed and shared domain contracts.
+- `fhir/` - parked FHIR interoperability experiments/plans.
+- `jobs/` - parked background worker/runtime area.
+- `infra/` - infrastructure, container, and database reference assets.
+- `.github/` - CI/CD workflow definitions (currently backend-focused).
+- `.devcontainer/` - devcontainer configuration for local contributor setup.
+- `.cursor/` - Cursor AI guidance rules and conventions.
+- `docs/` - product, architecture, compliance, and development documentation.
+
+## What Works Today
+
+Based on the current repository state:
+
+- `api` crate runs locally with Actix (`cargo run -p emr-api`).
+- Health endpoint is available at `/healthz`.
+- Prototype patient endpoints are available at:
+  - `/api/patients`
+  - `/api/patients/{id}`
+- `cargo fmt`, `cargo check`, and `cargo test` are wired for the current workspace.
+
+## What Is Not Built Yet
+
+- Production authentication and RBAC.
+- Real database-backed clinical and billing workflows.
+- Enforced audit logging across sensitive reads/writes.
+- Active React frontend implementation.
+- Billing engine and billing work queue execution.
+- Executive dashboards and leadership action workflows.
+- Production FHIR integration pipeline.
+- Active jobs/worker runtime integrated with production data flows.
+
+## Development Setup
 
 ### Prerequisites
-- [Rust](https://rustup.rs/) (1.78+)
-- [Just](https://github.com/casey/just) command runner
 
-### Start Development Environment
+- Rust (stable toolchain)
+- `just` (optional)
+
+### Run the API
 
 ```bash
-# Clone and start the platform
-git clone https://github.com/GabeGiancarlo/EMR.git
-cd EMR
+cargo run -p emr-api
+```
+
+or:
+
+```bash
 just dev
 ```
 
-**That's it!** This will:
-1. 🚀 Start the Rust API server on `http://localhost:8080`
-2. 🌐 Open the interactive demo in your browser
-3. ✅ Show you all available endpoints and features
-
-### Stop Everything
-```bash
-just dev-stop
-```
-
-## 📡 Live API Endpoints
-
-| Method | Endpoint | Description | Status |
-|--------|----------|-------------|--------|
-| `GET` | `/healthz` | System health check | ✅ Working |
-| `GET` | `/api/patients` | List all patients | ✅ Working |
-| `GET` | `/api/patients/{id}` | Get specific patient | ✅ Working |
-
-### Test the API
-```bash
-# Quick API test
-just api-test
-
-# Manual testing
-curl http://localhost:8080/healthz
-curl http://localhost:8080/api/patients
-curl http://localhost:8080/api/patients/patient-001
-```
-
-## 🌐 Demo Interface Features
-
-The interactive demo (`demo/index.html`) includes:
-
-- **📊 Dashboard** - Real-time system status and metrics
-- **👥 Patient Management** - Interactive patient list with live search
-- **🔧 API Testing** - Live endpoint testing with JSON responses
-- **⚡ Real-time Updates** - Auto-refreshing connection status
-- **🎨 Modern UI** - Responsive design with Tailwind CSS
-
-## 🛠️ Development Commands
-
-| Command | Description |
-|---------|-------------|
-| `just dev` | Start complete development environment |
-| `just api` | Start only the API server |
-| `just demo` | Open the demo interface |
-| `just api-test` | Test all API endpoints |
-| `just build` | Build the project |
-| `just test` | Run all tests |
-| `just lint` | Run code linting |
-| `just status` | Show project status |
-
-## 🏗️ Architecture
-
-```
-EMR Platform/
-├── api/                 # 🦀 Rust API Server (Actix-web)
-│   ├── src/main.rs     # Main server with endpoints
-│   └── Cargo.toml      # Dependencies
-├── demo/               # 🌐 Interactive Demo Interface
-│   └── index.html      # Full-featured web UI
-├── scripts/            # 🔧 Development automation
-├── justfile           # ⚡ Command runner configuration
-└── README.md          # 📖 This file
-```
-
-### Technology Stack
-
-- **Backend**: Rust + Actix-web
-- **Frontend**: HTML5 + JavaScript + Tailwind CSS
-- **API**: RESTful JSON endpoints with CORS
-- **Development**: Just + Hot-reload + Auto-browser opening
-- **Data**: Mock patient data (ready for database integration)
-
-## 🔥 What's Working Right Now
-
-### ✅ **Rust API Server**
-- Fast, memory-safe HTTP server
-- CORS-enabled for browser access
-- JSON API responses
-- Real patient data endpoints
-- Health monitoring
-
-### ✅ **Demo Interface**
-- Real-time API communication
-- Interactive patient search and filtering
-- Live endpoint testing
-- Responsive design
-- Auto-refreshing status indicators
-
-### ✅ **Developer Experience**
-- One-command startup (`just dev`)
-- Hot-reload development
-- Auto-opening browser demo
-- Comprehensive testing commands
-- Easy stop/start controls
-
-## 🎯 Roadmap & Next Steps
-
-Now that the foundation is working, upcoming features include:
-
-### Phase 1: Core Features
-- [ ] **Database Integration** (PostgreSQL)
-- [ ] **Patient CRUD Operations** (Create, Update, Delete)
-- [ ] **Authentication System** (OAuth2/JWT)
-- [ ] **Data Validation** & Error Handling
-
-### Phase 2: Medical Features
-- [ ] **FHIR R4 Integration** (External medical systems)
-- [ ] **Appointment Management**
-- [ ] **Medical Records** & Documentation
-- [ ] **Prescription Management**
-
-### Phase 3: Advanced Features
-- [ ] **Audit Trails** (HIPAA compliance)
-- [ ] **Role-based Access Control**
-- [ ] **Medical Imaging** Support
-- [ ] **Reporting & Analytics**
-
-### Phase 4: Production
-- [ ] **Docker Deployment**
-- [ ] **CI/CD Pipeline**
-- [ ] **Security Hardening**
-- [ ] **Performance Optimization**
-
-## 🔒 Security & Compliance
-
-This platform is being built with **HIPAA compliance** in mind:
-
-- **Data Encryption** (planned)
-- **Audit Logging** (planned)
-- **Access Controls** (planned)
-- **Secure Communications** (HTTPS ready)
-- **Memory Safety** (Rust guarantees)
-
-## 🤝 Contributing
-
-This project is in active development. To contribute:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test with `just test` and `just lint`
-5. Submit a pull request
-
-### Development Setup
-```bash
-git clone https://github.com/GabeGiancarlo/EMR.git
-cd EMR
-just setup  # Install development dependencies
-just dev    # Start development environment
-```
-
-## 📊 Project Stats
-
-- **Language**: Rust 🦀
-- **Framework**: Actix-web
-- **API Endpoints**: 3 (working)
-- **Frontend**: Interactive HTML/JS demo
-- **Development Commands**: 15+
-- **Status**: ✅ Functional prototype
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/GabeGiancarlo/EMR/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/GabeGiancarlo/EMR/discussions)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🎉 **Ready to Code!**
-
-Your EMR platform is **live and ready for development**:
+### Quick checks
 
 ```bash
-just dev    # Start everything
+cargo fmt --all
+cargo check --workspace
+cargo test --workspace
 ```
 
-**Open the demo in your browser and start building the future of healthcare technology!** 🚀
+### API smoke checks
 
----
+```bash
+curl http://127.0.0.1:8090/healthz
+curl http://127.0.0.1:8090/api/patients
+```
 
-*Built with ❤️ and Rust 🦀* 
+## Roadmap / Phases
+
+### Phase 0 — Repo Reset and Architecture Alignment
+
+- Remove stale demo/web/script assumptions.
+- Document current repo truth.
+- Define Nexus product direction.
+- Decide active vs. parked folders.
+- Establish documentation and coding standards.
+
+### Phase 1 — Backend Foundation
+
+- Refactor API into clear app/state/routes/modules.
+- Add Postgres + SQLx migrations.
+- Replace mock patient/client behavior with database-backed records.
+- Add organization, facility, user, role, and client foundations.
+- Add validation, structured errors, and async tests.
+- Add initial audit-event model.
+
+### Phase 2 — Security, Access, and Audit Foundation
+
+- Authentication.
+- Role-based access control.
+- Organization/facility scoping.
+- PHI-safe logging.
+- Audit logging for sensitive reads/writes.
+- Compliance-oriented documentation.
+
+### Phase 3 — Clinician Workspace
+
+- Clinician dashboard.
+- Client chart.
+- Calendar/sessions.
+- Clinical notes.
+- Treatment plans.
+- Documents/forms.
+- Tasks and alerts.
+
+### Phase 4 — Billing Workspace
+
+- Insurance policies.
+- Authorizations.
+- Claims.
+- Denials and appeals.
+- Payments and balances.
+- Billing work queue.
+- Claim/documentation readiness.
+
+### Phase 5 — Executive / Leadership Workspace
+
+- Census and capacity visibility.
+- Revenue and claim-health summaries.
+- Documentation compliance.
+- Staff/task visibility.
+- Outcomes and risk indicators.
+- Executive action queue.
+
+### Phase 6 — Integrations and Automation
+
+- FHIR import/export.
+- Kipu/QuickBooks migration strategy.
+- Background jobs.
+- Eligibility checks.
+- Report generation.
+- Claim status polling.
+
+### Phase 7 — Production Readiness
+
+- CI hardening.
+- Docker/deployment cleanup.
+- Secrets management.
+- Monitoring and observability.
+- Backup/restore strategy.
+- Security review.
+- Performance testing.
+- Compliance readiness review.
+
+## Current TODO
+
+- Finalize API module boundaries (`routes`, `handlers`, `services`, `repositories`).
+- Implement Postgres persistence with migrations for first role-aligned entities.
+- Add auth bootstrap (identity, sessions/tokens, role model).
+- Add audit-event model and PHI-safe logging policy in code.
+- Replace mock patient responses with repository-backed DTOs.
+- Define React/TypeScript frontend bootstrap plan and repo integration approach.
+- Decide activation criteria for parked `fhir/` and `jobs/` folders.
+
+## Documentation
+
+See [`docs/README.md`](docs/README.md) for product, architecture, decision records, compliance planning notes, and development guidance.

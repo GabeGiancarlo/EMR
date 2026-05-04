@@ -1,4 +1,4 @@
-//! Health check handler
+//! Health check handler for the Nexus API prototype.
 
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
@@ -123,7 +123,7 @@ pub async fn health_check(
 async fn check_database_health(data: &AppState) -> ServiceStatus {
     let start = std::time::Instant::now();
     
-    // TODO: Implement actual database health check
+    // TODO(nexus-phase1): Implement a real database query health probe.
     // For now, assume healthy if pool exists
     let status = if data.db_pool.status().available > 0 {
         "up"
@@ -143,7 +143,7 @@ async fn check_database_health(data: &AppState) -> ServiceStatus {
 async fn check_fhir_health(data: &AppState) -> ServiceStatus {
     let start = std::time::Instant::now();
     
-    // TODO: Implement actual FHIR server health check
+    // TODO(nexus-phase6): Implement real FHIR integration health checks.
     // For now, assume healthy
     let status = "up";
 
@@ -159,7 +159,7 @@ async fn check_fhir_health(data: &AppState) -> ServiceStatus {
 async fn check_nats_health(data: &AppState) -> ServiceStatus {
     let start = std::time::Instant::now();
     
-    // TODO: Implement actual NATS health check
+    // TODO(nexus-phase6): Implement real NATS connectivity checks.
     // For now, assume healthy if client exists
     let status = "up";
 

@@ -1,9 +1,9 @@
 version: '3.8'
 
-# HIPAA-grade EMR Platform - Docker Compose Configuration
-# 
-# This configuration sets up all services required for local development
-# and testing of the EMR platform with proper networking and security.
+# Nexus infrastructure references for local development.
+#
+# This compose file is an evolving backend-oriented scaffold and should not be
+# treated as production-ready infrastructure.
 
 services:
   # PostgreSQL 16 Database
@@ -67,7 +67,7 @@ services:
       timeout: 5s
       retries: 3
 
-  # EMR API Backend
+  # Nexus API backend
   api:
     build:
       context: ..
@@ -102,7 +102,8 @@ services:
       TLS_CERT_PATH: /app/certs/server.crt
       TLS_KEY_PATH: /app/certs/server.key
     ports:
-      - "8080:8080"
+      # Host 8090 avoids clashing with other stacks on 8080; container still listens on 8080
+      - "8090:8080"
       - "8443:8443"  # HTTPS port
     volumes:
       - ./certs:/app/certs:ro
@@ -122,49 +123,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # EMR Web Frontend
-  web:
-    build:
-      context: ..
-      dockerfile: infra/dockerfiles/Dockerfile.web
-      target: runtime
-    container_name: emr-web
-    restart: unless-stopped
-    environment:
-      # API configuration
-      WEB_API_BASE_URL: http://api:8080
-      
-      # Server configuration
-      WEB_SERVER_HOST: 0.0.0.0
-      WEB_SERVER_PORT: 3000
-      
-      # Authentication
-      WEB_AUTH_ENABLED: true
-      WEB_AUTH_JWT_SECRET: ${JWT_SECRET:-change_this_in_production_to_a_secure_random_string}
-      
-      # Feature flags
-      WEB_FEATURES_PATIENT_MANAGEMENT: true
-      WEB_FEATURES_FHIR_INTEGRATION: true
-      WEB_FEATURES_ANALYTICS: true
-      WEB_FEATURES_AUDIT_LOGGING: true
-      
-      # Logging
-      RUST_LOG: info,emr_web=debug
-    ports:
-      - "3000:3000"
-    networks:
-      - emr-network
-    depends_on:
-      api:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # EMR Jobs Worker
+  # Nexus jobs worker (parked)
   jobs:
     build:
       context: ..
@@ -274,7 +233,6 @@ services:
       - emr-network
     depends_on:
       - api
-      - web
     profiles:
       - proxy
 

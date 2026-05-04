@@ -98,7 +98,7 @@ jobs:
     if: github.event_name == 'push'
     strategy:
       matrix:
-        service: [api, web, jobs]
+        service: [api]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -215,9 +215,9 @@ jobs:
         name: license-compliance-report
         path: licenses.json
 
-  # HIPAA compliance checks
-  hipaa-compliance:
-    name: HIPAA Compliance Check
+  # HIPAA-oriented guardrails (planning-phase checks)
+  hipaa-oriented-controls:
+    name: HIPAA-Oriented Controls Check
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code

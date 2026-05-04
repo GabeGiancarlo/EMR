@@ -1,4 +1,4 @@
--- EMR Platform Database Initialization
+-- Nexus Database Initialization
 -- This script initializes the PostgreSQL database for the EMR platform
 
 -- Enable necessary extensions

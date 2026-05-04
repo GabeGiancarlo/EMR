@@ -12,22 +12,15 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # EMR API metrics
-  - job_name: "emr-api"
+  # Nexus API metrics
+  - job_name: "nexus-api"
     static_configs:
       - targets: ["api:8080"]
     metrics_path: '/metrics'
     scrape_interval: 30s
 
-  # EMR Web metrics
-  - job_name: "emr-web"
-    static_configs:
-      - targets: ["web:3000"]
-    metrics_path: '/api/metrics'
-    scrape_interval: 30s
-
-  # EMR Jobs metrics
-  - job_name: "emr-jobs"
+  # Nexus jobs metrics (parked until jobs runtime is activated)
+  - job_name: "nexus-jobs"
     static_configs:
       - targets: ["jobs:9090"]
     metrics_path: '/metrics'

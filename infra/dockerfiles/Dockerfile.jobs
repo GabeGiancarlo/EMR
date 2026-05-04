@@ -1,5 +1,5 @@
-# EMR Jobs Worker - Multi-stage Docker Build
-# This Dockerfile builds the background jobs worker service
+# Nexus jobs worker - multi-stage Docker build (parked)
+# This Dockerfile remains as a reference while the jobs runtime is not active.
 
 # Stage 1: Build dependencies (cached layer)
 FROM rust:1.78-slim-bullseye AS deps
@@ -20,17 +20,14 @@ COPY api/Cargo.toml ./api/
 COPY core/Cargo.toml ./core/
 COPY fhir/Cargo.toml ./fhir/
 COPY jobs/Cargo.toml ./jobs/
-COPY web/Cargo.toml ./web/
 
 # Create dummy source files to build dependencies
-RUN mkdir -p api/src core/src fhir/src jobs/src web/src && \
+RUN mkdir -p api/src core/src fhir/src jobs/src && \
     echo "fn main() {}" > api/src/main.rs && \
     echo "fn main() {}" > jobs/src/main.rs && \
-    echo "fn main() {}" > web/src/main.rs && \
     echo "" > core/src/lib.rs && \
     echo "" > fhir/src/lib.rs && \
-    echo "" > jobs/src/lib.rs && \
-    echo "" > web/src/lib.rs
+    echo "" > jobs/src/lib.rs
 
 # Build dependencies (will be cached)
 RUN cargo build --release --bin emr-jobs
@@ -39,14 +36,13 @@ RUN cargo build --release --bin emr-jobs
 FROM deps AS builder
 
 # Remove dummy source files
-RUN rm -rf api/src core/src fhir/src jobs/src web/src
+RUN rm -rf api/src core/src fhir/src jobs/src
 
 # Copy actual source code
 COPY api/src ./api/src
 COPY core/src ./core/src
 COPY fhir/src ./fhir/src
 COPY jobs/src ./jobs/src
-COPY web/src ./web/src
 
 # Build the application
 RUN cargo build --release --bin emr-jobs
@@ -61,9 +57,9 @@ RUN apt-get update && apt-get install -y \
     libssl1.1 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 emr \
+    && useradd -m -u 1000 nexus \
     && mkdir -p /app/logs /app/tmp \
-    && chown -R emr:emr /app
+    && chown -R nexus:nexus /app
 
 # Copy the binary from builder stage
 COPY --from=builder /app/target/release/emr-jobs /app/emr-jobs
@@ -75,7 +71,7 @@ COPY jobs/config /app/config
 RUN chmod +x /app/emr-jobs
 
 # Switch to non-root user
-USER emr
+USER nexus
 
 # Set working directory
 WORKDIR /app

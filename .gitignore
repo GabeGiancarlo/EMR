@@ -1,4 +1,4 @@
-# EMR Platform - Git Ignore Rules
+# Nexus - Git Ignore Rules
 
 # Rust
 /target/
@@ -88,6 +88,7 @@ config-backup-*
 .local/
 local/
 *.local
+.api_pid
 
 # Monitoring and observability
 prometheus/
