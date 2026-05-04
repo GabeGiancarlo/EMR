@@ -1,4 +1,4 @@
-# EMR Platform Environment Configuration
+# Nexus Environment Configuration
 # Copy this file to .env and update the values for your environment
 
 # Database Configuration
@@ -43,8 +43,8 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USERNAME=noreply@emr.local
 SMTP_PASSWORD=smtp_password
-SMTP_FROM_ADDRESS=noreply@emr.local
-SMTP_FROM_NAME=EMR Platform
+SMTP_FROM_ADDRESS=noreply@nexus.local
+SMTP_FROM_NAME=Nexus
 
 # OAuth2 Configuration
 OAUTH2_CLIENT_ID=emr_client_id
@@ -90,7 +90,7 @@ JOBS_TIMEOUT_SECONDS=300
 
 # Audit Configuration
 AUDIT_ENABLED=true
-AUDIT_RETENTION_DAYS=2555  # 7 years for HIPAA compliance
+AUDIT_RETENTION_DAYS=2555  # 7-year target, subject to compliance policy decisions
 AUDIT_LOG_SENSITIVE_DATA=false
 
 # Backup Configuration

@@ -1,4 +1,4 @@
-# cargo-deny configuration for EMR Platform
+# cargo-deny configuration for Nexus
 # This file configures cargo-deny to check for security vulnerabilities,
 # license compliance, and dependency issues
 

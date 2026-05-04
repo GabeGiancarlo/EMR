@@ -1,5 +1,5 @@
 {
-    "name": "EMR Platform Development",
+    "name": "Nexus Backend Development",
     "dockerComposeFile": [
         "../infra/docker-compose.yml",
         "docker-compose.override.yml"
@@ -52,7 +52,7 @@
                 "git.autofetch": true,
                 "sqltools.connections": [
                     {
-                        "name": "EMR PostgreSQL",
+                        "name": "Nexus PostgreSQL",
                         "driver": "PostgreSQL",
                         "previewLimit": 50,
                         "server": "postgres",
@@ -121,8 +121,8 @@
     
     // Forward ports for development
     "forwardPorts": [
-        8080,  // API server
-        3000,  // Web server
+        8090,  // API server (host port; avoids clashing with other stacks on 8080)
+        3000,  // Future frontend (planned React/TypeScript workspace)
         5432,  // PostgreSQL
         6379,  // Redis
         4222,  // NATS
@@ -134,12 +134,12 @@
     
     // Port attributes
     "portsAttributes": {
-        "8080": {
+        "8090": {
             "label": "API Server",
             "protocol": "https"
         },
         "3000": {
-            "label": "Web Server",
+            "label": "Future Frontend",
             "protocol": "https"
         },
         "5432": {
@@ -200,7 +200,7 @@
     ],
     
     // Lifecycle scripts
-    "initializeCommand": "echo 'Initializing EMR Platform development environment...'",
-    "onCreateCommand": "echo 'EMR Platform devcontainer created successfully!'",
-    "postStartCommand": "echo 'EMR Platform development environment is ready!'"
+    "initializeCommand": "echo 'Initializing Nexus development environment...'",
+    "onCreateCommand": "echo 'Nexus devcontainer created successfully!'",
+    "postStartCommand": "echo 'Nexus development environment is ready!'"
 } 

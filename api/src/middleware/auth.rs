@@ -2,7 +2,7 @@
 
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpMessage,
+    Error,
 };
 use futures_util::future::{ready, Ready};
 use std::{
@@ -47,8 +47,8 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // TODO: Implement JWT validation
-        // For now, just pass through
+        // TODO(nexus-phase2): Enforce token validation + role checks.
+        // Current behavior intentionally passes through during scaffold phase.
         let fut = self.service.call(req);
         Box::pin(async move { fut.await })
     }

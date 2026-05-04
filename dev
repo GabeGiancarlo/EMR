@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Same as `just dev` / `make dev` for backend-only local development.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+export EMR_PORT="${EMR_PORT:-8090}"
+exec env PORT="$EMR_PORT" cargo run -p emr-api

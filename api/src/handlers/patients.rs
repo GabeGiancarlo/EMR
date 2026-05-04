@@ -1,4 +1,7 @@
-//! Patient handlers
+//! Patient endpoints for the Nexus API.
+//!
+//! These handlers currently return scaffold-level data while persistence and
+//! role-based access controls are still in progress.
 
 use actix_web::{get, post, put, delete, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
@@ -33,7 +36,7 @@ pub async fn get_patient(
 ) -> Result<HttpResponse> {
     let patient_id = path.into_inner();
     
-    // TODO: Fetch from database
+    // TODO(nexus-phase1): Fetch from repository-backed storage.
     let patient = PatientResponse {
         id: patient_id,
         name: "John Doe".to_string(),
@@ -54,7 +57,7 @@ pub async fn list_patients(
 ) -> Result<HttpResponse> {
     let (page, per_page) = query.normalize();
     
-    // TODO: Fetch from database
+    // TODO(nexus-phase1): Fetch from repository-backed storage.
     let patients = vec![
         PatientResponse {
             id: "1".to_string(),
@@ -90,7 +93,7 @@ pub async fn create_patient(
     _req: HttpRequest,
     _data: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    // TODO: Save to database
+    // TODO(nexus-phase1): Persist through service/repository layers.
     let patient = PatientResponse {
         id: uuid::Uuid::new_v4().to_string(),
         name: request.name.clone(),
@@ -112,7 +115,7 @@ pub async fn update_patient(
 ) -> Result<HttpResponse> {
     let patient_id = path.into_inner();
     
-    // TODO: Update in database
+    // TODO(nexus-phase1): Persist through service/repository layers.
     let patient = PatientResponse {
         id: patient_id,
         name: request.name.clone(),
@@ -133,7 +136,7 @@ pub async fn delete_patient(
 ) -> Result<HttpResponse> {
     let _patient_id = path.into_inner();
     
-    // TODO: Delete from database
+    // TODO(nexus-phase1): Persist through service/repository layers.
     
     Ok(HttpResponse::NoContent().finish())
 } 

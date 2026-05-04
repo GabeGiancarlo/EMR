@@ -1,4 +1,4 @@
-//! Database module with connection pooling
+//! Database connection scaffolding for Nexus.
 
 use crate::config::DatabaseConfig;
 use crate::error::{ApiError, Result};
@@ -21,8 +21,8 @@ pub async fn create_pool(config: &DatabaseConfig) -> Result<Pool> {
 
 /// Run database migrations
 pub async fn run_migrations(pool: &Pool) -> Result<()> {
-    // TODO: Implement database migrations
-    // For now, just verify connection
+    // TODO(nexus-phase1): Execute SQLx migrations from the repo migration path.
+    // Current behavior only validates that a pooled connection can be acquired.
     let _conn = pool.get().await
         .map_err(|e| ApiError::database_error(&format!("Failed to get connection: {}", e)))?;
     
