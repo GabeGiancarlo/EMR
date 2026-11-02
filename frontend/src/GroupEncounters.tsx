@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   clientName,
-  date,
   initials,
   label,
   numeric,
@@ -9,6 +8,8 @@ import {
   withOriginalUpdatedAt,
 } from "./api";
 import type { WorkflowProps } from "./CarePlanning";
+import type { Row } from "./api";
+import { facilityYmd, formatFacilityTime, formatYmdLong, safeTimeZone } from "./calendar";
 import { Badge, Button, Empty, Icon, Panel } from "./ui";
 
 export default function GroupEncounters({
@@ -18,8 +19,9 @@ export default function GroupEncounters({
   edit,
   action,
   mutate,
-}: WorkflowProps) {
-  const [selectedId, setSelectedId] = useState("");
+  initialSelectedId = "",
+}: WorkflowProps & { initialSelectedId?: string }) {
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [error, setError] = useState("");
   const [savingAttendance, setSavingAttendance] = useState<Record<string, boolean>>({});
   const [pendingStatus, setPendingStatus] = useState<Record<string, string>>(
@@ -29,6 +31,12 @@ export default function GroupEncounters({
     value(b, "starts_at").localeCompare(value(a, "starts_at")),
   );
   const selected = groups.find((g) => g.id === selectedId) || groups[0];
+  const groupZone = (group: Row) => safeTimeZone(value(data.facilities.find(facility => facility.id === group.facility_id), "timezone"));
+  const groupDate = (group: Row, field = "starts_at") => {
+    const zone = groupZone(group);
+    const instant = new Date(value(group,field));
+    return `${formatYmdLong(facilityYmd(instant,zone))} · ${formatFacilityTime(instant,zone)} ${zone}`;
+  };
   const attendance = selected
     ? data.group_attendance.filter((a) => a.group_id === selected.id)
     : [];
@@ -101,7 +109,7 @@ export default function GroupEncounters({
           >
             <strong>{value(g, "title")}</strong>
             <Badge status={g.status} />
-            <small>{date(g.starts_at, true)}</small>
+            <small>{groupDate(g)}</small>
           </button>
         ))}
       </aside>
@@ -109,7 +117,7 @@ export default function GroupEncounters({
         <div className="plan-detail">
           <Panel
             title={value(selected, "title")}
-            subtitle={`${label(value(selected, "kind"))} · ${date(selected.starts_at, true)}`}
+            subtitle={`${label(value(selected, "kind"))} · ${groupDate(selected)}`}
             action={<Badge status={selected.status} />}
           >
             <div className="group-overview">
@@ -130,10 +138,7 @@ export default function GroupEncounters({
               <div>
                 <span>End time</span>
                 <strong>
-                  {new Date(value(selected, "ends_at")).toLocaleTimeString(
-                    "en-US",
-                    { hour: "numeric", minute: "2-digit" },
-                  )}
+                  {groupDate(selected, "ends_at")}
                 </strong>
               </div>
             </div>

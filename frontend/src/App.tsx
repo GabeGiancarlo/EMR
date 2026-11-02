@@ -2,6 +2,12 @@ import Setup from "./Setup";
 import NoteComposer from "./NoteComposer";
 import CarePlanning from "./CarePlanning";
 import GroupEncounters from "./GroupEncounters";
+import CalendarWorkspace from "./CalendarWorkspace";
+import StaffAvailability from "./StaffAvailability";
+import { schedulingZone, facilityWallTime } from "./schedulingTime";
+import RoleWorkspace from "./RoleWorkspace";
+import { allowedWorkspaceModes, defaultWorkspaceMode, claimMatchesFilter } from "./workspace";
+import type { WorkspaceMode } from "./workspace";
 import StructuredForms from "./StructuredForms";
 import ExportReports from "./ExportReports";
 import {
@@ -11,6 +17,9 @@ import {
 } from "./FinancialActions";
 import ClaimReadiness from "./ClaimReadiness";
 import ThemeControl from "./ThemeControl";
+import WorkspaceSearch from "./WorkspaceSearch";
+import { visibleViews } from "./search";
+import type { SearchResult } from "./search";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -74,7 +83,7 @@ const titles: Record<View, { title: string; description: string }> = {
       "Follow each client from the first conversation through continuing care.",
   },
   schedule: {
-    title: "Make room for meaningful care.",
+    title: "Calendar",
     description: "Sessions, people, and documentation stay connected.",
   },
   notes: {
@@ -222,8 +231,14 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState("templates");
   const [teamTab, setTeamTab] = useState("members");
   const [scheduleTab, setScheduleTab] = useState("agenda");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [scheduleFocusId, setScheduleFocusId] = useState("");
   const [documentationTab, setDocumentationTab] = useState("notes");
   const [query, setQuery] = useState("");
+  const [recordFocus, setRecordFocus] = useState<SearchResult | null>(null);
+  const [queueScope, setQueueScope] = useState<{ ids: string[]; label: string } | null>(null);
+  const [workspaceChoice, setWorkspaceChoice] = useState<{ actorId: string; mode: WorkspaceMode } | null>(null);
+  const [calendarToday, setCalendarToday] = useState(false);
   const [filter, setFilter] = useState("all");
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [readinessClaim, setReadinessClaim] = useState<Row | null>(null);
@@ -231,7 +246,6 @@ export default function App() {
   const [actor, setActor] = useState(
     localStorage.getItem(actorStorageKey) || "",
   );
-  const [weekOffset, setWeekOffset] = useState(0);
   const requestVersion = useRef(0);
   const reload = useCallback(async () => {
     const version = ++requestVersion.current;
@@ -290,8 +304,13 @@ export default function App() {
     setLoading(true);
     setDialog(null);
     setReadinessClaim(null);
+    setSelectedGroupId("");
+    setScheduleFocusId("");
     setClientId("");
     setView("overview");
+    setRecordFocus(null);
+    setQueueScope(null);
+    setWorkspaceChoice(null);
     setQuery("");
     setFilter("all");
     setMobile(false);
@@ -300,6 +319,13 @@ export default function App() {
   };
   const navigate = (next: View) => {
     setView(next);
+    setRecordFocus(null);
+    setQueueScope(null);
+    setCalendarToday(false);
+    setScheduleFocusId("");
+    if (next === "settings" && !data?.permissions?.templates?.read) setSettingsTab("facilities");
+    if (next === "billing" && !data?.permissions?.[billingTab as Resource]?.read)
+      setBillingTab((["claims", "policies", "authorizations", "payments"] as Resource[]).find(resource => data?.permissions?.[resource]?.read) || "claims");
     setClientId("");
     setQuery("");
     setFilter("all");
@@ -406,8 +432,47 @@ export default function App() {
     setView("clients");
     setQuery("");
   }
+  function openSearchResult(result: SearchResult) {
+    navigate(result.view);
+    if (result.resource === "clients") openChart(result.row);
+    else if (result.resource === "notes") {
+      setDocumentationTab("notes");
+      setDialog({ title: value(result.row, "title"), record: result.row, kind: "viewnote" });
+    } else if (result.resource === "groups") {
+      setSelectedGroupId(result.row.id);
+      setScheduleTab("groups");
+    } else if (result.resource === "sessions") {
+      setScheduleFocusId(result.row.id);
+      setScheduleTab("agenda");
+    } else {
+      if (["claims", "authorizations", "policies"].includes(result.resource)) setBillingTab(result.resource);
+      if (result.resource === "staff") setTeamTab("members");
+      if (result.resource === "templates") setSettingsTab("templates");
+      setRecordFocus(result);
+    }
+  }
+  function openWorkspaceQueue(next: View, target = "all") {
+    navigate(next);
+    if (target.startsWith("record:")) {
+      const resource = next === "notes" ? "notes" : "tasks";
+      const row = data?.[resource].find(row => row.id === target.slice(7));
+      if (row) openSearchResult({key:`${resource}:${row.id}`,resource,row,title:value(row,"title"),detail:"",view:next});
+    } else if (next === "billing") {
+      if (["claims", "policies", "authorizations", "payments"].includes(target)) setBillingTab(target);
+      else { setBillingTab("claims"); setFilter(target); }
+    } else if (next === "schedule") {
+      setScheduleTab(target === "pending" ? "pending" : "agenda"); setCalendarToday(target === "today");
+    } else if (target.startsWith("census:")) {
+      const [, facilityId, level] = target.split(":");
+      const episodes = data!.episodes.filter(row => row.status === "active" && row.facility_id === facilityId && row.level_of_care === level);
+      setQueueScope({ids:episodes.map(row => value(row,"client_id")),label:`${value(facility(facilityId),"name")} · ${label(level)} · active episodes`});
+    } else if (next === "team" && target.startsWith("role:")) {
+      setTeamTab("members");
+      setQueueScope({ids:data!.staff.filter(row => row.active === true && row.role === target.slice(5)).map(row => row.id),label:`Active ${label(target.slice(5))} team members`});
+    } else { setFilter(target); if (next === "notes") setDocumentationTab("notes"); }
+  }
   const matching = (rows: Row[]) =>
-    rows.filter(
+    rows.filter(r => (!recordFocus || r.id === recordFocus.row.id) && (!queueScope || queueScope.ids.includes(r.id))).filter(
       (r) =>
         !query ||
         Object.values(r).some(
@@ -428,6 +493,8 @@ export default function App() {
   );
   const toolbar = (placeholder: string, extra?: ReactNode) => (
     <div className="toolbar">
+      {recordFocus && <div className="search-selection"><span>Showing: <strong>{recordFocus.title}</strong></span><Button variant="text small" onClick={() => setRecordFocus(null)}>Show all</Button></div>}
+      {queueScope && <div className="search-selection"><span>Showing: <strong>{queueScope.label}</strong></span><Button variant="text small" onClick={() => setQueueScope(null)}>Show all</Button></div>}
       <div className="search-field">
         <Icon name="search" size={18} />
         <input
@@ -606,17 +673,13 @@ export default function App() {
     );
 
   const orgName = value(data.organizations[0], "name") || "Your organization";
+  const workspaceModes = allowedWorkspaceModes(data);
+  const preferredMode = workspaceChoice?.actorId === data.actor.id ? workspaceChoice.mode : localStorage.getItem(`nexus.workspace.${data.actor.id}`) as WorkspaceMode | null;
+  const workspaceMode = preferredMode && workspaceModes.includes(preferredMode) ? preferredMode : defaultWorkspaceMode(data);
+  const workspaceTitle = {clinical:"Clinical workspace",billing:"Billing workspace",executive:"Executive workspace"}[workspaceMode];
+  const workspaceDescription = {clinical:"Appointments, documentation, and follow-through for your care team.",billing:"Coverage, claims, and payments in one place.",executive:"Care delivery, workforce, and financial oversight."}[workspaceMode];
+  const navOrder: View[] = workspaceMode === "billing" ? ["overview","billing","clients","tasks","schedule","notes","team","settings"] : workspaceMode === "executive" ? ["overview","clients","billing","tasks","schedule","notes","team","settings"] : ["overview","schedule","notes","clients","tasks","billing","team","settings"];
   const metric = data.metrics;
-  const sessionsByDate = [...data.sessions].sort((a, b) =>
-    value(a, "starts_at").localeCompare(value(b, "starts_at")),
-  );
-  const upcoming = sessionsByDate
-    .filter(
-      (s) =>
-        s.status === "scheduled" &&
-        new Date(value(s, "starts_at")).getTime() >= Date.now(),
-    )
-    .slice(0, 4);
   const allNotes = data.notes;
   const dueTasks = data.tasks.filter((t) => t.status !== "done");
   const primaryAction: Partial<Record<View, ReactNode>> = {
@@ -625,10 +688,7 @@ export default function App() {
         <Icon name="plus" size={17} /> New client
       </Button>
     ) : null,
-    schedule: can(
-      scheduleTab === "groups" ? "groups" : "sessions",
-      canSessions,
-    ) ? (
+    schedule: scheduleTab === "groups" && can("groups", canSessions) ? (
       <Button
         onClick={() => create(scheduleTab === "groups" ? "groups" : "sessions")}
       >
@@ -674,241 +734,6 @@ export default function App() {
         </Button>
       ) : null,
   };
-
-  function renderOverview() {
-    return (
-      <>
-        <div className="metric-grid">
-          <Metric
-            icon="clients"
-            title="Active clients"
-            number={metric.active_clients}
-            caption={`${data!.episodes.filter((e) => e.status === "active").length} active care episodes`}
-          />
-          <Metric
-            icon="schedule"
-            title="Scheduled sessions"
-            number={metric.scheduled_sessions}
-            caption="Across your care team"
-            color="blue"
-          />
-          <Metric
-            icon="notes"
-            title="Notes awaiting signature"
-            number={metric.draft_notes}
-            caption="Drafts in the documentation queue"
-            color="sand"
-          />
-          <Metric
-            icon="billing"
-            title="Outstanding balance"
-            number={money(metric.outstanding_cents)}
-            caption="Submitted balances less payments and adjustments"
-            color="rose"
-          />
-        </div>
-        <div className="overview-grid">
-          <Panel
-            title="Your care pathway"
-            subtitle="One connected journey, from arrival to continuing care."
-            className="pathway-panel"
-          >
-            <div className="pathway">
-              {[
-                {
-                  name: "Intake",
-                  count: data!.clients.filter((c) =>
-                    ["inquiry", "intake"].includes(value(c, "status")),
-                  ).length,
-                  icon: "clients",
-                  view: "clients",
-                },
-                {
-                  name: "In care",
-                  count: metric.active_clients,
-                  icon: "leaf",
-                  view: "clients",
-                },
-                {
-                  name: "Documentation",
-                  count: metric.draft_notes,
-                  icon: "notes",
-                  view: "notes",
-                },
-                {
-                  name: "Billing readiness",
-                  count: data!.claims.filter((c) => c.status === "ready")
-                    .length,
-                  icon: "billing",
-                  view: "billing",
-                },
-              ].map((step, i) => (
-                <button
-                  key={step.name}
-                  onClick={() => navigate(step.view as View)}
-                  className="pathway-step"
-                >
-                  <span className="pathway-num">0{i + 1}</span>
-                  <span className={`pathway-icon tone-${i}`}>
-                    <Icon name={step.icon as IconName} size={24} />
-                  </span>
-                  <strong>{step.name}</strong>
-                  <span>
-                    {step.count}{" "}
-                    {i === 0
-                      ? "clients"
-                      : i === 1
-                        ? "clients"
-                        : i === 2
-                          ? "drafts"
-                          : "ready claims"}
-                  </span>
-                  {i < 3 && (
-                    <span className="pathway-arrow">
-                      <Icon name="arrow" size={17} />
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </Panel>
-          <Panel className="care-note">
-            <span className="eyebrow">A LITTLE MORE CLARITY</span>
-            <Icon name="leaf" size={34} />
-            <h2>Good care is a team effort.</h2>
-            <p>
-              Keep handoffs visible. Give every next step an owner, a date, and
-              a place in the client’s story.
-            </p>
-            <Button variant="text" onClick={() => navigate("tasks")}>
-              See your team’s tasks <Icon name="arrow" size={17} />
-            </Button>
-          </Panel>
-          <Panel
-            title="Coming up"
-            subtitle="Your next scheduled sessions"
-            action={
-              <Button variant="text small" onClick={() => navigate("schedule")}>
-                View schedule <Icon name="arrow" size={15} />
-              </Button>
-            }
-          >
-            {upcoming.length ? (
-              <div className="session-list">
-                {upcoming.map((s) => (
-                  <div className="session-row" key={s.id}>
-                    <div className="session-date">
-                      <strong>
-                        {new Date(value(s, "starts_at")).getDate()}
-                      </strong>
-                      <span>
-                        {new Date(value(s, "starts_at")).toLocaleDateString(
-                          "en-US",
-                          { month: "short" },
-                        )}
-                      </span>
-                    </div>
-                    <div className="grow">
-                      <strong>{clientName(client(s.client_id))}</strong>
-                      <small>
-                        {label(value(s, "kind"))} ·{" "}
-                        {value(staff(s.clinician_id), "name")}
-                      </small>
-                    </div>
-                    <div className="align-right">
-                      <span>
-                        {new Date(value(s, "starts_at")).toLocaleTimeString(
-                          "en-US",
-                          { hour: "numeric", minute: "2-digit" },
-                        )}
-                      </span>
-                      <small>{value(s, "location")}</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                icon="schedule"
-                title="A little space in the schedule"
-                description="Your upcoming sessions will appear here when care is scheduled."
-                action={
-                  clinical ? (
-                    <Button
-                      variant="secondary small"
-                      onClick={() => create("sessions")}
-                    >
-                      Schedule a session
-                    </Button>
-                  ) : undefined
-                }
-              />
-            )}
-          </Panel>
-          <Panel
-            title="Needs attention"
-            subtitle="The next steps that move care forward"
-            action={<span className="count-pill">{dueTasks.length}</span>}
-          >
-            {dueTasks.length ? (
-              <div className="attention-list">
-                {dueTasks.slice(0, 5).map((t) => (
-                  <button
-                    key={t.id}
-                    className="attention-row"
-                    onClick={() => edit("tasks", t)}
-                  >
-                    <span className={`priority-dot ${value(t, "priority")}`} />
-                    <div className="grow">
-                      <strong>{value(t, "title")}</strong>
-                      <small>
-                        {value(staff(t.assignee_id), "name") || "Unassigned"} ·{" "}
-                        {date(t.due_date)}
-                      </small>
-                    </div>
-                    <Icon name="chevron" size={16} />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                icon="check"
-                title="A clear next step starts here"
-                description="Add tasks for admissions, documentation, coverage, or care coordination."
-                action={
-                  <Button
-                    variant="secondary small"
-                    onClick={() => create("tasks")}
-                  >
-                    Add a task
-                  </Button>
-                }
-              />
-            )}
-          </Panel>
-        </div>
-        {!data!.clients.length && (
-          <div className="start-strip">
-            <span className="start-icon">
-              <Icon name="clients" size={24} />
-            </span>
-            <div>
-              <h3>Your workspace is ready for its first client.</h3>
-              <p>
-                Start with an intake record, then connect an episode, coverage,
-                and care team.
-              </p>
-            </div>
-            {canClients && (
-              <Button onClick={() => create("clients")}>
-                Start an intake <Icon name="arrow" size={17} />
-              </Button>
-            )}
-          </div>
-        )}
-      </>
-    );
-  }
 
   function renderClients() {
     if (selectedClient) return renderChart(selectedClient);
@@ -1062,7 +887,7 @@ export default function App() {
                   },
                 ]
               : []),
-            { id: "notes", label: "Documentation", count: notes.length },
+            ...(canRead("notes", clinical) ? [{ id: "notes", label: "Documentation", count: notes.length }] : []),
             ...(canRead("form_responses", clinical)
               ? [
                   {
@@ -1074,7 +899,7 @@ export default function App() {
                   },
                 ]
               : []),
-            { id: "coverage", label: "Coverage", count: policies.length },
+            ...(canRead("policies", false) ? [{ id: "coverage", label: "Coverage", count: policies.length }] : []),
             { id: "tasks", label: "Tasks", count: tasks.length },
             { id: "consents", label: "Consents", count: consents.length },
           ]}
@@ -1539,16 +1364,20 @@ export default function App() {
           value={scheduleTab}
           onChange={setScheduleTab}
           tabs={[
-            { id: "agenda", label: "Individual agenda" },
+            { id: "agenda", label: "Calendar" },
             {
               id: "groups",
               label: "Group encounters",
               count: data!.groups.length,
             },
+            ...(canRead("sessions", false) ? [{ id: "availability", label: "Staff availability" }] : []),
+            ...(canRead("sessions", false) ? [{ id: "pending", label: "Awaiting attendance" }] : []),
           ]}
         />
         {scheduleTab === "groups" ? (
           <GroupEncounters
+            key={selectedGroupId}
+            initialSelectedId={selectedGroupId}
             data={data!}
             canWrite={can("groups", canSessions)}
             create={create}
@@ -1556,198 +1385,36 @@ export default function App() {
             action={action}
             mutate={mutate}
           />
+        ) : scheduleTab === "pending" ? (
+          <Panel title="Client appointments awaiting attendance" subtitle="All scheduled client appointments, including past dates that still need attendance. Shared groups have one entry per enrolled client.">
+            {toolbar("Search scheduled client appointments")}
+            <Table rows={matching(data!.sessions).filter(row => row.status === "scheduled").sort((a,b)=>value(a,"starts_at").localeCompare(value(b,"starts_at")))} columns={[
+              {label:"Client",render:row=><Button variant="text small" onClick={()=>{const person=client(row.client_id); if(person) openChart(person);}}>{clientName(client(row.client_id))}</Button>},
+              {label:"Appointment",render:row=>{const zone=schedulingZone(data!,row,"sessions"); return <><strong>{facilityWallTime(value(row,"starts_at"),zone).replace("T"," ")}</strong><small>{zone} · {label(value(row,"kind"))}</small></>;}},
+              {label:"Clinician",render:row=>value(data!.staff.find(person=>person.id===row.clinician_id),"name")},
+              {label:"Action",render:row=><Button variant="text small" onClick={()=>{setScheduleFocusId(row.id);setScheduleTab("agenda");}}>Open appointment</Button>},
+            ]} empty={<Empty icon="schedule" title="Attendance is up to date" description="Appointments with scheduled status will appear here until attendance is resolved." />} />
+          </Panel>
+        ) : scheduleTab === "availability" ? (
+          <StaffAvailability key={data!.actor!.id} data={data!} />
         ) : (
-          renderScheduleAgenda()
+          <CalendarWorkspace
+            key={`${data!.actor!.id}:${scheduleFocusId}:${calendarToday}`}
+            data={data!}
+            canWrite={canSessions || can("groups", false)}
+            focusSessionId={scheduleFocusId}
+            startView={calendarToday ? "day" : "month"}
+            onCreateSession={initial => create("sessions", initial)}
+            onCreateGroup={initial => create("groups", initial)}
+            onEditSession={row => edit("sessions", row)}
+            onOpenGroup={row => { setSelectedGroupId(row.id); setScheduleTab("groups"); }}
+            onOpenClient={openChart}
+            onOpenTasks={row => row ? openSearchResult({key:`tasks:${row.id}`, resource:"tasks", row, title:value(row,"title"), detail:"Task", view:"tasks"}) : navigate("tasks")}
+          />
         )}
       </>
     );
   }
-  function renderScheduleAgenda() {
-    const start = new Date();
-    start.setDate(
-      start.getDate() - ((start.getDay() + 6) % 7) + weekOffset * 7,
-    );
-    start.setHours(0, 0, 0, 0);
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    const rows = matching(sessionsByDate).filter((s) => {
-      const d = new Date(value(s, "starts_at"));
-      return d >= start && d < end;
-    });
-    return (
-      <>
-        <Panel className="calendar-panel">
-          <div className="calendar-head">
-            <div>
-              <span className="eyebrow">WEEKLY AGENDA</span>
-              <h2>
-                {start.toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                })}{" "}
-                –{" "}
-                {days[6].toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </h2>
-            </div>
-            <div className="row-actions">
-              <Button
-                variant="secondary small"
-                onClick={() => setWeekOffset(weekOffset - 1)}
-              >
-                <Icon name="back" size={16} />
-                <span className="sr-only">Previous week</span>
-              </Button>
-              <Button
-                variant="secondary small"
-                onClick={() => setWeekOffset(0)}
-              >
-                Today
-              </Button>
-              <Button
-                variant="secondary small"
-                onClick={() => setWeekOffset(weekOffset + 1)}
-              >
-                <Icon name="arrow" size={16} />
-                <span className="sr-only">Next week</span>
-              </Button>
-            </div>
-          </div>
-          <div className="week-strip">
-            {days.map((d) => {
-              const count = rows.filter(
-                (s) =>
-                  new Date(value(s, "starts_at")).toDateString() ===
-                  d.toDateString(),
-              ).length;
-              return (
-                <div
-                  key={d.toISOString()}
-                  className={
-                    d.toDateString() === new Date().toDateString()
-                      ? "today"
-                      : ""
-                  }
-                >
-                  <span>
-                    {d.toLocaleDateString("en-US", { weekday: "short" })}
-                  </span>
-                  <strong>{d.getDate()}</strong>
-                  <small>
-                    {count ? `${count} session${count > 1 ? "s" : ""}` : "Open"}
-                  </small>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-        <Panel>
-          {toolbar("Search this week’s sessions…")}
-          <Table
-            rows={rows}
-            columns={[
-              { label: "Client", render: clientCell },
-              {
-                label: "When",
-                render: (r) => (
-                  <div>
-                    <strong>{date(r.starts_at, true)}</strong>
-                    <small>
-                      Until{" "}
-                      {new Date(value(r, "ends_at")).toLocaleTimeString(
-                        "en-US",
-                        { hour: "numeric", minute: "2-digit" },
-                      )}
-                    </small>
-                  </div>
-                ),
-              },
-              {
-                label: "Session",
-                render: (r) => (
-                  <div>
-                    {label(value(r, "kind"))}
-                    <small>{value(r, "location")}</small>
-                  </div>
-                ),
-              },
-              {
-                label: "Clinician",
-                render: (r) => value(staff(r.clinician_id), "name"),
-              },
-              { label: "Status", render: (r) => <Badge status={r.status} /> },
-              {
-                label: "Actions",
-                render: (r) =>
-                  canSessions ? (
-                    <div className="row-actions">
-                      <Button
-                        variant="text small"
-                        onClick={() => edit("sessions", r)}
-                      >
-                        Edit
-                      </Button>
-                      {r.status === "scheduled" && (
-                        <Button
-                          variant="text small"
-                          onClick={() =>
-                            void quick(
-                              `/api/sessions/${r.id}`,
-                              withOriginalUpdatedAt(r, { status: "completed" }),
-                            )
-                          }
-                        >
-                          Complete
-                        </Button>
-                      )}
-                      {r.status === "completed" && (
-                        <Button
-                          variant="text small"
-                          onClick={() =>
-                            create("notes", {
-                              client_id: r.client_id,
-                              session_id: r.id,
-                            })
-                          }
-                        >
-                          Write note
-                        </Button>
-                      )}
-                    </div>
-                  ) : null,
-              },
-            ]}
-            empty={
-              <Empty
-                icon="schedule"
-                title="A fresh week of possibilities"
-                description="Schedule a session and connect it to the client, clinician, and care episode."
-                action={
-                  canSessions ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => create("sessions")}
-                    >
-                      Schedule session
-                    </Button>
-                  ) : undefined
-                }
-              />
-            }
-          />
-        </Panel>
-      </>
-    );
-  }
-
   function renderNotes() {
     if (!canRead("notes", clinical) && !canRead("form_responses", clinical))
       return (
@@ -1874,10 +1541,7 @@ export default function App() {
 
   function renderBilling() {
     if (
-      !canRead(
-        "claims",
-        ["admin", "billing", "executive", "clinical_lead"].includes(role),
-      )
+      !(["claims", "policies", "authorizations", "payments"] as Resource[]).some(resource => canRead(resource, false))
     )
       return (
         <Panel>
@@ -1888,7 +1552,7 @@ export default function App() {
           />
         </Panel>
       );
-    const rows = matching(data![billingTab as Resource]);
+    const rows = matching(data![billingTab as Resource]).filter(row => billingTab !== "claims" || claimMatchesFilter(value(row,"status"),filter));
     const cols: Record<string, Column[]> = {
       claims: [
         { label: "Client / service", render: clientCell },
@@ -2117,6 +1781,7 @@ export default function App() {
           onChange={(t) => {
             setBillingTab(t);
             setQuery("");
+            setRecordFocus(null);
           }}
           tabs={[
             { id: "claims", label: "Claims", count: data!.claims.length },
@@ -2127,10 +1792,10 @@ export default function App() {
               count: data!.authorizations.length,
             },
             { id: "payments", label: "Payments", count: data!.payments.length },
-          ]}
+          ].filter(tab => canRead(tab.id as Resource, false))}
         />
         <Panel>
-          {toolbar(`Search ${billingTab}…`)}
+          {toolbar(`Search ${billingTab}…`, billingTab === "claims" ? <select className="compact-select" aria-label="Filter claims" value={filter} onChange={event=>setFilter(event.target.value)}>{["all","draft","ready","submitted","denied","paid","voided","balance","attention"].map(status=><option key={status} value={status}>{status === "all" ? "All claims" : status === "balance" ? "Current balances" : status === "attention" ? "Needs attention" : label(status)}</option>)}</select> : undefined)}
           <Table
             rows={rows}
             columns={cols[billingTab]}
@@ -2220,13 +1885,14 @@ export default function App() {
             >
               <option value="all">All tasks</option>
               <option value="open">Open</option>
+              <option value="unfinished">Open & in progress</option>
               <option value="in_progress">In progress</option>
               <option value="done">Completed</option>
             </select>,
           )}
           <Table
             rows={matching(data!.tasks).filter(
-              (t) => filter === "all" || t.status === filter,
+              (t) => filter === "all" || (filter === "unfinished" ? t.status !== "done" : t.status === filter),
             )}
             columns={taskColumns}
             empty={
@@ -2252,7 +1918,7 @@ export default function App() {
       <>
         <Tabs
           value={teamTab}
-          onChange={setTeamTab}
+          onChange={tab => { setTeamTab(tab); setRecordFocus(null); }}
           tabs={[
             { id: "members", label: "Team members", count: data!.staff.length },
             { id: "permissions", label: "Role overview" },
@@ -2453,12 +2119,12 @@ export default function App() {
       <>
         <Tabs
           value={settingsTab}
-          onChange={setSettingsTab}
+          onChange={tab => { setSettingsTab(tab); setRecordFocus(null); }}
           tabs={[
-            { id: "templates", label: "Forms & templates" },
+            ...(canRead("templates", false) ? [{ id: "templates", label: "Forms & templates" }] : []),
             { id: "facilities", label: "Facilities" },
             { id: "integrations", label: "Connections" },
-            { id: "audit", label: "Audit history" },
+            ...(data!.permissions?.audit?.read ? [{ id: "audit", label: "Audit history" }] : []),
           ]}
         />
         {settingsTab === "templates" && (
@@ -2466,9 +2132,10 @@ export default function App() {
             title="Your organization’s forms"
             subtitle="Author reusable prompts, then use them when documenting care."
           >
-            {data!.templates.length ? (
+            {toolbar("Search templates…")}
+            {matching(data!.templates).length ? (
               <div className="template-grid">
-                {data!.templates.map((t) => (
+                {matching(data!.templates).map((t) => (
                   <article className="template-card" key={t.id}>
                     <div>
                       <span className="template-icon">
@@ -2673,8 +2340,9 @@ export default function App() {
             <span>Recovery workspace</span>
           </div>
         </div>
+        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<select aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode)) return; localStorage.setItem(`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</select></label>}
         <nav aria-label="Primary navigation">
-          {nav.map((item) => (
+          {nav.filter(item => visibleViews(data).includes(item.id)).sort((a,b)=>navOrder.indexOf(a.id)-navOrder.indexOf(b.id)).map((item) => (
             <div key={item.id}>
               {item.section && (
                 <div className="nav-section">{item.section}</div>
@@ -2737,6 +2405,7 @@ export default function App() {
             <strong>{nav.find((n) => n.id === view)?.label}</strong>
           </div>
           <div className="topbar-right">
+            <WorkspaceSearch key={data.actor.id} data={data} onSelect={openSearchResult} />
             <span className="today-label">
               <Icon name="sun" size={17} />
               {new Date().toLocaleDateString("en-US", {
@@ -2761,7 +2430,7 @@ export default function App() {
           </div>
         </header>
         <main>
-          <div className="page-heading">
+          <div className={`page-heading ${view === "schedule" ? "compact-heading" : ""}`}>
             <div>
               <span className="eyebrow">
                 {view === "overview"
@@ -2774,9 +2443,9 @@ export default function App() {
               <h1>
                 {view === "clients" && selectedClient
                   ? "One person. A connected team."
-                  : titles[view].title}
+                  : view === "overview" ? workspaceTitle : titles[view].title}
               </h1>
-              <p>{titles[view].description}</p>
+              <p>{view === "overview" ? workspaceDescription : titles[view].description}</p>
             </div>
             {view === "overview" ? (
               <Button variant="secondary" onClick={() => navigate("clients")}>
@@ -2799,7 +2468,7 @@ export default function App() {
             </div>
           )}
           {view === "overview"
-            ? renderOverview()
+            ? <RoleWorkspace data={data} mode={workspaceMode} onNavigate={openWorkspaceQueue} onOpenClient={openChart} onCreate={create} onOpenClaim={row=>openSearchResult({key:`claims:${row.id}`,resource:"claims",row,title:`${clientName(client(row.client_id))} · ${value(row,"service_code")}`,detail:"Claim",view:"billing"})} />
             : view === "clients"
               ? renderClients()
               : view === "schedule"

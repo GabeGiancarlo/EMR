@@ -1,5 +1,7 @@
 # Local verification record
 
+The latest [workspace and scheduling checkpoint](workspace-rebuild-checkpoint.md) adds 43 passing Rust unit tests, six passing real PostgreSQL/HTTP suites, 36 passing frontend tests, successful build/lint/format checks, observed browser paths and a 25-table backup/restore. Older entries below retain their original counts and limitations. The [50-capability acceptance ledger](../product/acceptance-ledger.md) remains the current scope record; this checkpoint is not full product acceptance.
+
 Verified November 2, 2026 against the local PostgreSQL/API and custom frontend. This records observed behavior, not a production-readiness or compliance certification.
 
 **Product acceptance remains incomplete.** The owner's review exposed gaps not closed by the tests below. The [scope and delivery audit](roadmap-gap-audit.md) maps those gaps to the original roadmap and newly supplied Figma references. Earlier browser checks establish only the paths specifically described here.

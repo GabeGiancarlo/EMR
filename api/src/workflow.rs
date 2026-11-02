@@ -15,6 +15,7 @@ pub async fn action(
     let actor = access::actor(&req, &state.pool).await?;
     access::require(&state.pool, &actor, &resource, true).await?;
     let mut tx = state.pool.begin().await?;
+    let actor = access::lock_mutation(&req, &mut tx, actor.org, &resource).await?;
     if resource == "staff" {
         sqlx::query("SELECT pg_advisory_xact_lock(9182402)")
             .execute(&mut *tx)
@@ -294,6 +295,7 @@ pub async fn action(
             sqlx::query("UPDATE tasks SET assignee_id=$1,updated_at=now() WHERE organization_id=$2 AND assignee_id=$3 AND status IN ('open','in_progress')").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
             sqlx::query("UPDATE groups SET clinician_id=$1,updated_at=now() WHERE organization_id=$2 AND clinician_id=$3 AND status='scheduled' AND starts_at>now()").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
             sqlx::query("UPDATE sessions SET clinician_id=$1,updated_at=now() WHERE organization_id=$2 AND clinician_id=$3 AND status='scheduled' AND starts_at>now()").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
+            crate::scheduling::check_staff_schedule(&mut tx, &actor, replacement_id).await?;
             sqlx::query("UPDATE clients SET primary_clinician_id=$1,updated_at=now() WHERE organization_id=$2 AND primary_clinician_id=$3").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
             sqlx::query("UPDATE exceptions SET revoked=true,updated_at=now() WHERE organization_id=$1 AND staff_id=$2 AND NOT revoked").bind(actor.org).bind(id).execute(&mut *tx).await?;
             records::patch(

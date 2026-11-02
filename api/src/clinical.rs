@@ -155,6 +155,8 @@ pub async fn prepare_create(
             }
             let status = value["status"].as_str().unwrap_or("scheduled");
             check_attendance_time(&group, status)?;
+            let candidate = json!({"client_id":value["client_id"],"episode_id":value["episode_id"],"clinician_id":group["clinician_id"],"starts_at":group["starts_at"],"ends_at":group["ends_at"],"kind":"group","status":attendance_status(status)?,"group_id":group["id"]});
+            crate::scheduling::check_session(tx, actor, &candidate).await?;
             let session=records::insert(tx,"sessions",object(json!({"client_id":value["client_id"],"episode_id":value["episode_id"],"clinician_id":group["clinician_id"],"starts_at":group["starts_at"],"ends_at":group["ends_at"],"kind":"group","status":attendance_status(status)?,"location":group["location"],"group_id":group["id"]})),actor).await?;
             data.insert("session_id".into(), session["id"].clone());
         }
@@ -261,6 +263,20 @@ pub async fn before_update(
             if let Some(status) = data.get("status").and_then(Value::as_str) {
                 attendance_status(status)?;
                 check_attendance_time(&group, status)?;
+                if matches!(status, "scheduled" | "attended")
+                    && !matches!(before["status"].as_str(), Some("scheduled" | "attended"))
+                {
+                    let mut candidate = records::get(
+                        tx,
+                        "sessions",
+                        records::uuid(before, "session_id")?,
+                        actor.org,
+                        false,
+                    )
+                    .await?;
+                    candidate["status"] = json!(attendance_status(status)?);
+                    crate::scheduling::check_session(tx, actor, &candidate).await?;
+                }
                 if before["status"] == "excused" && status != "excused" {
                     let count:i64=sqlx::query_scalar("SELECT count(*) FROM group_attendance WHERE group_id=$1 AND organization_id=$2 AND status<>'excused'").bind(records::uuid(&group,"id")?).bind(actor.org).fetch_one(&mut **tx).await?;
                     if count >= group["capacity"].as_i64().unwrap_or_default() {

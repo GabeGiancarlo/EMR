@@ -244,6 +244,8 @@ pub async fn create(
             "Use the original payment's reversal action",
         ));
     }
+    let mut tx = state.pool.begin().await?;
+    let actor = access::lock_mutation(&req, &mut tx, actor.org, &resource).await?;
     let mut data = records::clean(&resource, &body)?;
     if resource == "sessions" && data.get("kind") == Some(&json!("group")) {
         return Err(ApiError::invalid(
@@ -261,7 +263,6 @@ pub async fn create(
             "Create an active or planned episode, then use discharge",
         ));
     }
-    let mut tx = state.pool.begin().await?;
     crate::clinical::prepare_create(&mut tx, &actor, &resource, &mut data).await?;
     if resource == "form_responses" {
         crate::forms::prepare_create(&mut tx, &actor, &mut data).await?;
@@ -276,6 +277,11 @@ pub async fn create(
     }
     if resource == "payments" {
         validate_payment(&mut tx, &actor, &Value::Object(data.clone())).await?;
+    }
+    if resource == "sessions" {
+        crate::scheduling::check_session(&mut tx, &actor, &Value::Object(data.clone())).await?;
+    } else if resource == "groups" {
+        crate::scheduling::check_group(&mut tx, &actor, &Value::Object(data.clone())).await?;
     }
     let result = records::insert(&mut tx, &resource, data, &actor).await?;
     if resource == "episodes" && result["status"] == "active" {
@@ -354,6 +360,7 @@ pub async fn update(
         return Err(ApiError::conflict("Payments are append only"));
     }
     let mut tx = state.pool.begin().await?;
+    let actor = access::lock_mutation(&req, &mut tx, actor.org, &resource).await?;
     if resource == "staff" {
         sqlx::query("SELECT pg_advisory_xact_lock(9182402)")
             .execute(&mut *tx)
@@ -471,6 +478,13 @@ pub async fn update(
     }
     records::scope(&mut tx, &actor, &resource, &merged).await?;
     records::validate_links(&mut tx, &actor, &resource, &merged).await?;
+    if schedule_changed(&before, &merged) {
+        if resource == "sessions" {
+            crate::scheduling::check_session(&mut tx, &actor, &merged).await?;
+        } else if resource == "groups" {
+            crate::scheduling::check_group(&mut tx, &actor, &merged).await?;
+        }
+    }
     if resource == "clients" && data.contains_key("birth_date") {
         ensure_birth_date_change_is_adult(&mut tx, &actor, &before, &merged).await?;
     }
@@ -488,6 +502,13 @@ pub async fn update(
     access::audit(&mut tx, &actor, "update", &resource, Some(id)).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(result))
+}
+fn schedule_changed(before: &Value, after: &Value) -> bool {
+    ["starts_at", "ends_at", "clinician_id"]
+        .iter()
+        .any(|key| before[*key] != after[*key])
+        || (!matches!(before["status"].as_str(), Some("scheduled" | "completed"))
+            && matches!(after["status"].as_str(), Some("scheduled" | "completed")))
 }
 async fn facility_local_today(
     tx: &mut Transaction<'_, Postgres>,
