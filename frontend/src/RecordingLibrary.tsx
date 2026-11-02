@@ -5,14 +5,16 @@ import type { Row } from "./api";
 import { Button } from "./ui";
 import type { RecordingPolicy } from "./recordingTypes";
 import "./recording.css";
+import TranscriptReviewPanel from "./TranscriptReviewPanel";
 
 type Track={recording_id:string;id:string;state:string;mime_type:string;label:string;role:string;byte_count:number;created_at:string};
 type Saved={id:string;state:string;mode:string;created_at:string;retain_until:string;reason:string;tracks:Track[]};
 type Archive={recordings:Omit<Saved,"tracks">[];tracks:Track[]};
 const hydrate=(archive:Archive):Saved[]=>archive.recordings.map(r=>({...r,tracks:archive.tracks.filter(t=>t.recording_id===r.id)}));
-export default function RecordingLibrary({roomId,actor,zone}:{roomId:string;actor:Row|null;zone:string}) {
+export default function RecordingLibrary({roomId,actor,zone,onDirtyChange}:{roomId:string;actor:Row|null;zone:string;onDirtyChange:(dirty:boolean)=>void}) {
   const[recordings,setRecordings]=useState<Saved[]>([]),[policies,setPolicies]=useState<RecordingPolicy[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[media,setMedia]=useState<{url:string;mime:string;label:string}|null>(null);
   const[title,setTitle]=useState(""),[purpose,setPurpose]=useState(""),[days,setDays]=useState(""),[video,setVideo]=useState(false),[showPolicy,setShowPolicy]=useState(false);
+  const [transcriptTrack,setTranscriptTrack]=useState<string|null>(null);
   const generation=useRef(0),url=useRef("");
   const date=(input:string)=>new Intl.DateTimeFormat("en-US",{timeZone:zone,dateStyle:"medium",timeStyle:"short"}).format(new Date(input));
   const reload=useCallback(async()=>{const result=await request<Archive>(`/api/telehealth/rooms/${roomId}/recordings`);setRecordings(hydrate(result));},[roomId]);
@@ -25,8 +27,9 @@ export default function RecordingLibrary({roomId,actor,zone}:{roomId:string;acto
     {error&&<p className="error-banner" role="alert">{error}</p>}
     <p>Each participant device saves a separate segment. A device label does not verify the identity of every speaker heard on it.</p>
     {!recordings.length&&<p>No recordings have been requested for this room.</p>}
-    {recordings.map(r=><article key={r.id} className="rec-saved"><h4>{date(r.created_at)} · {r.mode} · {r.state}</h4><p>{r.reason} Retention review due {date(r.retain_until)}. This date does not automatically delete media.</p>{!r.tracks.length&&<p>No media was saved.</p>}{r.tracks.map(t=><div className="visit-invite-row" key={t.id}><span>{t.label} · {t.state} · {Math.ceil(t.byte_count/1024)} KB</span><Button variant="secondary small" disabled={busy||t.state!=="complete"} onClick={()=>void play(r,t)}>Review {t.label} segment</Button></div>)}</article>)}
+    {recordings.map(r=><article key={r.id} className="rec-saved"><h4>{date(r.created_at)} · {r.mode} · {r.state}</h4><p>{r.reason} Retention review due {date(r.retain_until)}. This date does not automatically delete media.</p>{!r.tracks.length&&<p>No media was saved.</p>}{r.tracks.map(t=><div className="visit-invite-row" key={t.id}><span>{t.label} · {t.state} · {Math.ceil(t.byte_count/1024)} KB</span><Button variant="secondary small" disabled={busy||t.state!=="complete"||!!(transcriptTrack&&transcriptTrack!==t.id)} onClick={()=>void play(r,t)}>Review {t.label} segment</Button><Button variant="secondary small" disabled={busy||t.state!=="complete"||!!transcriptTrack} onClick={()=>{setTranscriptTrack(t.id);void play(r,t);}}>Transcript review · {t.label}</Button></div>)}</article>)}
     {media&&<div className="rec-playback"><h4>{media.label} · recorded device</h4>{media.mime.startsWith("video/")?<video src={media.url} controls playsInline aria-label="Saved recording playback"/>:<audio src={media.url} controls aria-label="Saved recording playback"/>}<Button variant="text small" onClick={()=>{if(url.current)URL.revokeObjectURL(url.current);url.current="";setMedia(null);}}>Close playback</Button></div>}
+    {transcriptTrack&&<TranscriptReviewPanel key={`${roomId}:${transcriptTrack}`} roomId={roomId} trackId={transcriptTrack} zone={zone} onDirtyChange={onDirtyChange} onClose={()=>setTranscriptTrack(null)}/>}
     {manage&&<details><summary>Recording policies ({policies.filter(p=>p.active).length} active)</summary><p>Policies describe the purpose and retention review period before participants agree. Create a new version to change these terms. Retiring a policy stops further capture under it.</p>{policies.filter(p=>p.active).map(p=><div className="visit-invite-row" key={p.id}><span><strong>{p.title}</strong> · review after {p.retention_days} days<br/>{p.purpose}</span><Button variant="text small" disabled={busy} onClick={()=>void retire(p.id)}>Retire {p.title}</Button></div>)}<Button variant="secondary small" onClick={()=>setShowPolicy(!showPolicy)}>{showPolicy?"Cancel new policy":"Create recording policy"}</Button>
       {showPolicy&&<form className="rec-form" onSubmit={savePolicy}><label>Policy title<input value={title} onChange={e=>setTitle(e.target.value)} required maxLength={120}/></label><label>Purpose presented to participants<textarea value={purpose} onChange={e=>setPurpose(e.target.value)} required minLength={10} maxLength={2000}/></label><label>Retention review period in days<input type="number" min={1} max={3650} step={1} required value={days} onChange={e=>setDays(e.target.value)}/></label><label className="rec-check"><input type="checkbox" checked={video} onChange={e=>setVideo(e.target.checked)}/>Allow participants' cameras as well as microphones</label><Button type="submit" disabled={busy}>Save policy version</Button></form>}
     </details>}

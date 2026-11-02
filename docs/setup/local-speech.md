@@ -78,3 +78,11 @@ Example against loopback only, after the variables are set and the API is restar
 ```
 curl -sS -X POST -H "content-type: audio/wav" -H "x-nexus-actor: ACTOR_UUID" -H "x-nexus-client: CLIENT_UUID" -H "x-nexus-consent: CONSENT_UUID" --data-binary @recording.wav http://127.0.0.1:8090/api/speech/transcribe
 ```
+
+## Saved WebM recordings
+
+Run `./tools/setup-local-media.ps1`, then restart the API. The helper verifies the FFmpeg 9.0.2 Windows essentials archive SHA-256 `60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba` before extraction into ignored `.local/media-tools`. `start-api.ps1` discovers that decoder and the existing recognizer. Explicit `NEXUS_FFMPEG_CLI` overrides discovery. This is an optional standalone decoder, not a frontend component dependency.
+
+[FFmpeg downloads](https://ffmpeg.org/download.html) links to the [Gyan Windows build provider](https://www.gyan.dev/ffmpeg/builds/). The installed build includes GPL components; its distribution/deployment license obligations require review before shipping a packaged service. No executable/model is committed.
+
+Recorded-media processing uses separate `transcription` consent, persisted job status, bounded five-minute PCM slices, timed JSON, model-content SHA-256, and explicit transcript review. It does not use the uploaded-WAV endpoint's ten-minute limit. See [the checkpoint and remaining limits](../development/transcript-checkpoint.md). Temporary decoded files remain plaintext until cleanup; crash cleanup and secure erasure are not established.

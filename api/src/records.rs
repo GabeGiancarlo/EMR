@@ -50,7 +50,7 @@ pub fn fields(resource: &str) -> Result<Vec<&'static str>> {
         "plan_reviews"=>"plan_id summary goal_progress next_review_date",
         "groups"=>"facility_id clinician_id title kind starts_at ends_at capacity location",
         "group_attendance"=>"group_id client_id episode_id status",
-        "form_responses"=>"client_id episode_id session_id template_id answers source_type source_excerpt field_provenance",
+        "form_responses"=>"client_id episode_id session_id template_id answers source_type source_excerpt field_provenance transcript_excerpt_id",
         _=>return Err(ApiError::missing())
     };
     Ok(value.split_whitespace().collect())
@@ -96,7 +96,7 @@ pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
             "consents" => "expires_on revoked_on",
             "treatment_plans" | "plan_reviews" => "next_review_date",
             "goals" => "target_date",
-            "form_responses" => "episode_id session_id",
+            "form_responses" => "episode_id session_id transcript_excerpt_id",
             _ => "",
         };
         if value.is_null() && !nullable.split_whitespace().any(|k| k == key) {

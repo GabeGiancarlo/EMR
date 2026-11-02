@@ -319,7 +319,41 @@ pub async fn playback(
             "This recording track is incomplete and cannot be presented as a complete recording",
         ));
     }
-    let chunks=sqlx::query("SELECT sequence,key_id,nonce,ciphertext,plain_sha256,plain_length FROM recording_chunks WHERE track_id=$1 ORDER BY sequence").bind(tid).fetch_all(&mut *tx).await?;
+    let bytes = decrypt_track(&mut tx, &room, &track).await?;
+    access::audit(&mut tx, &actor, "playback", "recording_tracks", Some(tid)).await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok()
+        .insert_header((
+            "Content-Type",
+            track["mime_type"]
+                .as_str()
+                .unwrap_or("application/octet-stream"),
+        ))
+        .insert_header(("Cache-Control", "no-store"))
+        .insert_header(("X-Content-Type-Options", "nosniff"))
+        .insert_header(("Referrer-Policy", "no-referrer"))
+        .body(bytes))
+}
+
+pub(super) async fn decrypt_track(
+    tx: &mut Transaction<'_, Postgres>,
+    room: &Value,
+    track: &Value,
+) -> Result<Vec<u8>> {
+    let tid = uid(track, "id")?;
+    let rid = uid(track, "recording_id")?;
+    if track["state"] != "complete" {
+        return Err(ApiError::conflict("Only complete media can be processed"));
+    }
+    if !track["byte_count"]
+        .as_i64()
+        .is_some_and(|n| (1..=MAX_TRACK_BYTES).contains(&n))
+    {
+        return Err(ApiError::conflict(
+            "The stored track has an invalid byte count",
+        ));
+    }
+    let chunks=sqlx::query("SELECT sequence,key_id,nonce,ciphertext,plain_sha256,plain_length FROM recording_chunks WHERE track_id=$1 ORDER BY sequence").bind(tid).fetch_all(&mut **tx).await?;
     if chunks.is_empty() || chunks.len() as i64 != track["expected_chunks"].as_i64().unwrap_or(-1) {
         return Err(ApiError::conflict(
             "The stored media sequence is incomplete",
@@ -332,7 +366,7 @@ pub async fn playback(
             return Err(ApiError::conflict("The stored media sequence has a gap"));
         }
         let plain = crypto::open(
-            uid(&room, "organization_id")?,
+            uid(room, "organization_id")?,
             rid,
             tid,
             seq,
@@ -347,19 +381,17 @@ pub async fn playback(
                 "The stored media failed its integrity check",
             ));
         }
+        if bytes.len().saturating_add(plain.len()) > MAX_TRACK_BYTES as usize {
+            return Err(ApiError::conflict(
+                "The stored track exceeds its media limit",
+            ));
+        }
         bytes.extend_from_slice(&plain);
     }
-    access::audit(&mut tx, &actor, "playback", "recording_tracks", Some(tid)).await?;
-    tx.commit().await?;
-    Ok(HttpResponse::Ok()
-        .insert_header((
-            "Content-Type",
-            track["mime_type"]
-                .as_str()
-                .unwrap_or("application/octet-stream"),
-        ))
-        .insert_header(("Cache-Control", "no-store"))
-        .insert_header(("X-Content-Type-Options", "nosniff"))
-        .insert_header(("Referrer-Policy", "no-referrer"))
-        .body(bytes))
+    if bytes.len() as i64 != track["byte_count"].as_i64().unwrap_or(-1) {
+        return Err(ApiError::conflict(
+            "The stored media byte count does not match its saved manifest",
+        ));
+    }
+    Ok(bytes)
 }

@@ -1,6 +1,6 @@
 //! Encounter-bound local telehealth. Admission is authorization, not identity verification.
 mod manager;
-mod recording;
+pub(crate) mod recording;
 mod visitor;
 
 use crate::{
