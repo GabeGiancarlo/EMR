@@ -56,6 +56,18 @@ Metrics include outstanding_cents (submitted/denied/paid balances less posted pa
 
 ## Treatment planning and group encounters
 
+### Scheduling reservations and time away
+
+New and rescheduled individual appointments reserve clinician and client. Group parents reserve the facilitator even before enrollment; attendance-linked sessions reserve each participating client without double-counting the facilitator. Scheduled/completed care reserves its interval; cancelled/no-show care does not. Intervals are half-open, allowing back-to-back appointments. Conflicts return 409 without other clients' details. Restoring excused attendance, group rescheduling and offboarding future assignments are checked transactionally; a conflict rolls back the entire operation. Migration preserves historical overlaps, and title-only edits do not rewrite them.
+
+- GET `/api/scheduling/unavailability`: organization-scoped rows, requires session read access. Reasons are visible to administrators, clinical leads, support and the owning clinician; other permitted viewers receive `Unavailable`.
+- POST `/api/scheduling/unavailability`: `{staff_id, starts_at, ends_at, reason, active?}`. Administrators, clinical leads and support manage clinical staff blocks; clinicians manage their own. Requires session write access. Active blocks require active clinical staff and cannot overlap active blocks or reserved care. Reasons contain 1–200 characters; keep personal/clinical details out of this field.
+- PATCH `/api/scheduling/unavailability/{id}`: editable `starts_at`, `ends_at`, `reason`, `active`; immutable owner. `_expected_updated_at` is required (428 missing, 409 stale). Set `active:false` to cancel reversibly. Administrators can cancel inactive staff members' blocks; reactivation requires active clinical staff.
+
+Current record/workflow mutations acquire an organization advisory transaction lock before record locks. Operator activity, role and write exceptions are rechecked after waiting; expiry uses wall-clock time. This conservative prototype strategy serializes writes per organization; production load capacity is not established. Direct SQL writes bypass these application checks and are not a supported booking interface. Recurrence, room capacity and calendar availability overlays remain unimplemented.
+
+Browser entry uses the episode/facility timezone and sends offset-bearing timestamps. Nonexistent local times are rejected; repeated DST minutes require an occurrence choice. The API independently validates timestamp intervals.
+
 The following resources use the same GET/POST/PATCH pattern and are included in bootstrap:
 
 - treatment_plans: client_id, episode_id, title, presenting_needs, strengths, next_review_date (nullable). Server sets author_id and status=draft. Signed active plans are immutable. POST `/api/treatment_plans/{id}/activate` with `{}` requires at least one goal; author/clinical lead/admin attests and signs. POST `/api/treatment_plans/{id}/complete` with `{reason}` completes active plan. POST `/api/treatment_plans/{id}/revise` with `{reason}` copies signed plan and goals into a new draft linked by supersedes_plan_id; original remains active until new draft activates and atomically supersedes it.

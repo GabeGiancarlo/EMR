@@ -909,7 +909,10 @@ async fn verify_role_changes_preserve_clinical_assignments(
     let client = create(pool, actor, "clients", json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Role transition","birth_date":"1990-01-01"})).await;
     let episode = create(pool, actor, "episodes", json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
     let future = chrono::Utc::now() + chrono::Duration::days(2);
-    for kind in ["client", "session", "group"] {
+    for (index, kind) in ["client", "session", "group"].into_iter().enumerate() {
+        // Each assignment is eventually transferred to the same administrator.
+        // Use distinct appointments so this tests role changes, not double-booking.
+        let future = future + chrono::Duration::hours(index as i64 * 2);
         let staff = create(pool, actor, "staff", json!({"name":format!("Synthetic {kind} clinician"),"email":format!("role-{kind}@example.invalid"),"role":"clinician"})).await;
         let staff_id = staff["id"].as_str().unwrap();
         let (resource, assignment, field) = match kind {

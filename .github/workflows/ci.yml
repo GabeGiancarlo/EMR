@@ -88,6 +88,8 @@ jobs:
         run: cargo test --locked --test speech_postgres -- --ignored
       - name: PostgreSQL adult intake integration
         run: cargo test --locked --test intake_postgres -- --ignored
+      - name: PostgreSQL scheduling and availability integration
+        run: cargo test --locked --test scheduling_postgres -- --ignored
 
   frontend:
     name: Frontend build

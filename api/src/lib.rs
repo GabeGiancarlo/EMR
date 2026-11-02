@@ -2,12 +2,14 @@
 mod access;
 mod adult;
 mod applicability;
+mod availability;
 mod clinical;
 mod exports;
 mod forms;
 mod readiness;
 mod records;
 mod routes;
+mod scheduling;
 mod speech;
 mod workflow;
 
@@ -131,6 +133,18 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 )
                 .route("/setup", web::post().to(routes::setup))
                 .route("/bootstrap", web::get().to(routes::bootstrap))
+                .route(
+                    "/scheduling/unavailability",
+                    web::get().to(availability::list),
+                )
+                .route(
+                    "/scheduling/unavailability",
+                    web::post().to(availability::create),
+                )
+                .route(
+                    "/scheduling/unavailability/{id}",
+                    web::patch().to(availability::update),
+                )
                 .service(
                     web::resource("/speech/transcribe")
                         .app_data(web::PayloadConfig::new(speech::MAX_WAV_BYTES))

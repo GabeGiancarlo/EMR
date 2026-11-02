@@ -29,6 +29,7 @@ erDiagram
     payments ||--o| payment_reversals : corrects
     clients ||--o{ consents : records
     staff ||--o{ exceptions : receives
+    staff ||--o{ staff_unavailability : reserves
     staff ||--o{ audit_events : performs
     staff |o--o{ tasks : owns
 ```
@@ -52,6 +53,10 @@ Templates also carry organization-authored stage/care-level rules and a required
 PATCH uses `_expected_updated_at` to compare the loaded version under the record lock. Missing versions return 428, stale versions 409, and neither creates an update audit. Signed-record immutability remains an additional constraint. Local audio is transient: whisper.cpp produces draft text, authorization/recording consent is checked before and after processing, and only deliberately saved source text becomes part of the form record. Consent calendar dates follow the client's facility timezone.
 
 Discharge closes the episode, completes its active plans and cancels scheduled activity after its end date. It does not erase history or settle receivables. Staff offboarding preserves authorship and transfers open tasks, future appointments and current client assignments.
+
+## Scheduling and availability
+
+Migration 010 adds `staff_unavailability` with organization/owner/creator composite foreign keys, positive intervals, bounded reasons, reversible active status and version timestamps. Indexes cover time away, individual clinician appointments, client appointments and group facilitators. Existing care rows are unchanged. Organization mutations serialize and recheck reservations within the writing transaction, including offboarding transfers. See [scheduling invariants and limits](api-contract.md#scheduling-reservations-and-time-away). Recurrence, rooms and staffing capacity are not modeled yet.
 
 ## Financial integrity
 

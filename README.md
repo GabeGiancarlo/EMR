@@ -2,7 +2,7 @@
 
 Nexus connects recovery-center care, billing readiness and operational oversight. The local prototype uses a custom React/TypeScript interface, a Rust/Actix API and PostgreSQL. It starts with an empty database: organization setup and every client record come from user input.
 
-**Current stage: early functional engineering prototype, not a completed initial product.** Dedicated clinician/billing/executive journeys, the full calendar, telehealth, client portal and records lifecycle remain incomplete. See the [scope and delivery audit](docs/development/roadmap-gap-audit.md), including the newly supplied Figma references and the [preserved original roadmap](docs/product/original-roadmap.md).
+**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive home screens and a day/week/month/agenda calendar now work against persisted records. Complete role journeys, recurring scheduling, telehealth, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the expanded objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [tested workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md) and the [preserved original roadmap](docs/product/original-roadmap.md).
 
 Authentication is deliberately deferred. Local operator selection exercises application permissions but does not verify identity. The API requires explicit development mode and refuses a non-loopback bind. Do not use real patient data or publish this mode.
 
@@ -38,8 +38,10 @@ Open http://127.0.0.1:5173. The API is at http://127.0.0.1:8090; `/healthz` chec
 ## Connected workflows
 
 - Organization and facility setup; team roles and expiring permission exceptions.
+- Permission-filtered global search and separate clinical, billing and executive home screens; local workspace and light/dark/system preferences.
 - Client intake, care episodes, clinician assignment and discharge.
 - Session scheduling, authored clinical notes, signing and append-only amendments.
+- Facility-time calendar entry with DST occurrence selection; transactional clinician/client conflicts, audited staff time away and an attendance queue.
 - Shared group encounters, attendance and linked individual documentation.
 - Treatment plans, measurable goals, activation, progress reviews and revision history.
 - User-authored form templates, versioned responses, source excerpts, review/signing and consent attestations.
@@ -67,6 +69,7 @@ cargo test --locked --test exports_postgres -- --ignored
 cargo test --locked --test form_requirements_postgres -- --ignored
 cargo test --locked --test speech_postgres -- --ignored
 cargo test --locked --test intake_postgres -- --ignored
+cargo test --locked --test scheduling_postgres -- --ignored
 cd frontend
 npm test
 npm run build
