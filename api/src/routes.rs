@@ -382,7 +382,7 @@ pub async fn update(
     require_current_version(&before, expected)?;
     crate::clinical::before_update(&mut tx, &actor, &resource, &before, &data).await?;
     if resource == "form_responses" {
-        crate::forms::before_update(&actor, &before, &mut data)?;
+        crate::forms::before_update(&mut tx, &actor, &before, &mut data).await?;
     }
     for key in [
         "client_id",

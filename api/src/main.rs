@@ -31,6 +31,7 @@ async fn main() -> io::Result<()> {
         .await
         .map_err(io::Error::other)?;
     emr_api::migrate(&pool).await.map_err(io::Error::other)?;
+    emr_api::start_background_workers(pool.clone());
     println!(
         "Nexus local API: http://{host}:{port} (authentication deferred; development actors only)"
     );

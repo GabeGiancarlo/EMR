@@ -155,3 +155,7 @@ POST `/api/claims/{id}/return-to-draft` `{}` returns a ready, unsubmitted claim 
 POST `/api/speech/transcribe` accepts a raw `audio/wav` body and `x-nexus-client` / `x-nexus-consent` UUID headers in addition to the local actor header. Only administrators, clinical leads, and primary-assigned clinicians can transcribe. An active same-client recording consent is required using the client's facility calendar date. Resource exceptions cannot extend this role set. Authorization is re-read under locks before processing and in the completion-audit transaction.
 
 Input is PCM16 mono 16 kHz, at most 20 MiB / 10 minutes. One whisper.cpp process runs at a time, with a 120-second execution limit and no hosted fallback. Missing local configuration returns 503, occupied worker 429, invalid WAV 400, and oversized input 413. A successful no-store response is `{transcript, engine: "whisper.cpp", manual_review_required: true}`. Nothing is signed or saved as a form automatically. See [setup, provenance and observed verification](../setup/local-speech.md).
+
+## Recorded-media transcripts and source-bound forms
+
+See [transcript endpoints, review states and provenance](../development/transcript-contract.md) and the [verified checkpoint](../development/transcript-checkpoint.md). Migration 013 adds persistent background recognition, versioned review, and patient-specific immutable excerpts. Authentication remains deliberately deferred.

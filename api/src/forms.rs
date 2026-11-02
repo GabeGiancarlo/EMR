@@ -1,4 +1,5 @@
 //! Typed user-authored forms with immutable template snapshots and answer provenance.
+use crate::telehealth::recording::transcripts::excerpts;
 use crate::{access::Actor, records, ApiError, Result};
 use chrono::{NaiveDate, Utc};
 use serde_json::{json, Map, Value};
@@ -85,6 +86,7 @@ pub async fn prepare_create(
     actor: &Actor,
     data: &mut Map<String, Value>,
 ) -> Result<()> {
+    excerpts::bind_form(tx, actor, data, None).await?;
     let value = Value::Object(data.clone());
     let template = records::get(
         tx,
@@ -118,7 +120,12 @@ pub async fn prepare_create(
     }
     validate(&Value::Object(data.clone()), false)
 }
-pub fn before_update(actor: &Actor, before: &Value, data: &mut Map<String, Value>) -> Result<()> {
+pub async fn before_update(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Actor,
+    before: &Value,
+    data: &mut Map<String, Value>,
+) -> Result<()> {
     if before["status"] == "signed" {
         return Err(ApiError::conflict(
             "Signed responses are immutable; create an amendment",
@@ -136,6 +143,7 @@ pub fn before_update(actor: &Actor, before: &Value, data: &mut Map<String, Value
             ));
         }
     }
+    excerpts::bind_form(tx, actor, data, Some(before)).await?;
     let mut combined = before.clone();
     for (key, value) in data.iter() {
         combined[key] = value.clone();
@@ -162,6 +170,7 @@ pub async fn perform(
             if old["status"] != "draft" {
                 return Err(ApiError::conflict("Only drafts can enter review"));
             }
+            excerpts::validate_form(tx, actor, old).await?;
             validate(old, true)?;
             records::patch(
                 tx,
@@ -184,6 +193,7 @@ pub async fn perform(
             if old["status"] != "reviewed" {
                 return Err(ApiError::conflict("Review the form before signing"));
             }
+            excerpts::validate_form(tx, actor, old).await?;
             validate(old, true)?;
             records::patch(
                 tx,
@@ -215,6 +225,7 @@ pub async fn perform(
                 "source_type",
                 "source_excerpt",
                 "field_provenance",
+                "transcript_excerpt_id",
             ] {
                 data.insert(key.into(), old[key].clone());
             }
@@ -232,6 +243,7 @@ pub async fn perform(
                     "Sign the reviewed form before creating its clinical note",
                 ));
             }
+            excerpts::validate_form(tx, actor, old).await?;
             let fields = old["template_snapshot"]["fields"]
                 .as_array()
                 .ok_or_else(|| ApiError::invalid("Invalid form snapshot"))?;
