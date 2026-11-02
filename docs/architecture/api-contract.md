@@ -7,6 +7,7 @@ Manager routes use the current local `x-nexus-actor` policy. Only admin, clinica
 | Method / route | Contract |
 |---|---|
 | POST `/api/telehealth/rooms` | `{session_id}` or `{group_id}`, exclusively. Reuses an unended room; expires after four hours. Shared group child sessions are rejected. |
+| GET `/api/telehealth/rooms?session_id=…` or `?group_id=…` | Scoped encounter history, including completed encounters. Returns `{rooms}` newest first, bounded to 100. |
 | GET `/api/telehealth/rooms/{id}` | `{room,participants,events,invitees}`. No token/hash. Minimal eligible group roster does not grant chart access. |
 | POST `/api/telehealth/rooms/{id}/host` | `{}` → one new clinician invitation `{participant,token,expires_at}`. |
 | POST `/api/telehealth/rooms/{id}/invite` | `{client_id}` → one invitation for an eligible encounter participant. |
@@ -21,6 +22,24 @@ Visitor routes use `Authorization: Bearer <64-hex-character capability>` without
 - Host-only `admit`/`remove` with `{to}`, and `end`. These recheck staff/encounter eligibility on every request.
 
 Connected snapshots contain room expiry/state, self, permitted participants, current-generation signals/cursor, host presence, permitted board and ICE configuration. Waiting guests see only themselves. Identity/chart IDs, raw credentials, hashes and clinical narratives are excluded. Admission is not identity verification. `visit_busy` (409) rejects another live window; `visit_connection` (409) requires rejoin after a stale generation/presence timeout; `visit_access` (403) stops media on access loss/expiry/end. Long polling interruptions close media and require rejoin. A presence event is not attendance or billable duration. See [evidence and limits](../development/telehealth-checkpoint.md).
+
+## Recording and media (local prototype)
+
+Connected visit snapshots additionally contain `recording:{configured,policies,current}`. Waiting/unconnected participants receive no recording roster or policy list. Hosts receive available organization policies; request participants see the snapshotted purpose, retention review period, mode and agreement decisions without chart-consent identifiers.
+
+| Method / route | Contract |
+|---|---|
+| GET `/api/recording-policies` | Clinical-role scoped `{configured,policies}` with read audit. |
+| POST `/api/recording-policies` | Admin/clinical lead `{title,purpose,retention_days,allow_video}`. Immutable version; no defaults seeded. |
+| POST `/api/recording-policies/{id}/retire` | Admin/clinical lead. Ends further capture under that version. |
+| POST `/api/telehealth/visit/recordings/{action}` | Visit capability + `connection_id`; actions request, accept, decline, withdraw, start, pause, resume, stop. Request adds `policy_id,mode`. All but own decisions are host-only. Returns recording context. |
+| POST `/api/telehealth/visit/recordings/{id}/tracks` | Visit capability + `{connection_id,mime_type}` during authorized recording; returns `{track_id,upload_token,mime_type}`. WebM audio/video whitelist. |
+| PUT `/api/recording-tracks/{id}/chunks/{sequence}` | Separate upload bearer, raw bytes. Maximum 8 MiB, ordered from zero, identical duplicates idempotent. First piece must have WebM EBML prefix. |
+| POST `/api/recording-tracks/{id}/finish` | Upload bearer + `{expected_chunks,complete}`. Complete requires a nonempty exact stored piece count. |
+| GET `/api/telehealth/rooms/{id}/recordings` | Current clinical room scope; `{recordings,tracks}`, no upload hashes/tokens. Audited. |
+| GET `/api/telehealth/rooms/{room}/recordings/{recording}/tracks/{track}` | Current clinical room scope; authenticated/decrypted complete WebM with no-store headers and committed playback audit. No range/streaming support yet. |
+
+Upload rights are rechecked against current participant eligibility, generation, chart consent, agreement and policy. Normal pause/end gives 30 seconds for final media; withdrawal and retired policies reject additional bytes. Retained historical playback does not imply continued capture consent. Limits, key setup, recovery evidence and outstanding disclosure/retention work are in the [recording checkpoint](../development/recording-checkpoint.md). Recording does not transcribe, sign, complete attendance or determine billable duration.
 
 Record API responses are JSON; export routes return CSV. Errors are `{error:{code,message}}`. UUID identifiers are strings, money is integer cents, dates are ISO dates, timestamps RFC3339. No example clients are seeded. API listens at `http://127.0.0.1:8090`.
 

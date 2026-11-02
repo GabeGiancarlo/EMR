@@ -612,7 +612,7 @@ export default function CalendarWorkspace({
               )}
             </dl>
             <div className="cal-dialog-actions">
-              {openEvent.status === "scheduled" && ["admin","clinical_lead","clinician"].includes(value(data.actor,"role")) && (value(data.actor,"role")!=="clinician"||openEvent.clinicianId===data.actor?.id) && <Button onClick={()=>{onTelehealth(openEvent.source==="group"||parentGroup?"groups":"sessions",parentGroup||openEvent.row);setOpenKey(null);}}>Open telehealth</Button>}
+              {["admin","clinical_lead","clinician"].includes(value(data.actor,"role")) && (value(data.actor,"role")!=="clinician"||openEvent.clinicianId===data.actor?.id) && <Button onClick={()=>{onTelehealth(openEvent.source==="group"||parentGroup?"groups":"sessions",parentGroup||openEvent.row);setOpenKey(null);}}>{openEvent.status==="scheduled"?"Open telehealth":"Visit records"}</Button>}
               {openEvent.source === "session" && !parentGroup && canWrite && data.permissions?.sessions?.write && (
                 <Button onClick={() => { onEditSession(openEvent.row); setOpenKey(null); }}>Edit session</Button>
               )}

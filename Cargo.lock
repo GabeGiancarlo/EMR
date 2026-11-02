@@ -702,6 +702,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "log",
+ "ring",
  "serde",
  "serde_json",
  "sha2",
