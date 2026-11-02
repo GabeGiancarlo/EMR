@@ -401,6 +401,28 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
     .await;
     assert_eq!(s, StatusCode::OK, "{note}");
     assert_eq!(note["form_response_id"], response["id"]);
+    let knowledge_path = format!("/api/clients/{}/knowledge", client["id"].as_str().unwrap());
+    let (status, index) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::GET,
+        &knowledge_path,
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{index}");
+    assert_eq!(index["total"], 2, "{index}");
+    assert!(index["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|r| r["source_kind"] == "transcript_excerpt"));
+    assert!(index["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|r| r["source_kind"] == "form_response"));
     let (_, options) = send(
         &pool,
         Some(actor),
@@ -454,6 +476,16 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
     assert_eq!(s, StatusCode::OK);
     assert_eq!(next["current_version"]["state"], "draft");
     assert_eq!(next["excerpts"], json!([]));
+    let (_, stale_index) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::GET,
+        &knowledge_path,
+        Value::Null,
+    )
+    .await;
+    assert_eq!(stale_index["total"], 0, "{stale_index}");
     assert!(
         sqlx::query("UPDATE transcripts SET current_version_id=$2 WHERE id=$1")
             .bind(doc)
@@ -591,6 +623,16 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
         .execute(&pool)
         .await
         .unwrap();
+    let (_, revoked_index) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::GET,
+        &knowledge_path,
+        Value::Null,
+    )
+    .await;
+    assert_eq!(revoked_index["total"], 0, "{revoked_index}");
     assert_eq!(
         send(
             &pool,

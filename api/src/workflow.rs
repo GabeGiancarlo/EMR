@@ -66,6 +66,7 @@ pub async fn action(
                 )
                 .await?;
             }
+            crate::drafting::validate_note(&mut tx, &actor, &old).await?;
             records::text(&old, "body")?;
             records::patch(
                 &mut tx,

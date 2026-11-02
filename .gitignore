@@ -68,6 +68,7 @@ dist/
 build/
 pkg/
 wasm-pack.log
+*.tsbuildinfo
 
 # Test results
 coverage/
