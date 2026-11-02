@@ -2,6 +2,8 @@
 
 The schema in `migrations/` is the source of truth. This document describes the implemented local prototype; the broader proposals in the market research are not all implemented.
 
+Adult-first intake is now an API invariant: new clients, changed birth dates, transitions into intake/active status, and new/activated episodes require age 18 on the facility-local calendar date. Existing records remain intact and permit unrelated corrections. The detailed policy and error contract are in [the API contract](api-contract.md). Persistence is implemented; the complete archive/deletion/retention lifecycle is still open as described in [the scope audit](../development/roadmap-gap-audit.md).
+
 ```mermaid
 erDiagram
     organizations ||--o{ facilities : contains

@@ -1,3 +1,4 @@
+use crate::adult::{self, has_completed_adult_years};
 use crate::{access::Actor, ApiError, Result};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::{json, Map, Value};
@@ -400,6 +401,24 @@ pub async fn validate_links(
     Ok(())
 }
 
+pub fn parse_record_date(value: &Value, key: &str) -> Result<NaiveDate> {
+    NaiveDate::parse_from_str(value[key].as_str().unwrap_or_default(), "%Y-%m-%d")
+        .map_err(|_| ApiError::invalid(format!("{key} must be a valid YYYY-MM-DD date")))
+}
+
+/// Adult program gate. Callers supply the facility-local calendar date.
+/// Does not read or rewrite stored client rows.
+pub fn require_adult_program(
+    birth: NaiveDate,
+    facility_today: NaiveDate,
+    field: &str,
+) -> Result<()> {
+    if has_completed_adult_years(birth, facility_today) {
+        return Ok(());
+    }
+    Err(ApiError::invalid(adult::ineligible_message(field)))
+}
+
 pub fn ensure_session_ended(session: &Value) -> Result<()> {
     let end = DateTime::parse_from_rfc3339(text(session, "ends_at")?).map_err(|_| {
         ApiError::invalid("Session end must include a valid timestamp and timezone")
@@ -435,6 +454,30 @@ mod tests {
         let err = clean("clients", &json!({"phone":null})).unwrap_err();
         assert!(err.message.contains("phone"));
         assert!(clean("clients", &json!({"primary_clinician_id":null})).is_ok());
+    }
+    #[test]
+    fn adult_program_uses_calendar_anniversary_not_day_count() {
+        use chrono::NaiveDate;
+        let birth = NaiveDate::from_ymd_opt(2008, 4, 9).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 4, 9).unwrap();
+        assert!(require_adult_program(birth, today, "birth_date").is_ok());
+        let err =
+            require_adult_program(birth, today.pred_opt().unwrap(), "birth_date").unwrap_err();
+        assert!(err.message.contains("birth_date"));
+        assert!(err.message.contains("18"));
+        let leap = NaiveDate::from_ymd_opt(2004, 2, 29).unwrap();
+        assert!(require_adult_program(
+            leap,
+            NaiveDate::from_ymd_opt(2022, 2, 28).unwrap(),
+            "birth_date"
+        )
+        .is_err());
+        assert!(require_adult_program(
+            leap,
+            NaiveDate::from_ymd_opt(2022, 3, 1).unwrap(),
+            "birth_date"
+        )
+        .is_ok());
     }
     #[test]
     fn validates_template_applicability() {

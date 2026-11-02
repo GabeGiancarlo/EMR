@@ -4,6 +4,11 @@ import { clientName, date, label, value } from "./api";
 import type { Bootstrap, FormField, Resource, Row } from "./api";
 import { Button, Icon } from "./ui";
 import { normalizeFieldValue } from "./serialize";
+import {
+  ADULT_PROGRAM_HINT,
+  facilityLocalToday,
+  latestEligibleBirthDate,
+} from "./adult.ts";
 
 type InputKind =
   | "text"
@@ -58,7 +63,11 @@ export const definitions: Record<
       f("first_name", "First name", { required: true }),
       f("last_name", "Last name", { required: true }),
       f("preferred_name", "Preferred name"),
-      f("birth_date", "Date of birth", { type: "date", required: true }),
+      f("birth_date", "Date of birth", {
+        type: "date",
+        required: true,
+        hint: ADULT_PROGRAM_HINT,
+      }),
       f("email", "Email", { type: "email" }),
       f("phone", "Phone", { type: "tel" }),
       reference("facility_id", "Facility", "facilities"),
@@ -718,6 +727,7 @@ export function RecordForm({
                       <input
                         id={id}
                         type={f.type === "money" ? "number" : f.type || "text"}
+                        aria-describedby={f.hint ? `${id}-hint` : undefined}
                         value={String(values[f.key] ?? "")}
                         onChange={(e) => set(f.key, e.target.value)}
                         onInput={
@@ -727,7 +737,18 @@ export function RecordForm({
                         }
                         required={f.required}
                         min={f.min}
-                        max={f.max}
+                        max={
+                          resource === "clients" && f.key === "birth_date" &&
+                          (!initial.id || values.birth_date !== initial.birth_date)
+                            ? latestEligibleBirthDate(
+                                facilityLocalToday(
+                                  data.facilities.find(
+                                    (row) => row.id === values.facility_id,
+                                  )?.timezone as string | undefined,
+                                ),
+                              ) || f.max
+                            : f.max
+                        }
                         step={
                           f.type === "money"
                             ? "0.01"
@@ -744,7 +765,7 @@ export function RecordForm({
                     )}
                   </>
                 )}
-                {f.hint && <small>{f.hint}</small>}
+                {f.hint && <small id={`${id}-hint`}>{f.hint}</small>}
               </div>
             );
           })}

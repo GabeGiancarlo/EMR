@@ -8,6 +8,8 @@ Authentication provider installation is explicitly deferred by the owner. Permis
 
 ## Acceptance map
 
+The November 2 review found that the shared interface and workflow tests did not satisfy the original three-workspace product plan. Treat this document as a delivery plan, not a completion ledger. The [scope audit](roadmap-gap-audit.md) reconciles the original roadmap, Figma evidence and remaining work; it takes precedence over earlier narrow milestone summaries.
+
 Each item requires working user flows, persisted state, meaningful validation, accessible empty/error/loading states and tests for critical invariants. A view existing is not evidence its workflow is complete.
 
 | Area | Prototype acceptance |
@@ -42,10 +44,10 @@ Claims preparation and reconciliation can be owned by Nexus. Actual payer transm
 
 Current local checkpoint includes intake, episodes, care plans, individual/group encounters, reviewed/signed documentation, stage/care-level form routing, local WAV transcription, billing readiness, manual external references, payments/reversals, exports and staff handoffs. Browser and database evidence is recorded in [verification](verification.md). Five scoped Grok implementation proposals were integrated and checked locally; a failed staff-role worker was completed by the root agent. This is an expanded working prototype, not completion of the entire EMR scope.
 
-Next development priorities are document attachments with access/audit/retention handling, broader care-team and facility access scopes, and billing import/reconciliation workflows. Live therapy capture and clinical speech evaluation remain separate from the verified WAV adapter. External payer connectivity needs actual trading-partner inputs. Authentication stays explicitly deferred.
+Next priorities are the dedicated clinician/billing/executive journeys, a full calendar and working telehealth/client journey, then records lifecycle/attachments and the remaining documentation/financial workflows. See the scope audit for acceptance gates. Broader care-team/facility permissions and billing reconciliation remain open. Live capture and clinical speech evaluation remain separate from the verified WAV adapter. External payer connectivity needs actual trading-partner inputs. Authentication stays explicitly deferred.
 
 - Checkout: C:/Users/ganeg/source/EMR, branch nexus/integrated-prototype.
 - Root agent owns integration, operations and verification; specialist agents own backend, frontend and research during their work.
 - xAI reviewers and implementation workers receive scoped development source packets only. The shared ledger records known billed usage and conservative holds for pending/unknown charges against the owner's $5,000 total ceiling. Up to four implementation workers run in parallel; proposals require local review and verification. See [the worker workflow](xai-workers.md). No automatic retry loops.
-- Original Figma references were absent from repository/history as of November 2, 2026; the owner confirmed proceeding with a fresh custom interface without them.
+- The owner supplied the Demo and EMR DUMP FILE Figma URLs on November 2. Selected Demo frames and the DUMP inventory have now been viewed; frame evidence and inspection limits are in the scope audit. Earlier permission to proceed without the missing files does not supersede these newly available references.
 - Keep acceptance status honest; do not label a prototype complete merely because builds pass.

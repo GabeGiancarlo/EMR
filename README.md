@@ -2,6 +2,8 @@
 
 Nexus connects recovery-center care, billing readiness and operational oversight. The local prototype uses a custom React/TypeScript interface, a Rust/Actix API and PostgreSQL. It starts with an empty database: organization setup and every client record come from user input.
 
+**Current stage: early functional engineering prototype, not a completed initial product.** Dedicated clinician/billing/executive journeys, the full calendar, telehealth, client portal and records lifecycle remain incomplete. See the [scope and delivery audit](docs/development/roadmap-gap-audit.md), including the newly supplied Figma references and the [preserved original roadmap](docs/product/original-roadmap.md).
+
 Authentication is deliberately deferred. Local operator selection exercises application permissions but does not verify identity. The API requires explicit development mode and refuses a non-loopback bind. Do not use real patient data or publish this mode.
 
 ## Local development on this Windows workspace
@@ -64,6 +66,7 @@ cargo test --locked --test postgres -- --ignored
 cargo test --locked --test exports_postgres -- --ignored
 cargo test --locked --test form_requirements_postgres -- --ignored
 cargo test --locked --test speech_postgres -- --ignored
+cargo test --locked --test intake_postgres -- --ignored
 cd frontend
 npm test
 npm run build

@@ -4,7 +4,7 @@ use crate::{
     ApiError, AppState, Result,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
@@ -268,6 +268,12 @@ pub async fn create(
     }
     records::scope(&mut tx, &actor, &resource, &Value::Object(data.clone())).await?;
     records::validate_links(&mut tx, &actor, &resource, &Value::Object(data.clone())).await?;
+    if resource == "clients" {
+        ensure_new_client_is_adult(&mut tx, &actor, &Value::Object(data.clone())).await?;
+    }
+    if resource == "episodes" {
+        ensure_episode_client_is_adult(&mut tx, &actor, &Value::Object(data.clone())).await?;
+    }
     if resource == "payments" {
         validate_payment(&mut tx, &actor, &Value::Object(data.clone())).await?;
     }
@@ -465,12 +471,105 @@ pub async fn update(
     }
     records::scope(&mut tx, &actor, &resource, &merged).await?;
     records::validate_links(&mut tx, &actor, &resource, &merged).await?;
+    if resource == "clients" && data.contains_key("birth_date") {
+        ensure_birth_date_change_is_adult(&mut tx, &actor, &before, &merged).await?;
+    }
+    if resource == "clients"
+        && before["status"] != merged["status"]
+        && matches!(merged["status"].as_str(), Some("intake" | "active"))
+    {
+        ensure_new_client_is_adult(&mut tx, &actor, &merged).await?;
+    }
+    if resource == "episodes" && before["status"] != "active" && merged["status"] == "active" {
+        ensure_episode_client_is_adult(&mut tx, &actor, &merged).await?;
+    }
     let result = records::patch(&mut tx, &resource, id, actor.org, data).await?;
     crate::clinical::after_update(&mut tx, &actor, &resource, &result).await?;
     access::audit(&mut tx, &actor, "update", &resource, Some(id)).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(result))
 }
+async fn facility_local_today(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Actor,
+    facility_id: Uuid,
+) -> Result<NaiveDate> {
+    let facility = records::get(tx, "facilities", facility_id, actor.org, false).await?;
+    let zone = facility["timezone"].as_str().unwrap_or("UTC");
+    let today: NaiveDate = sqlx::query_scalar(
+        "SELECT (CURRENT_TIMESTAMP AT TIME ZONE $1)::date",
+    )
+    .bind(zone)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|_| {
+        ApiError::invalid(
+            "facility_id timezone could not supply a local calendar date. Choose a recognized facility timezone, such as America/New_York.",
+        )
+    })?;
+    Ok(today)
+}
+
+async fn ensure_new_client_is_adult(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Actor,
+    data: &Value,
+) -> Result<()> {
+    let birth = records::parse_record_date(data, "birth_date")?;
+    let facility_id = records::uuid(data, "facility_id").map_err(|_| {
+        ApiError::invalid(
+            "facility_id is required to check adult program eligibility against the facility calendar",
+        )
+    })?;
+    let today = facility_local_today(tx, actor, facility_id).await?;
+    records::require_adult_program(birth, today, "birth_date")
+}
+
+async fn ensure_birth_date_change_is_adult(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Actor,
+    before: &Value,
+    merged: &Value,
+) -> Result<()> {
+    if before.get("birth_date") == merged.get("birth_date") {
+        return Ok(());
+    }
+    let birth = records::parse_record_date(merged, "birth_date")?;
+    let facility_id =
+        records::uuid(merged, "facility_id").or_else(|_| records::uuid(before, "facility_id"))?;
+    let today = facility_local_today(tx, actor, facility_id).await?;
+    records::require_adult_program(birth, today, "birth_date")
+}
+
+async fn ensure_episode_client_is_adult(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Actor,
+    data: &Value,
+) -> Result<()> {
+    let client = records::get(
+        tx,
+        "clients",
+        records::uuid(data, "client_id")?,
+        actor.org,
+        true,
+    )
+    .await?;
+    let birth = records::parse_record_date(&client, "birth_date").map_err(|_| {
+        ApiError::invalid(
+            "client_id birth_date must be a valid YYYY-MM-DD date before an episode can be created or activated",
+        )
+    })?;
+    let facility_id =
+        records::uuid(data, "facility_id").or_else(|_| records::uuid(&client, "facility_id"))?;
+    let today = facility_local_today(tx, actor, facility_id).await?;
+    if records::require_adult_program(birth, today, "client_id").is_err() {
+        return Err(ApiError::invalid(
+            "client_id: a new or newly active episode requires a client aged 18 or older as of the facility's local date. Check the recorded date of birth; existing records remain available for correction.",
+        ));
+    }
+    Ok(())
+}
+
 async fn validate_payment(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
