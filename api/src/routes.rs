@@ -246,7 +246,13 @@ pub async fn create(
     }
     let mut tx = state.pool.begin().await?;
     let actor = access::lock_mutation(&req, &mut tx, actor.org, &resource).await?;
-    let mut data = records::clean(&resource, &body)?;
+    let mut input = body.into_inner();
+    let duplicate_review = if resource == "clients" {
+        crate::patient_identity::take_review(&mut input)?
+    } else {
+        None
+    };
+    let mut data = records::clean(&resource, &input)?;
     if resource == "sessions" && data.get("kind") == Some(&json!("group")) {
         return Err(ApiError::invalid(
             "Create a shared group and enroll attendance to generate group sessions",
@@ -283,7 +289,29 @@ pub async fn create(
     } else if resource == "groups" {
         crate::scheduling::check_group(&mut tx, &actor, &Value::Object(data.clone())).await?;
     }
+    let duplicates = if resource == "clients" {
+        crate::patient_identity::check(
+            &mut tx,
+            &actor,
+            &Value::Object(data.clone()),
+            None,
+            duplicate_review.as_ref(),
+        )
+        .await?
+    } else {
+        Vec::new()
+    };
     let result = records::insert(&mut tx, &resource, data, &actor).await?;
+    if resource == "clients" {
+        crate::patient_identity::record_review(
+            &mut tx,
+            &actor,
+            records::uuid(&result, "id")?,
+            &duplicates,
+            duplicate_review.as_ref(),
+        )
+        .await?;
+    }
     if resource == "episodes" && result["status"] == "active" {
         sqlx::query("UPDATE clients SET status='active',updated_at=now() WHERE id=$1 AND organization_id=$2").bind(records::uuid(&result,"client_id")?).bind(actor.org).execute(&mut *tx).await?;
     }
@@ -355,6 +383,11 @@ pub async fn update(
     access::require(&state.pool, &actor, &resource, true).await?;
     let mut input = body.into_inner();
     let expected = take_expected_updated_at(&mut input)?;
+    let duplicate_review = if resource == "clients" {
+        crate::patient_identity::take_review(&mut input)?
+    } else {
+        None
+    };
     let mut data = records::clean(&resource, &input)?;
     if matches!(resource.as_str(), "payments" | "payment_reversals") {
         return Err(ApiError::conflict("Payments are append only"));
@@ -380,6 +413,15 @@ pub async fn update(
     let before = records::get(&mut tx, &resource, id, actor.org, true).await?;
     records::scope(&mut tx, &actor, &resource, &before).await?;
     require_current_version(&before, expected)?;
+    if resource == "episodes" {
+        crate::admissions::before_episode_update(&mut tx, &actor, &before, &data).await?;
+    }
+    if resource == "clients" {
+        crate::admissions::before_client_update(&mut tx, &actor, &before, &data).await?;
+    }
+    if resource == "staff" {
+        crate::admissions::before_staff_update(&mut tx, &actor, &before, &data).await?;
+    }
     crate::clinical::before_update(&mut tx, &actor, &resource, &before, &data).await?;
     if resource == "form_responses" {
         crate::forms::before_update(&mut tx, &actor, &before, &mut data).await?;
@@ -488,6 +530,21 @@ pub async fn update(
     if resource == "clients" && data.contains_key("birth_date") {
         ensure_birth_date_change_is_adult(&mut tx, &actor, &before, &merged).await?;
     }
+    if resource == "clients" && before["facility_id"] != merged["facility_id"] {
+        let facility = records::get(
+            &mut tx,
+            "facilities",
+            records::uuid(&merged, "facility_id")?,
+            actor.org,
+            false,
+        )
+        .await?;
+        if facility["active"] != true {
+            return Err(ApiError::invalid(
+                "Choose an active facility for registration",
+            ));
+        }
+    }
     if resource == "clients"
         && before["status"] != merged["status"]
         && matches!(merged["status"].as_str(), Some("intake" | "active"))
@@ -497,7 +554,29 @@ pub async fn update(
     if resource == "episodes" && before["status"] != "active" && merged["status"] == "active" {
         ensure_episode_client_is_adult(&mut tx, &actor, &merged).await?;
     }
+    let duplicates = if resource == "clients" {
+        crate::patient_identity::check(
+            &mut tx,
+            &actor,
+            &merged,
+            Some(&before),
+            duplicate_review.as_ref(),
+        )
+        .await?
+    } else {
+        Vec::new()
+    };
     let result = records::patch(&mut tx, &resource, id, actor.org, data).await?;
+    if resource == "clients" {
+        crate::patient_identity::record_review(
+            &mut tx,
+            &actor,
+            id,
+            &duplicates,
+            duplicate_review.as_ref(),
+        )
+        .await?;
+    }
     crate::clinical::after_update(&mut tx, &actor, &resource, &result).await?;
     access::audit(&mut tx, &actor, "update", &resource, Some(id)).await?;
     tx.commit().await?;
@@ -543,6 +622,12 @@ async fn ensure_new_client_is_adult(
         )
     })?;
     let today = facility_local_today(tx, actor, facility_id).await?;
+    let facility = records::get(tx, "facilities", facility_id, actor.org, false).await?;
+    if facility["active"] != true {
+        return Err(ApiError::invalid(
+            "Choose an active facility for registration",
+        ));
+    }
     records::require_adult_program(birth, today, "birth_date")
 }
 

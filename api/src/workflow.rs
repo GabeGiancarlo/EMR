@@ -241,6 +241,7 @@ pub async fn action(
             .await?
         }
         ("episodes", "discharge") => {
+            crate::admissions::before_discharge(&mut tx, &actor, &old).await?;
             if old["status"] == "discharged" {
                 return Err(ApiError::conflict("Episode is already discharged"));
             }
@@ -312,6 +313,7 @@ pub async fn action(
                 }
             }
             sqlx::query("UPDATE tasks SET assignee_id=$1,updated_at=now() WHERE organization_id=$2 AND assignee_id=$3 AND status IN ('open','in_progress')").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
+            crate::admissions::transfer_owner(&mut tx, &actor, id, &replacement).await?;
             sqlx::query("UPDATE groups SET clinician_id=$1,updated_at=now() WHERE organization_id=$2 AND clinician_id=$3 AND status='scheduled' AND starts_at>now()").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
             sqlx::query("UPDATE sessions SET clinician_id=$1,updated_at=now() WHERE organization_id=$2 AND clinician_id=$3 AND status='scheduled' AND starts_at>now()").bind(replacement_id).bind(actor.org).bind(id).execute(&mut *tx).await?;
             crate::scheduling::check_staff_schedule(&mut tx, &actor, replacement_id).await?;

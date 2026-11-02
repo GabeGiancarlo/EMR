@@ -32,6 +32,7 @@ export default function FormRequirements({
   canStart,
   onStart,
   onAuthorRules,
+  episodeId,
 }: {
   clientId: string;
   data: Bootstrap;
@@ -42,6 +43,7 @@ export default function FormRequirements({
     templateName?: string,
   ) => void;
   onAuthorRules?: () => void;
+  episodeId?: string;
 }) {
   const [payload, setPayload] = useState<FormRequirementsPayload | null>(null);
   const [error, setError] = useState("");
@@ -56,7 +58,7 @@ export default function FormRequirements({
     let cancelled = false;
     setLoading(true);
     request<FormRequirementsPayload>(
-      `/api/clients/${clientId}/form-requirements`,
+      `/api/clients/${clientId}/form-requirements${episodeId ? `?episode_id=${encodeURIComponent(episodeId)}` : ""}`,
     )
       .then((result) => {
         if (cancelled) return;
@@ -78,7 +80,7 @@ export default function FormRequirements({
     return () => {
       cancelled = true;
     };
-  }, [clientId, data]);
+  }, [clientId, data, episodeId]);
 
   const rules = Array.isArray(payload?.requirements) ? payload.requirements : [];
   const unsignedRequired = rules.filter(
@@ -137,8 +139,7 @@ export default function FormRequirements({
             <p className="form-rules-context">
               <small>
                 {unsignedRequired} form{unsignedRequired === 1 ? "" : "s"} your
-                organization marked required {unsignedRequired === 1 ? "is" : "are"} not
-                signed.
+                organization marked required {unsignedRequired === 1 ? "needs" : "need"} completion or source review.
               </small>
             </p>
           )}
@@ -171,6 +172,7 @@ export default function FormRequirements({
                       {item.response_status === "reviewed" && (
                         <small>Reviewed, not signed</small>
                       )}
+                      {item.completion === "source_review" && <small>The signed history is preserved, but its source changed or is unavailable. Complete a response from current evidence.</small>}
                     </td>
                     <td>
                       {canStart && (

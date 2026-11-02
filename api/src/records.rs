@@ -32,7 +32,7 @@ pub fn fields(resource: &str) -> Result<Vec<&'static str>> {
     let value = match resource {
         "facilities"=>"name timezone active",
         "staff"=>"name email role facility_id active",
-        "clients"=>"first_name last_name preferred_name birth_date email phone status facility_id primary_clinician_id emergency_contact",
+        "clients"=>"first_name last_name preferred_name birth_date email phone status facility_id primary_clinician_id emergency_contact pronouns preferred_language address_line1 address_line2 city region postal_code country",
         "episodes"=>"client_id facility_id level_of_care start_date end_date status discharge_reason",
         "sessions"=>"client_id episode_id clinician_id starts_at ends_at kind status location",
         "notes"=>"client_id session_id template_id title body",
@@ -71,6 +71,9 @@ pub fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
 }
 pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
     let allowed = fields(resource)?;
+    if resource == "clients" {
+        crate::patient_identity::validate_demographics(input)?;
+    }
     let object = input
         .as_object()
         .ok_or_else(|| ApiError::invalid("Expected a JSON object"))?;

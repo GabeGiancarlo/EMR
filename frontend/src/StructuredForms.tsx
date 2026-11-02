@@ -464,10 +464,12 @@ export default function StructuredForms({
   action,
   mutate,
   onAuthorRules,
-}: WorkflowProps & { clientId?: string; onAuthorRules?: () => void }) {
+  episodeId,
+}: WorkflowProps & { clientId?: string; episodeId?: string; onAuthorRules?: () => void }) {
   const all =
     (data as Bootstrap & { form_responses?: Row[] }).form_responses || [];
-  const responses = all.filter((r) => !clientId || r.client_id === clientId);
+  const [contextEpisodeId, setContextEpisodeId] = useState(episodeId || "");
+  const responses = all.filter((r) => (!clientId || r.client_id === clientId) && (!contextEpisodeId || r.episode_id === contextEpisodeId));
   const [editor, setEditor] = useState<Row | null | undefined>(undefined);
   const [preset, setPreset] = useState<{
     templateId: string;
@@ -487,9 +489,11 @@ export default function StructuredForms({
     value(r.template_snapshot as Row, "name") || "Form response";
   return (
     <>
+      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><select id="forms-episode-context" value={contextEpisodeId} onChange={event=>setContextEpisodeId(event.target.value)}><option value="">Current care context · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</select></div>}
       {clientId && (
         <FormRequirements
           clientId={clientId}
+          episodeId={contextEpisodeId || undefined}
           data={data}
           canStart={canWrite}
           onAuthorRules={onAuthorRules}
@@ -681,7 +685,7 @@ export default function StructuredForms({
           clientId={clientId}
           record={editor || undefined}
           templateId={preset?.templateId}
-          episodeId={preset?.episodeId}
+          episodeId={preset?.episodeId ?? (contextEpisodeId || undefined)}
           templateName={preset?.templateName}
           onClose={() => {
             setPreset(null);

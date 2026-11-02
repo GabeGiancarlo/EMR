@@ -1,0 +1,143 @@
+.client-registration {
+  color: var(--ink);
+  min-width: 0;
+}
+
+.client-registration fieldset {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 0 0 16px;
+  min-width: 0;
+  padding: 12px 14px 16px;
+  background: transparent;
+  color: inherit;
+}
+
+.client-registration legend {
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.registration-kicker,
+.registration-status {
+  margin: 4px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.client-registration input[readonly] {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.registration-reason {
+  margin-top: 14px;
+}
+
+.match-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.match-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.match-identity {
+  min-width: 0;
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.match-identity strong,
+.match-identity span {
+  overflow-wrap: anywhere;
+}
+
+.match-identity span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.match-card .button {
+  flex: 1 1 180px;
+  white-space: normal;
+  text-align: center;
+}
+
+.registration-block {
+  margin: 12px 0 0;
+  border: 1px solid #eecfc8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff4ef;
+  color: #8a3f32;
+  line-height: 1.6;
+}
+
+.registration-confirm {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.registration-confirm p {
+  flex: 1 1 100%;
+  color: var(--ink);
+}
+
+html[data-resolved-theme="dark"] .registration-block {
+  background: #3d2422;
+  border-color: #c47b70;
+  color: #ffd8d2;
+}
+
+html[data-resolved-theme="dark"] .match-card {
+  background: #182420;
+  border-color: #3a524b;
+  color: #e7f1eb;
+}
+
+@media (max-width: 760px) {
+  .client-registration .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .match-card,
+  .registration-confirm {
+    align-items: stretch;
+  }
+
+  .match-card .button,
+  .registration-confirm .button {
+    width: 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  .client-registration fieldset,
+  .match-card,
+  .registration-block {
+    border: 1px solid ButtonText;
+  }
+}
