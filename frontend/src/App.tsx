@@ -10,7 +10,7 @@ import {
   ReversalHistory,
 } from "./FinancialActions";
 import ClaimReadiness from "./ClaimReadiness";
-import "./workflows.css";
+import ThemeControl from "./ThemeControl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -213,6 +213,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlight = useRef(false);
   const [view, setView] = useState<View>("overview");
   const [clientId, setClientId] = useState("");
   const [chartTab, setChartTab] = useState("overview");
@@ -236,7 +238,7 @@ export default function App() {
     setError("");
     try {
       const result = await request<Bootstrap>("/api/bootstrap");
-      if (version !== requestVersion.current) return;
+      if (version !== requestVersion.current) return false;
       setData({
         ...result,
         treatment_plans: result.treatment_plans || [],
@@ -247,17 +249,29 @@ export default function App() {
         form_responses: result.form_responses || [],
         payment_reversals: result.payment_reversals || [],
       });
+      return true;
     } catch (e) {
-      if (version !== requestVersion.current) return;
+      if (version !== requestVersion.current) return false;
       setError(
         e instanceof Error
           ? e.message
           : "Nexus could not reach the local service.",
       );
+      return false;
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
   }, []);
+  const refreshWorkspace = async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    setRefreshing(true);
+    setToast("");
+    const refreshed = await reload();
+    if (refreshed) setToast("Workspace refreshed.");
+    refreshInFlight.current = false;
+    setRefreshing(false);
+  };
   useEffect(() => {
     void reload();
   }, [reload, actor]);
@@ -268,6 +282,7 @@ export default function App() {
     }
   }, [toast]);
   const changeActor = (id: string) => {
+    ++requestVersion.current;
     if (id) localStorage.setItem(actorStorageKey, id);
     else localStorage.removeItem(actorStorageKey);
     setActor(id);
@@ -276,7 +291,12 @@ export default function App() {
     setDialog(null);
     setReadinessClaim(null);
     setClientId("");
-    void reload();
+    setView("overview");
+    setQuery("");
+    setFilter("all");
+    setMobile(false);
+    setToast("");
+    if (id === actor) void reload();
   };
   const navigate = (next: View) => {
     setView(next);
@@ -504,6 +524,9 @@ export default function App() {
   if (loading && !data)
     return (
       <div className="loading-page">
+        <div className="entry-appearance">
+          <ThemeControl />
+        </div>
         <Brand />
         <div className="spinner" />
         <p>Connecting your workspace…</p>
@@ -512,6 +535,9 @@ export default function App() {
   if (!data)
     return (
       <div className="loading-page">
+        <div className="entry-appearance">
+          <ThemeControl />
+        </div>
         <Brand />
         <div className="connection-card">
           <Icon name="link" size={32} />
@@ -534,10 +560,21 @@ export default function App() {
         </div>
       </div>
     );
-  if (data.setup_required) return <Setup onDone={changeActor} />;
+  if (data.setup_required)
+    return (
+      <>
+        <div className="entry-appearance">
+          <ThemeControl />
+        </div>
+        <Setup onDone={changeActor} />
+      </>
+    );
   if (!data.actor)
     return (
       <div className="loading-page">
+        <div className="entry-appearance">
+          <ThemeControl />
+        </div>
         <Brand />
         <div className="connection-card">
           <span className="eyebrow">LOCAL WORKSPACE</span>
@@ -2667,12 +2704,11 @@ export default function App() {
           <div className="operator">
             <Person name={value(data.actor, "name")} sub={label(role)} small />
             <button
-              className="icon-button"
-              title="Switch local operator"
-              aria-label="Switch local operator"
+              className="button secondary small exit-workspace"
+              title="Return to local operator selection"
               onClick={() => changeActor("")}
             >
-              <Icon name="chevron" size={17} />
+              <Icon name="back" size={15} /> Exit workspace
             </button>
           </div>
         </div>
@@ -2710,17 +2746,18 @@ export default function App() {
               })}
             </span>
             <span className="topbar-divider" />
+            <ThemeControl />
             <button
-              className="icon-button"
+              className="button secondary small refresh-workspace"
               aria-label="Refresh workspace"
               title="Refresh workspace"
-              onClick={() => void reload()}
+              aria-busy={refreshing}
+              disabled={refreshing}
+              onClick={() => void refreshWorkspace()}
             >
-              <Icon name="activity" size={19} />
+              <Icon name="refresh" size={17} />
+              <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
             </button>
-            <span className="avatar small top-avatar">
-              {initials(value(data.actor, "name"))}
-            </span>
           </div>
         </header>
         <main>

@@ -20,6 +20,7 @@ export type IconName =
   | "chevron"
   | "shield"
   | "activity"
+  | "refresh"
   | "filter"
   | "sun"
   | "download"
@@ -96,6 +97,7 @@ const paths: Record<IconName, ReactNode> = {
     </>
   ),
   activity: <path d="M3 12h4l3-8 4 16 3-8h4" />,
+  refresh: <><path d="M20 7a9 9 0 1 0 1 9M20 3v5h-5" /></>,
   filter: (
     <>
       <path d="M4 7h16M7 12h10m-7 5h4" />

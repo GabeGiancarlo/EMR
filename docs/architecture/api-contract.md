@@ -33,6 +33,8 @@ Resource and editable fields:
 
 ## Workflow actions
 
+Adult-first intake policy: new clients, changes to `birth_date`, and client transitions into `intake` or `active` require 18 completed calendar years on the selected facility's local date. New or newly activated episodes enforce the same client age check. February 29 birthdays use March 1 in a non-leap anniversary year. Violations return 400 `validation`. Existing rows are not rewritten, and unchanged birth dates allow unrelated corrections. This is the scoped prototype's program rule, not jurisdiction-specific legal guidance.
+
 POST `/api/notes/{id}/sign` with `{}`: author or clinical_lead/admin; body required, immutable signed content.
 POST `/api/notes/{id}/amend` with `{body,reason}`: creates new draft amendment linked by amends_note_id; preserves original signed note.
 GET `/api/claims/{id}/readiness`: claims readers in the same organization receive `{ready, checklist:[{code,title,passed,message,owner_role}]}`. `owner_role` is `clinical` or `billing`. The checklist is the same evaluation used by mark-ready and record-submission. It does not include clinical narrative. `ready` means the rules passed, not that the claim was transmitted.
