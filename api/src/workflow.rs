@@ -28,11 +28,13 @@ pub async fn action(
             if !matches!(actor.role.as_str(), "admin" | "clinical_lead" | "clinician") {
                 return Err(ApiError::denied());
             }
+            let lineage = crate::note_lineage::resolve(&mut tx, &actor, &old).await?;
+            let old = &lineage.row;
             if !old["session_id"].is_null() {
                 let session = records::get(
                     &mut tx,
                     "sessions",
-                    records::uuid(&old, "session_id")?,
+                    records::uuid(old, "session_id")?,
                     actor.org,
                     true,
                 )
@@ -56,7 +58,7 @@ pub async fn action(
                 let source = records::get(
                     &mut tx,
                     "form_responses",
-                    records::uuid(&old, "form_response_id")?,
+                    records::uuid(old, "form_response_id")?,
                     actor.org,
                     false,
                 )
@@ -66,8 +68,8 @@ pub async fn action(
                 )
                 .await?;
             }
-            crate::drafting::validate_note(&mut tx, &actor, &old).await?;
-            records::text(&old, "body")?;
+            crate::drafting::validate_note(&mut tx, &actor, &lineage).await?;
+            records::text(old, "body")?;
             records::patch(
                 &mut tx,
                 "notes",
@@ -96,7 +98,9 @@ pub async fn action(
                     "Explain the amendment reason in at least 10 characters",
                 ));
             }
-            let data = json!({"client_id":old["client_id"],"session_id":old["session_id"],"template_id":old["template_id"],"author_id":actor.id,"title":format!("Amendment: {}",old["title"].as_str().unwrap_or_default()),"body":note,"amends_note_id":id,"amendment_reason":reason});
+            let lineage = crate::note_lineage::resolve(&mut tx, &actor, &old).await?;
+            let old = &lineage.row;
+            let data = json!({"client_id":old["client_id"],"session_id":old["session_id"],"template_id":old["template_id"],"form_response_id":old["form_response_id"],"clinical_draft_job_id":old["clinical_draft_job_id"],"author_id":actor.id,"title":format!("Amendment: {}",old["title"].as_str().unwrap_or_default()),"body":note,"amends_note_id":id,"amendment_reason":reason});
             records::insert(&mut tx, "notes", data.as_object().unwrap().clone(), &actor).await?
         }
         ("payments", "reverse") => {

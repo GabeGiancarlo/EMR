@@ -31,6 +31,12 @@ Dedicated retrieval/drafting routes allow active administrators, clinical leads 
 
 ## Limits
 
+### Independent review follow-up
+
+The returned source-only Grok review identified amendment provenance and review-binding gaps. Note signing now follows up to 100 same-patient, same-organization signed ancestors, rejects cycles/conflicting links, and recovers form/model/encounter context even for older amendments that omitted those links. Accepted model review must reference the actual note or its signed amendment ancestor; merely attaching the same job to an unrelated note does not authorize signing. New amendments copy source links. Migration 017 keeps one originating note per signed form while allowing its amendments to retain that form link. Episode-filtered indexing follows inherited source context and rechecks inherited transcript-form eligibility.
+
+Targeted PostgreSQL regressions passed for unrelated-review rejection, legacy amendment signing, repeated amendment provenance, recovered episode search, upstream source correction blocking a subsequent signature, and removal of affected amended notes from current search. All 86 unit checks and strict Clippy passed. This is amendment-chain validation, not complete transitive validation across every generated source document; that wider policy remains open. The review's suggested already-claimed worker race was not reproduced: the queue has one PostgreSQL advisory-lock owner. No unverified race fix was applied.
+
 Search is bounded to 1,000 eligible documents, 5,000 chunks per patient, 200,000 bytes per document and 50 results per page. Oversized work fails explicitly; it is not silently truncated. Chunks contain up to 1,200 Unicode characters with 150-character overlap. Index refresh currently scans the patient's eligible source set; large-chart performance and finer invalidation need further work.
 
 Drafting accepts at most 12 sources/template fields and bounded text, has a 120-second model-response timeout, and rejects truncated/invalid output. Generation history currently lists the latest 50 jobs. The local model service has one inference slot shared by the local APIs, while process-level busy controls are separate. Model hashing reads the configured local artifact; the service alias is verified, but this is not remote attestation of the service binary or loaded weights. The runtime is a general-purpose model with no clinical evaluation evidence. Exact citation matching cannot detect an incorrect paraphrase, ambiguous speaker or unsupported interpretation.
@@ -39,6 +45,6 @@ Clinical history remains accessible under current chart permission after source 
 
 ## Development workers
 
-Two source-only Grok proposals contributed the knowledge interface and local model adapter. The indexing proposal timed out without returning code; the backend and durable review workflow were implemented locally. Independent boundary review remains pending while this checkpoint is being finalized. The ledger's known charges before that review are $8.078234, with $225 in unresolved reservations and a further $25 reserved for the active review. Reservations are budget holds, not confirmed charges; account billing is authoritative. No patient data, media, models, database backups or secrets were sent to development workers.
+Two source-only Grok proposals contributed the knowledge interface and local model adapter. The indexing proposal timed out without returning code; the backend and durable review workflow were implemented locally. The independent boundary review completed for $0.488610, bringing known ledger charges at that checkpoint to $8.566844, with $225 in unresolved reservations. Subsequent admission workers are accounted for separately in the live local ledger. Reservations are budget holds, not confirmed charges; account billing is authoritative. No patient data, media, models, database backups or secrets were sent to development workers.
 
 See [endpoint contract](knowledge-drafting-contract.md) and [runtime installation and sources](../setup/local-drafting.md).
