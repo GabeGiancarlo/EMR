@@ -9,6 +9,7 @@ import {
   PaymentCorrection,
   ReversalHistory,
 } from "./FinancialActions";
+import ClaimReadiness from "./ClaimReadiness";
 import "./workflows.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -22,6 +23,7 @@ import {
   numeric,
   request,
   value,
+  withOriginalUpdatedAt,
 } from "./api";
 import type { Bootstrap, Resource, Row } from "./api";
 import { definitions, RecordForm } from "./forms";
@@ -222,6 +224,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [readinessClaim, setReadinessClaim] = useState<Row | null>(null);
   const [mobile, setMobile] = useState(false);
   const [actor, setActor] = useState(
     localStorage.getItem(actorStorageKey) || "",
@@ -271,6 +274,7 @@ export default function App() {
     setData(null);
     setLoading(true);
     setDialog(null);
+    setReadinessClaim(null);
     setClientId("");
     void reload();
   };
@@ -280,6 +284,7 @@ export default function App() {
     setQuery("");
     setFilter("all");
     setMobile(false);
+    setReadinessClaim(null);
   };
   const role = value(data?.actor, "role");
   const admin = role === "admin";
@@ -349,7 +354,17 @@ export default function App() {
     fields: Field[] = [],
     initial: Record<string, unknown> = {},
     submitLabel = "Confirm",
-  ) => setDialog({ path, title, description, fields, initial, submitLabel });
+    record?: Row,
+  ) =>
+    setDialog({
+      path,
+      title,
+      description,
+      fields,
+      initial,
+      submitLabel,
+      record,
+    });
   async function mutate(path: string, body: unknown, method = "POST") {
     await request(path, method, body);
     setDialog(null);
@@ -442,7 +457,10 @@ export default function App() {
             <Button
               variant="text small"
               onClick={() =>
-                void quick(`/api/tasks/${r.id}`, { status: "done" })
+                void quick(
+                  `/api/tasks/${r.id}`,
+                  withOriginalUpdatedAt(r, { status: "done" }),
+                )
               }
             >
               Complete
@@ -1291,6 +1309,15 @@ export default function App() {
             edit={edit}
             action={action}
             mutate={mutate}
+            onAuthorRules={
+              canTemplates
+                ? () => {
+                    setClientId("");
+                    setSettingsTab("templates");
+                    setView("settings");
+                  }
+                : undefined
+            }
           />
         )}
         {chartTab === "notes" && (
@@ -1445,6 +1472,7 @@ export default function App() {
                             ],
                             {},
                             "Record revocation",
+                            r,
                           )
                         }
                       >
@@ -1634,9 +1662,10 @@ export default function App() {
                         <Button
                           variant="text small"
                           onClick={() =>
-                            void quick(`/api/sessions/${r.id}`, {
-                              status: "completed",
-                            })
+                            void quick(
+                              `/api/sessions/${r.id}`,
+                              withOriginalUpdatedAt(r, { status: "completed" }),
+                            )
                           }
                         >
                           Complete
@@ -1787,8 +1816,8 @@ export default function App() {
           <Icon name="shield" size={20} />
           <p>
             <strong>Human review stays at the center.</strong> Notes remain
-            drafts until signed. Speech recognition and automated form
-            completion are not connected.
+            drafts until signed. Structured forms support local audio
+            transcription and reviewed source excerpts.
           </p>
           {canTemplates && (
             <Button
@@ -1837,27 +1866,20 @@ export default function App() {
         },
         {
           label: "Actions",
-          render: (r) =>
-            billing ? (
+          render: (r) => {
+            const reviewable = r.status === "draft" || r.status === "ready";
+            if (!reviewable && !billing) return null;
+            return (
               <div className="row-actions">
-                {r.status === "draft" && (
+                {reviewable && (
                   <Button
                     variant="text small"
-                    onClick={() =>
-                      action(
-                        `/api/claims/${r.id}/ready`,
-                        "Check claim readiness",
-                        "Nexus will check the completed session, signed documentation, coverage, service codes, and selected authorization. This does not send the claim.",
-                        [],
-                        {},
-                        "Check readiness",
-                      )
-                    }
+                    onClick={() => setReadinessClaim(r)}
                   >
-                    Check readiness
+                    Review readiness
                   </Button>
                 )}
-                {r.status === "ready" && (
+                {billing && r.status === "ready" && (
                   <Button
                     variant="text small"
                     onClick={() =>
@@ -1914,13 +1936,16 @@ export default function App() {
                     Payment
                   </Button>
                 )}
-                <ClaimCorrections
-                  claim={r}
-                  action={action}
-                  edit={() => edit("claims", r)}
-                />
+                {billing && (
+                  <ClaimCorrections
+                    claim={r}
+                    action={action}
+                    edit={() => edit("claims", r)}
+                  />
+                )}
               </div>
-            ) : null,
+            );
+          },
         },
       ],
       policies: [
@@ -2361,9 +2386,10 @@ export default function App() {
                       <Button
                         variant="text small danger"
                         onClick={() =>
-                          void quick(`/api/exceptions/${r.id}`, {
-                            revoked: true,
-                          })
+                          void quick(
+                            `/api/exceptions/${r.id}`,
+                            withOriginalUpdatedAt(r, { revoked: true }),
+                          )
                         }
                       >
                         Revoke
@@ -2418,6 +2444,14 @@ export default function App() {
                     <p>
                       {value(t, "description") ||
                         "Custom form created by your organization."}
+                    </p>
+                    <p>
+                      {label(value(t, "applies_to_stage") || "any")} stage ·{" "}
+                      {label(value(t, "applies_to_care_level") || "any")} care
+                      level ·{" "}
+                      {t.required_for_stage
+                        ? "Required by your organization"
+                        : "Suggested"}
                     </p>
                     <div className="template-card-foot">
                       <span>
@@ -2490,7 +2524,7 @@ export default function App() {
           <>
             <Panel
               title="A deliberately small set of connections"
-              subtitle="These capabilities are not connected. Local workflows remain available without external services."
+              subtitle="Review local capabilities and the external services that still need setup."
             >
               <div className="integration-grid">
                 {[
@@ -2507,7 +2541,8 @@ export default function App() {
                   {
                     icon: "notes",
                     title: "Speech-to-text",
-                    desc: "Local transcription and consent-aware session capture need a selected engine and validation. Author notes directly or paste reviewed text today.",
+                    status: "optional_local",
+                    desc: "Structured forms support local WAV transcription with recording consent and manual review. The optional recognizer must be installed on the API machine. Live session recording is not connected.",
                   },
                   {
                     icon: "link",
@@ -2519,7 +2554,7 @@ export default function App() {
                     <span className="integration-icon">
                       <Icon name={i.icon as IconName} size={25} />
                     </span>
-                    <Badge status="not_connected" />
+                    <Badge status={i.status || "not_connected"} />
                     <h3>{i.title}</h3>
                     <p>{i.desc}</p>
                   </article>
@@ -2757,6 +2792,20 @@ export default function App() {
           {toast}
         </div>
       )}
+      {readinessClaim && (
+        <ClaimReadiness
+          claim={readinessClaim}
+          canWrite={can("claims", ["admin", "billing"].includes(role))}
+          onClose={() => setReadinessClaim(null)}
+          onMarkedReady={async () => {
+            setReadinessClaim(null);
+            await reload();
+            setToast(
+              "Marked internally ready. The claim has not been transmitted.",
+            );
+          }}
+        />
+      )}
       {dialog && (
         <Modal
           title={dialog.title}
@@ -2881,16 +2930,29 @@ export default function App() {
               fields={dialog.fields}
               submitLabel={dialog.submitLabel}
               onCancel={() => setDialog(null)}
-              onSubmit={(body) =>
-                mutate(
-                  dialog.path ||
-                    `/api/${dialog.resource}${dialog.record ? `/${dialog.record.id}` : ""}`,
-                  body,
-                  dialog.record || dialog.path?.startsWith("/api/consents/")
-                    ? "PATCH"
-                    : "POST",
-                )
-              }
+              onSubmit={async (body) => {
+                const patching =
+                  (!dialog.path && Boolean(dialog.record)) ||
+                  Boolean(dialog.path?.startsWith("/api/consents/"));
+                const payload = patching
+                  ? withOriginalUpdatedAt(dialog.record, body)
+                  : body;
+                try {
+                  await mutate(
+                    dialog.path ||
+                      `/api/${dialog.resource}${dialog.record ? `/${dialog.record.id}` : ""}`,
+                    payload,
+                    patching ? "PATCH" : "POST",
+                  );
+                } catch (error) {
+                  setError(
+                    error instanceof Error
+                      ? error.message
+                      : "This change could not be saved.",
+                  );
+                  throw error;
+                }
+              }}
             />
           )}
         </Modal>

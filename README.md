@@ -47,8 +47,11 @@ Open http://127.0.0.1:5173. The API is at http://127.0.0.1:8090; `/healthz` chec
 - Shared tasks, staff offboarding and reassignment.
 - Operational metrics from stored records and audit history.
 - Aggregate accounting and internal claim-review CSV exports with bounded date windows.
+- Draft edit conflict protection that preserves unsaved fields, and a billing checklist shared with the server's readiness rules.
+- Organization-authored form rules by care stage and level, with episode-specific completion status.
+- Optional local WAV transcription through whisper.cpp, recording consent checks, and reviewed source-to-field mapping.
 
-These are prototype workflows, not a claim of production or regulatory readiness. Exact record fields and boundaries are in [the API contract](docs/architecture/api-contract.md) and [backend notes](api/README.md). The [delivery plan](docs/development/delivery-plan.md) tracks the broader requested scope. External payer transmission, eligibility/remittance adapters, document attachment storage and locally hosted speech recognition require further implementation and validation. Transcript-to-form mapping is explicit and human-reviewed; the application does not yet transcribe audio.
+These are prototype workflows, not a claim of production or regulatory readiness. Exact record fields and boundaries are in [the API contract](docs/architecture/api-contract.md) and [backend notes](api/README.md). The [delivery plan](docs/development/delivery-plan.md) tracks the broader requested scope. External payer transmission, eligibility/remittance adapters and document attachment storage require further implementation and validation. [Local speech setup](docs/setup/local-speech.md) installs the optional recognizer; the application remains useful without it. Transcription has passed a synthetic local audio check, but clinical accuracy, live capture and diarization are not validated. Mapping and signing require human review.
 
 ## Verification
 
@@ -59,6 +62,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 $env:TEST_DATABASE_URL = 'postgres://nexus:nexus_local@127.0.0.1:55432/nexus_test'
 cargo test --locked --test postgres -- --ignored
 cargo test --locked --test exports_postgres -- --ignored
+cargo test --locked --test form_requirements_postgres -- --ignored
+cargo test --locked --test speech_postgres -- --ignored
 cd frontend
 npm test
 npm run build
@@ -93,4 +98,4 @@ The interface can be built for Vercel later. The Rust API and PostgreSQL need se
 
 `frontend/` contains custom UI components; `api/` contains the active application; `migrations/` defines durable schema; `tools/` provides local operational helpers; `docs/research/` holds evidence and product analysis. `core/`, `fhir/` and `jobs/` remain parked legacy material and are not active workspace members.
 
-xAI is used only as a development reviewer through `tools/xai-review.mjs`. It is not a clinical application dependency. Source-review usage and outputs remain in ignored `.local/xai`; the API key is read from the environment and never committed.
+xAI assists with development reviews and parallel implementation proposals through `tools/xai-review.mjs` and `tools/xai-workers.mjs`. Returned code is reviewed, integrated and tested locally. It is not a clinical application dependency. Usage and proposals remain in ignored `.local/xai`; the API key is read from the environment and never committed. See [the worker workflow](docs/development/xai-workers.md). `node tools/xai-status.mjs` reports known charges and conservative pending/unknown budget holds separately.

@@ -4,6 +4,7 @@ use crate::{
     ApiError, AppState, Result,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
@@ -288,6 +289,49 @@ pub async fn create(
     tx.commit().await?;
     Ok(HttpResponse::Created().json(result))
 }
+const STALE_RECORD: &str = "This record was updated after you opened it. Reload the latest version and preserve your unsaved edits; they were not saved.";
+
+fn take_expected_updated_at(input: &mut Value) -> Result<DateTime<Utc>> {
+    let object = input
+        .as_object_mut()
+        .ok_or_else(|| ApiError::invalid("Expected a JSON object"))?;
+    let text = match object.remove("_expected_updated_at") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Some(_) => {
+            return Err(ApiError::invalid(
+                "_expected_updated_at must be an RFC3339 timestamp",
+            ))
+        }
+    };
+    let Some(text) = text else {
+        return Err(ApiError::precondition(
+            "Reload the record before saving. The originally loaded updated_at is required so a newer edit is not overwritten.",
+        ));
+    };
+    DateTime::parse_from_rfc3339(&text)
+        .map(|stamp| stamp.with_timezone(&Utc))
+        .map_err(|_| ApiError::invalid("_expected_updated_at must be an RFC3339 timestamp"))
+}
+
+fn require_current_version(before: &Value, expected: DateTime<Utc>) -> Result<()> {
+    let current = before["updated_at"].as_str().unwrap_or_default();
+    let current = DateTime::parse_from_rfc3339(current)
+        .map(|stamp| stamp.with_timezone(&Utc))
+        .map_err(|_| ApiError::conflict(STALE_RECORD))?;
+    if current != expected {
+        return Err(ApiError::conflict(STALE_RECORD));
+    }
+    Ok(())
+}
+
 pub async fn update(
     req: HttpRequest,
     state: web::Data<AppState>,
@@ -297,7 +341,9 @@ pub async fn update(
     let (resource, id) = path.into_inner();
     let actor = access::actor(&req, &state.pool).await?;
     access::require(&state.pool, &actor, &resource, true).await?;
-    let mut data = records::clean(&resource, &body)?;
+    let mut input = body.into_inner();
+    let expected = take_expected_updated_at(&mut input)?;
+    let mut data = records::clean(&resource, &input)?;
     if matches!(resource.as_str(), "payments" | "payment_reversals") {
         return Err(ApiError::conflict("Payments are append only"));
     }
@@ -320,6 +366,7 @@ pub async fn update(
     }
     let before = records::get(&mut tx, &resource, id, actor.org, true).await?;
     records::scope(&mut tx, &actor, &resource, &before).await?;
+    require_current_version(&before, expected)?;
     crate::clinical::before_update(&mut tx, &actor, &resource, &before, &data).await?;
     if resource == "form_responses" {
         crate::forms::before_update(&actor, &before, &mut data)?;
@@ -384,6 +431,17 @@ pub async fn update(
                 "Use offboarding to deactivate staff and transfer assignments",
             ));
         }
+        if let Some(role) = data.get("role").and_then(Value::as_str) {
+            if before["role"] != role && !matches!(role, "admin" | "clinical_lead" | "clinician") {
+                // The staff row is already locked. Assignment creation takes this
+                // same lock before validating role, preventing a concurrent bypass.
+                let assigned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clients WHERE organization_id=$1 AND primary_clinician_id=$2) OR EXISTS(SELECT 1 FROM sessions WHERE organization_id=$1 AND clinician_id=$2 AND status='scheduled' AND starts_at>now()) OR EXISTS(SELECT 1 FROM groups WHERE organization_id=$1 AND clinician_id=$2 AND status='scheduled' AND starts_at>now())")
+                    .bind(actor.org).bind(id).fetch_one(&mut *tx).await?;
+                if assigned {
+                    return Err(ApiError::conflict("Reassign this person's clients and future clinical sessions before choosing a nonclinical role"));
+                }
+            }
+        }
         if before["role"] == "admin" && data.get("role").map(|r| r != "admin").unwrap_or(false) {
             let admins: i64 = sqlx::query_scalar(
                 "SELECT count(*) FROM staff WHERE organization_id=$1 AND role='admin' AND active",
@@ -440,4 +498,66 @@ async fn validate_payment(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod concurrency_tests {
+    use super::{require_current_version, take_expected_updated_at};
+    use actix_web::http::StatusCode;
+    use chrono::{DateTime, Utc};
+    use serde_json::json;
+
+    #[test]
+    fn strips_expected_updated_at_before_field_cleaning() {
+        let mut body = json!({"name":"QA facility","_expected_updated_at":"2026-02-01T14:00:00Z"});
+        let expected = take_expected_updated_at(&mut body).unwrap();
+        assert_eq!(
+            expected,
+            DateTime::parse_from_rfc3339("2026-02-01T14:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert!(body.get("_expected_updated_at").is_none());
+        assert!(crate::records::clean("facilities", &body).is_ok());
+        assert!(crate::records::clean(
+            "facilities",
+            &json!({"_expected_updated_at":"2026-02-01T14:00:00Z"})
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn missing_token_is_precondition_required() {
+        let mut body = json!({"title":"draft"});
+        let err = take_expected_updated_at(&mut body).unwrap_err();
+        assert_eq!(err.status, StatusCode::PRECONDITION_REQUIRED);
+        assert_eq!(err.code, "precondition_required");
+        let mut body = json!({"title":"draft","_expected_updated_at":null});
+        let err = take_expected_updated_at(&mut body).unwrap_err();
+        assert_eq!(err.status, StatusCode::PRECONDITION_REQUIRED);
+        let mut body = json!({"_expected_updated_at":"yesterday"});
+        let err = take_expected_updated_at(&mut body).unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn stale_loaded_timestamp_conflicts_without_treating_format_as_different() {
+        let before = json!({"updated_at":"2026-02-01T14:00:00.123456+00:00"});
+        let same = DateTime::parse_from_rfc3339("2026-02-01T14:00:00.123456Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert!(require_current_version(&before, same).is_ok());
+        let stale = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let err = require_current_version(&before, stale).unwrap_err();
+        assert_eq!(err.status, StatusCode::CONFLICT);
+        assert_eq!(err.code, "conflict");
+        let message = err.message.to_lowercase();
+        assert!(message.contains("reload"), "{message}");
+        assert!(
+            message.contains("preserve") && message.contains("unsaved"),
+            "{message}"
+        );
+    }
 }

@@ -1,5 +1,7 @@
 # Code Audit
 
+> Historical architecture-reset audit, retained for provenance. Its current-state and test-count statements predate the persistent Nexus implementation. See [verification.md](verification.md) and [the architecture overview](../architecture/overview.md) for the present application.
+
 ## Scope
 
 Architecture reset audit for Nexus documentation, maintainability, and stale-reference cleanup.

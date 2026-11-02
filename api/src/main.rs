@@ -34,17 +34,27 @@ async fn main() -> io::Result<()> {
     println!(
         "Nexus local API: http://{host}:{port} (authentication deferred; development actors only)"
     );
+    println!(
+        "Optional local whisper.cpp: {} (not a production speech service; see docs/setup/local-speech.md)",
+        emr_api::speech_configuration_label()
+    );
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
             .allowed_origin("http://localhost:5173")
             .allowed_origin("http://127.0.0.1:5173")
             .allowed_methods(vec!["GET", "POST", "PATCH", "OPTIONS"])
-            .allowed_headers(vec!["content-type", "x-nexus-actor"])
+            .allowed_headers(vec![
+                "content-type",
+                "x-nexus-actor",
+                "x-nexus-client",
+                "x-nexus-consent",
+            ])
             .max_age(600);
         App::new()
             .wrap(cors)
             .app_data(web::Data::new(AppState { pool: pool.clone() }))
             .app_data(web::JsonConfig::default().limit(1_048_576))
+            .app_data(web::PayloadConfig::new(emr_api::MAX_WAV_BYTES))
             .configure(configure)
     })
     .bind((host, port))?
