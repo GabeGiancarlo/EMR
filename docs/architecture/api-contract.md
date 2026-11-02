@@ -156,6 +156,12 @@ POST `/api/speech/transcribe` accepts a raw `audio/wav` body and `x-nexus-client
 
 Input is PCM16 mono 16 kHz, at most 20 MiB / 10 minutes. One whisper.cpp process runs at a time, with a 120-second execution limit and no hosted fallback. Missing local configuration returns 503, occupied worker 429, invalid WAV 400, and oversized input 413. A successful no-store response is `{transcript, engine: "whisper.cpp", manual_review_required: true}`. Nothing is signed or saved as a form automatically. See [setup, provenance and observed verification](../setup/local-speech.md).
 
+## Patient identity and admission
+
+Patient registration and admission now have a separate [identity/intake contract](../development/patient-intake-contract.md). `POST /api/intake/matches`, `GET/POST /api/clients/{id}/intake`, `POST /api/clients/{id}/identity-checks`, `PATCH /api/intake-cases/{id}` and `POST /api/intake-cases/{id}/transition` provide the scoped workflow. Generic client writes accept explicit duplicate-review metadata when required; MRNs are server assigned and immutable. Intake reads/writes require an active intake role and preserve clinician primary-patient scope. Billing/executive roles cannot retrieve referral narratives.
+
+Form requirements accept an optional `episode_id` query parameter and return a source-review state when a signed response's transcript evidence is no longer usable. Readiness and admission use the planned episode's exact requirements. A linked intake episode cannot change status/context through generic updates; use admission or the existing discharge action after admission. Declined/withdrawn cases preserve their planned episode and prevent later generic activation. Independent legacy episodes remain available pending program policy configuration.
+
 ## Recorded-media transcripts and source-bound forms
 
 See [transcript endpoints, review states and provenance](../development/transcript-contract.md) and the [verified checkpoint](../development/transcript-checkpoint.md). Migration 013 adds persistent background recognition, versioned review, and patient-specific immutable excerpts. Authentication remains deliberately deferred.

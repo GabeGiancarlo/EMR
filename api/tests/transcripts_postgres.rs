@@ -534,6 +534,29 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
     )
     .await;
     assert_eq!(stale_index["total"], 0, "{stale_index}");
+    let (status, form_rules) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::GET,
+        &format!(
+            "/api/clients/{}/form-requirements?episode_id={}",
+            client["id"].as_str().unwrap(),
+            episode["id"].as_str().unwrap()
+        ),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{form_rules}");
+    assert!(
+        form_rules["requirements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["template_id"] == response["template_id"]
+                && r["completion"] == "source_review"),
+        "{form_rules}"
+    );
     let (status, blocked) = send(
         &pool,
         Some(actor),
