@@ -2,11 +2,13 @@
 
 Verified November 2, 2026 against the local PostgreSQL/API and custom frontend. This records observed behavior, not a production-readiness or compliance certification.
 
+**Product acceptance remains incomplete.** The owner's review exposed gaps not closed by the tests below. The [scope and delivery audit](roadmap-gap-audit.md) maps those gaps to the original roadmap and newly supplied Figma references. Earlier browser checks establish only the paths specifically described here.
+
 ## Isolation
 
 - `nexus`: ordinary workspace; no sample clients or demo fixtures seeded.
 - `nexus_test`: explicitly disposable backend integration database. Export, form-routing and speech authorization tests each create and remove their own isolated schema inside it.
-- `nexus_ui_test`: isolated browser QA database. All names, records, codes, references and amounts are clearly labeled synthetic QA fixtures. No payer submission or real payment occurs.
+- `nexus_ui_test`: separate browser QA database originally populated with synthetic fixtures. The owner has since entered additional review records; do not assume all its rows are disposable or reset it. No payer submission or real payment occurs in the recorded QA paths.
 - xAI receives development source files only. No clinical content, credentials, database dumps or user records are included.
 
 ## Browser path exercised
@@ -52,3 +54,17 @@ An actual local backup was hashed and restored into a newly created isolated dat
 The research HTML report was opened and visually reviewed. The DOCX passed structural validation, but visual rendering could not run because the bundled LibreOffice binary is unavailable on this Windows host; the DOCX is not described as visually verified.
 
 Authentication is intentionally absent. Local actor policies do not establish identity. Public deployment, real patient use, external payer exchange, clinical speech accuracy and production operational controls are outside the evidence above.
+
+## Scope-review corrections, after 981afd0
+
+Verified on November 2 after the owner's review:
+
+- 42 Rust unit tests pass. Five real PostgreSQL/HTTP integration scenarios pass, including the new adult-intake scenario. Strict Clippy and Rust formatting pass. The database scenarios ran only in `nexus_test`; the new intake scenario creates and removes a unique schema.
+- Adult intake checks reject minor creation, DOB changes to a minor, client transition into intake, and new/activated episodes for a legacy minor. They accept an eligible adult and preserve the legacy DOB during an unrelated correction, including when the unchanged DOB is submitted. Calendar boundary/leap-year unit checks pass. The rule is scoped product policy, not legal eligibility advice.
+- 11 frontend validation tests and the TypeScript/Vite build pass. The three new age tests cover the birthday boundary, leap-day cutoff consistency and differing facility dates at the same instant.
+- Browser verification on the existing QA workspace: dark/light/system selection; dark preference persists after reload; refresh produces the visible “Workspace refreshed” confirmation; desktop and mobile Exit workspace return to local operator selection. Dark intake fields and dialog surfaces were visually inspected.
+- A new-client form with explicitly synthetic inputs and DOB `2015-01-01` was rejected by the browser date limit; the form retained its inputs and was cancelled without saving. Backend rejection is separately covered by the database scenario.
+- At 390 × 844, header theme/refresh/navigation controls fit. DOM inspection reported viewport width 390 and content width 375 (scrollbar accounted for). Viewport restored afterward. This does not certify all screens for accessibility or contrast, and OS theme switching itself was not simulated.
+- No existing ordinary or QA client was changed or deleted. API services were restarted on their existing ports after the test checks. No public deployment or GitHub push was performed.
+
+Read-only design screenshots and the corrected dark overview are retained under ignored `.local/design-review`. Neither these visual checks nor the additional tests close the missing dedicated workspaces, full calendar, telehealth, client portal, retention/deletion or complete revenue workflows.

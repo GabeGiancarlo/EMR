@@ -86,6 +86,8 @@ jobs:
         run: cargo test --locked --test form_requirements_postgres -- --ignored
       - name: PostgreSQL speech authorization integration
         run: cargo test --locked --test speech_postgres -- --ignored
+      - name: PostgreSQL adult intake integration
+        run: cargo test --locked --test intake_postgres -- --ignored
 
   frontend:
     name: Frontend build

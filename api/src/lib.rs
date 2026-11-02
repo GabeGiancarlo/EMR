@@ -1,5 +1,6 @@
 //! Persistent Nexus application API. Local actors exercise policies, not authentication.
 mod access;
+mod adult;
 mod applicability;
 mod clinical;
 mod exports;

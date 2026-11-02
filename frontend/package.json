@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/serialize.test.ts src/wav.test.ts",
+    "test": "node --test src/serialize.test.ts src/wav.test.ts src/adult.test.ts",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
