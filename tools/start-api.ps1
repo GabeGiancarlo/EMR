@@ -18,6 +18,13 @@ if (!$env:NEXUS_WHISPER_CLI -and !$env:NEXUS_WHISPER_MODEL -and
     $env:NEXUS_WHISPER_MODEL = $localSpeechModel
     Write-Output 'Optional local speech recognizer found.'
 }
+$localDraftModel = Join-Path (Get-Location) '.local\models\Qwen3-4B-Q4_K_M.gguf'
+if (!$env:NEXUS_LLM_MODEL -and (Test-Path -LiteralPath $localDraftModel -PathType Leaf)) {
+    $env:NEXUS_LLM_MODEL = $localDraftModel
+    if (!$env:NEXUS_LLM_PORT) { $env:NEXUS_LLM_PORT = '8093' }
+    if (!$env:NEXUS_LLM_ALIAS) { $env:NEXUS_LLM_ALIAS = 'nexus-qwen3-4b' }
+    Write-Output 'Optional local drafting model configured (service health checked on use).'
+}
 cargo build -p emr-api
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # A separate running copy keeps Windows from locking Cargo's build output.

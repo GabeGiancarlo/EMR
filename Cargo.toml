@@ -20,5 +20,9 @@ tokio = { version = "1.0", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 thiserror = "1.0"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
 uuid = { version = "1.0", features = ["v4"] }
+
+# Model provenance hashes multi-GB local weights even in the development preview.
+[profile.dev.package.sha2]
+opt-level = 3

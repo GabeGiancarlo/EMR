@@ -2,7 +2,11 @@
 use super::*;
 use serde_json::Map;
 
-async fn source(tx: &mut Transaction<'_, Postgres>, actor: &Actor, id: Uuid) -> Result<Value> {
+pub(crate) async fn source(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Actor,
+    id: Uuid,
+) -> Result<Value> {
     if !matches!(actor.role.as_str(), "admin" | "clinical_lead" | "clinician") {
         return Err(ApiError::denied());
     }

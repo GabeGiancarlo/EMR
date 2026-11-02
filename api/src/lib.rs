@@ -4,8 +4,11 @@ mod adult;
 mod applicability;
 mod availability;
 mod clinical;
+mod clinical_model;
+mod drafting;
 mod exports;
 mod forms;
+mod knowledge;
 mod media_transcription;
 mod readiness;
 mod records;
@@ -23,7 +26,10 @@ pub struct AppState {
     pub pool: PgPool,
 }
 pub fn start_background_workers(pool: PgPool) {
-    tokio::spawn(telehealth::recording::transcripts::worker::start(pool));
+    tokio::spawn(telehealth::recording::transcripts::worker::start(
+        pool.clone(),
+    ));
+    tokio::spawn(drafting::worker::start(pool));
 }
 pub type Result<T> = std::result::Result<T, ApiError>;
 
@@ -128,6 +134,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(
             web::scope("/api")
                 .configure(telehealth::configure)
+                .configure(knowledge::configure)
+                .configure(drafting::configure)
                 .route(
                     "/exports/accounting.csv",
                     web::get().to(exports::accounting),
