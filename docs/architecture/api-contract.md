@@ -1,5 +1,27 @@
 # Nexus local API contract
 
+## Telehealth (local prototype)
+
+Manager routes use the current local `x-nexus-actor` policy. Only admin, clinical lead or the authorized assigned clinician may manage a scheduled encounter. These return JSON with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+
+| Method / route | Contract |
+|---|---|
+| POST `/api/telehealth/rooms` | `{session_id}` or `{group_id}`, exclusively. Reuses an unended room; expires after four hours. Shared group child sessions are rejected. |
+| GET `/api/telehealth/rooms/{id}` | `{room,participants,events,invitees}`. No token/hash. Minimal eligible group roster does not grant chart access. |
+| POST `/api/telehealth/rooms/{id}/host` | `{}` → one new clinician invitation `{participant,token,expires_at}`. |
+| POST `/api/telehealth/rooms/{id}/invite` | `{client_id}` → one invitation for an eligible encounter participant. |
+| POST `/api/telehealth/rooms/{id}/participants/{participant}/{admit\|remove}` | `{}`. Admission requires eligible, currently waiting, online participant. |
+| POST `/api/telehealth/rooms/{id}/end` | `{}`. Revokes participants and removes signaling; no attendance/documentation change. |
+
+Visitor routes use `Authorization: Bearer <64-hex-character capability>` without a local actor header. GET `/api/telehealth/visit` returns a minimum prejoin snapshot. POST `/api/telehealth/visit/{action}` requires `connection_id` (UUID). Actions:
+
+- `join`, `poll` (optional nonnegative `after` cursor), `leave`.
+- `signal`: `{to,to_connection,payload}`; payload contains exactly one bounded WebRTC `description` or `candidate`. Admission/current generation/online host/current eligibility required for both sender and recipient. Delivery expires after two minutes. Poll/join/end perform room cleanup; unattended cleanup remains unfinished.
+- `board`: `{stroke:{id,color,points}}` or host-only `{clear:true}`. Four supported ink colors; 1–256 normalized points per stroke, at most 200 strokes. No markup or narrative fields.
+- Host-only `admit`/`remove` with `{to}`, and `end`. These recheck staff/encounter eligibility on every request.
+
+Connected snapshots contain room expiry/state, self, permitted participants, current-generation signals/cursor, host presence, permitted board and ICE configuration. Waiting guests see only themselves. Identity/chart IDs, raw credentials, hashes and clinical narratives are excluded. Admission is not identity verification. `visit_busy` (409) rejects another live window; `visit_connection` (409) requires rejoin after a stale generation/presence timeout; `visit_access` (403) stops media on access loss/expiry/end. Long polling interruptions close media and require rejoin. A presence event is not attendance or billable duration. See [evidence and limits](../development/telehealth-checkpoint.md).
+
 Record API responses are JSON; export routes return CSV. Errors are `{error:{code,message}}`. UUID identifiers are strings, money is integer cents, dates are ISO dates, timestamps RFC3339. No example clients are seeded. API listens at `http://127.0.0.1:8090`.
 
 Authentication is deliberately deferred. Local development uses `x-nexus-actor: <staff UUID>` to exercise permission policies; this is NOT authentication. Server refuses to start unless `NEXUS_LOCAL_DEV=1`; bind must be loopback. CORS allows localhost:5173 and 127.0.0.1:5173. Do not deploy this mode publicly.

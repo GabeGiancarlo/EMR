@@ -2,7 +2,7 @@
 
 Nexus connects recovery-center care, billing readiness and operational oversight. The local prototype uses a custom React/TypeScript interface, a Rust/Actix API and PostgreSQL. It starts with an empty database: organization setup and every client record come from user input.
 
-**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive home screens and a day/week/month/agenda calendar now work against persisted records. Complete role journeys, recurring scheduling, telehealth, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the expanded objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [tested workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md) and the [preserved original roadmap](docs/product/original-roadmap.md).
+**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive homes, a day/week/month/agenda calendar and encounter-linked local telehealth work against persisted records. Telehealth passed a three-participant browser media check; remote connectivity, recording and the transcript-to-reviewed-note chain remain unfinished. Complete role journeys, recurring scheduling, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md), [telehealth evidence and limits](docs/development/telehealth-checkpoint.md) and the [original roadmap](docs/product/original-roadmap.md).
 
 Authentication is deliberately deferred. Local operator selection exercises application permissions but does not verify identity. The API requires explicit development mode and refuses a non-loopback bind. Do not use real patient data or publish this mode.
 
@@ -43,6 +43,7 @@ Open http://127.0.0.1:5173. The API is at http://127.0.0.1:8090; `/healthz` chec
 - Session scheduling, authored clinical notes, signing and append-only amendments.
 - Facility-time calendar entry with DST occurrence selection; transactional clinician/client conflicts, audited staff time away and an attendance queue.
 - Shared group encounters, attendance and linked individual documentation.
+- Encounter-linked local video rooms, participant invitations, waiting/admission, device controls, screen sharing, whiteboard and participation history. Call completion is separate from clinical attendance.
 - Treatment plans, measurable goals, activation, progress reviews and revision history.
 - User-authored form templates, versioned responses, source excerpts, review/signing and consent attestations.
 - Coverage and authorizations; session-based claim readiness and manual external-submission records.
@@ -68,6 +69,7 @@ cargo test --locked --test postgres -- --ignored
 cargo test --locked --test exports_postgres -- --ignored
 cargo test --locked --test form_requirements_postgres -- --ignored
 cargo test --locked --test speech_postgres -- --ignored
+cargo test --locked --test telehealth_postgres -- --ignored
 cargo test --locked --test intake_postgres -- --ignored
 cargo test --locked --test scheduling_postgres -- --ignored
 cd frontend

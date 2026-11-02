@@ -20,7 +20,8 @@ export default function GroupEncounters({
   action,
   mutate,
   initialSelectedId = "",
-}: WorkflowProps & { initialSelectedId?: string }) {
+  onTelehealth,
+}: WorkflowProps & { initialSelectedId?: string; onTelehealth?:(row:Row)=>void }) {
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [error, setError] = useState("");
   const [savingAttendance, setSavingAttendance] = useState<Record<string, boolean>>({});
@@ -144,6 +145,7 @@ export default function GroupEncounters({
             </div>
             {canWrite && selected.status === "scheduled" && (
               <div className="plan-actions">
+                {onTelehealth&&["admin","clinical_lead","clinician"].includes(value(data.actor,"role"))&&(value(data.actor,"role")!=="clinician"||selected.clinician_id===data.actor?.id)&&<Button variant="secondary small" onClick={()=>onTelehealth(selected)}>Open telehealth</Button>}
                 <Button
                   variant="secondary small"
                   onClick={() => edit("groups", selected)}

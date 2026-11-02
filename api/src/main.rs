@@ -45,6 +45,7 @@ async fn main() -> io::Result<()> {
             .allowed_methods(vec!["GET", "POST", "PATCH", "OPTIONS"])
             .allowed_headers(vec![
                 "content-type",
+                "authorization",
                 "x-nexus-actor",
                 "x-nexus-client",
                 "x-nexus-consent",

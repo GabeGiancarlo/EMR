@@ -4,6 +4,7 @@ import CarePlanning from "./CarePlanning";
 import GroupEncounters from "./GroupEncounters";
 import CalendarWorkspace from "./CalendarWorkspace";
 import StaffAvailability from "./StaffAvailability";
+import TelehealthManager from "./TelehealthManager";
 import { schedulingZone, facilityWallTime } from "./schedulingTime";
 import RoleWorkspace from "./RoleWorkspace";
 import { allowedWorkspaceModes, defaultWorkspaceMode, claimMatchesFilter } from "./workspace";
@@ -239,6 +240,7 @@ export default function App() {
   const [queueScope, setQueueScope] = useState<{ ids: string[]; label: string } | null>(null);
   const [workspaceChoice, setWorkspaceChoice] = useState<{ actorId: string; mode: WorkspaceMode } | null>(null);
   const [calendarToday, setCalendarToday] = useState(false);
+  const [telehealth, setTelehealth] = useState<{kind:"sessions"|"groups";row:Row}|null>(null);
   const [filter, setFilter] = useState("all");
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [readinessClaim, setReadinessClaim] = useState<Row | null>(null);
@@ -304,6 +306,7 @@ export default function App() {
     setLoading(true);
     setDialog(null);
     setReadinessClaim(null);
+    setTelehealth(null);
     setSelectedGroupId("");
     setScheduleFocusId("");
     setClientId("");
@@ -1378,6 +1381,7 @@ export default function App() {
           <GroupEncounters
             key={selectedGroupId}
             initialSelectedId={selectedGroupId}
+            onTelehealth={row=>setTelehealth({kind:"groups",row})}
             data={data!}
             canWrite={can("groups", canSessions)}
             create={create}
@@ -1408,6 +1412,7 @@ export default function App() {
             onCreateGroup={initial => create("groups", initial)}
             onEditSession={row => edit("sessions", row)}
             onOpenGroup={row => { setSelectedGroupId(row.id); setScheduleTab("groups"); }}
+            onTelehealth={(kind,row)=>setTelehealth({kind,row})}
             onOpenClient={openChart}
             onOpenTasks={row => row ? openSearchResult({key:`tasks:${row.id}`, resource:"tasks", row, title:value(row,"title"), detail:"Task", view:"tasks"}) : navigate("tasks")}
           />
@@ -2512,6 +2517,7 @@ export default function App() {
           }}
         />
       )}
+      {telehealth && <TelehealthManager data={data} encounter={telehealth.row} kind={telehealth.kind} onClose={()=>setTelehealth(null)} />}
       {dialog && (
         <Modal
           title={dialog.title}
