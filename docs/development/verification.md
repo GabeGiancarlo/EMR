@@ -1,6 +1,6 @@
 # Local verification record
 
-The latest [telehealth checkpoint](telehealth-checkpoint.md) records 46 passing Rust unit tests, seven passing PostgreSQL/HTTP suites, 39 passing frontend tests, build/lint/format checks, three-window browser WebRTC transport and a 29-table backup/restore. It follows the [workspace and scheduling checkpoint](workspace-rebuild-checkpoint.md). Older entries retain their original counts and limitations. The [50-capability acceptance ledger](../product/acceptance-ledger.md) remains the scope record; these checkpoints are not full product acceptance.
+The latest [recording checkpoint](recording-checkpoint.md) records 48 passing Rust unit tests, eight passing PostgreSQL/HTTP suites, 44 passing frontend tests, build/lint/format checks, real browser MediaRecorder capture/playback and byte-identical encrypted-media recovery from a 34-table backup. It follows the [telehealth checkpoint](telehealth-checkpoint.md) and [workspace and scheduling checkpoint](workspace-rebuild-checkpoint.md). Older entries retain their original counts and limitations. The [50-capability acceptance ledger](../product/acceptance-ledger.md) remains the scope record; these checkpoints are not full product acceptance.
 
 Verified November 2, 2026 against the local PostgreSQL/API and custom frontend. This records observed behavior, not a production-readiness or compliance certification.
 

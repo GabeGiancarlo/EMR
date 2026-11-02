@@ -5,6 +5,7 @@ $env:NEXUS_LOCAL_DEV = '1'
 $env:HOST = '127.0.0.1'
 $env:PORT = [string]$Port
 if (!$env:DATABASE_URL) { $env:DATABASE_URL = 'postgres://nexus:nexus_local@127.0.0.1:55432/nexus' }
+& (Join-Path $PSScriptRoot 'initialize-media-vault.ps1')
 # The optional recognizer remains local and can be overridden with explicit paths.
 $localSpeechCli = Join-Path (Get-Location) '.local\whisper\build\bin\Release\whisper-cli.exe'
 $localSpeechModel = Join-Path (Get-Location) '.local\whisper\models\ggml-base.en.bin'

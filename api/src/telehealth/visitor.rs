@@ -129,7 +129,7 @@ fn validate_stroke(stroke: &Value) -> Result<()> {
     }
     Ok(())
 }
-fn connection(p: &Value, id: Uuid) -> Result<()> {
+pub(super) fn connection(p: &Value, id: Uuid) -> Result<()> {
     if p["connection_id"] != id.to_string()
         || !matches!(p["state"].as_str(), Some("waiting" | "admitted"))
         || !online(p)
@@ -184,8 +184,9 @@ async fn snapshot(
     } else {
         json!([])
     };
+    let recording = super::recording::context(tx, room, p, connected).await?;
     Ok(
-        json!({"room":{"id":room["id"],"state":if room["ended_at"].is_null(){"open"}else{"ended"},"expires_at":room["expires_at"]},"self":public_participant(p),"participants":visible,"signals":signals,"cursor":cursor,"host_present":host_present&&connected,"board":if admitted&&host_present {room["board"].clone()}else{json!([])},"connectivity":if ice.as_array().is_some_and(|a|!a.is_empty()){"configured"}else{"local"},"ice_servers":ice}),
+        json!({"room":{"id":room["id"],"state":if room["ended_at"].is_null(){"open"}else{"ended"},"expires_at":room["expires_at"]},"self":public_participant(p),"participants":visible,"signals":signals,"cursor":cursor,"host_present":host_present&&connected,"board":if admitted&&host_present {room["board"].clone()}else{json!([])},"connectivity":if ice.as_array().is_some_and(|a|!a.is_empty()){"configured"}else{"local"},"ice_servers":ice,"recording":recording}),
     )
 }
 pub async fn inspect(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse> {
