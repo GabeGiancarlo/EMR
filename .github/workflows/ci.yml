@@ -92,6 +92,8 @@ jobs:
         run: cargo test --locked --test scheduling_postgres -- --ignored
       - name: PostgreSQL telehealth participation and signaling integration
         run: cargo test --locked --test telehealth_postgres -- --ignored
+      - name: PostgreSQL transcript review and provenance integration
+        run: cargo test --locked --test transcripts_postgres -- --ignored
       - name: PostgreSQL recording consent and encrypted media integration
         run: cargo test --locked --test recordings_postgres -- --ignored
 

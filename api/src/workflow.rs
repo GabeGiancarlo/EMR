@@ -52,6 +52,20 @@ pub async fn action(
             {
                 return Err(ApiError::denied());
             }
+            if !old["form_response_id"].is_null() {
+                let source = records::get(
+                    &mut tx,
+                    "form_responses",
+                    records::uuid(&old, "form_response_id")?,
+                    actor.org,
+                    false,
+                )
+                .await?;
+                crate::telehealth::recording::transcripts::excerpts::validate_form(
+                    &mut tx, &actor, &source,
+                )
+                .await?;
+            }
             records::text(&old, "body")?;
             records::patch(
                 &mut tx,

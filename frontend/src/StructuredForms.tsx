@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
+  request,
   clientName,
   date,
   label,
@@ -47,6 +48,10 @@ function ResponseEditor({
     (record?.answers || {}) as Answers,
   );
   const [source, setSource] = useState(value(record, "source_excerpt"));
+  const [excerptId,setExcerptId] = useState(value(record,"transcript_excerpt_id"));
+  const [excerpts,setExcerpts] = useState<Row[]>([]);
+  const [excerptError,setExcerptError] = useState("");
+  useEffect(()=>{let active=true;setExcerpts([]);setExcerptError("");if(client)void request<{excerpts:Row[]}>(`/api/clients/${client}/transcript-excerpts`).then(r=>{if(active)setExcerpts(r.excerpts);}).catch(e=>{if(active)setExcerptError(e.message);});return()=>{active=false;};},[client]);
   const sourceVersion = useRef(0);
   const [selected, setSelected] = useState("");
   const [target, setTarget] = useState("");
@@ -72,6 +77,7 @@ function ResponseEditor({
               template_id: template,
             }
           : {}),
+        transcript_excerpt_id: excerptId || null,
         answers,
         source_type: source.trim() ? "transcript" : "manual",
         source_excerpt: source,
@@ -108,6 +114,7 @@ function ResponseEditor({
                   onChange={(e) => {
                     sourceVersion.current += 1;
                     setClient(e.target.value);
+                    setExcerptId("");
                     setSession("");
                     setEpisode("");
                     setAnswers({});
@@ -160,6 +167,7 @@ function ResponseEditor({
                 <label htmlFor="response-episode">Care episode</label>
                 <select
                   id="response-episode"
+                  disabled={!!excerptId}
                   value={episode}
                   onChange={(e) => setEpisode(e.target.value)}
                 >
@@ -178,6 +186,7 @@ function ResponseEditor({
                 <label htmlFor="response-session">Session</label>
                 <select
                   id="response-session"
+                  disabled={!!excerptId}
                   value={session}
                   onChange={(e) => setSession(e.target.value)}
                 >
@@ -227,7 +236,21 @@ function ResponseEditor({
                     its destination field. Each mapped answer keeps its source
                     excerpt for traceability.
                   </p>
-                  <SpeechImport key={client} clientId={client} data={data} onTranscript={(text) => {
+                  <div className="form-field">
+                    <label htmlFor="response-excerpt">Reviewed patient excerpt</label>
+                    <select id="response-excerpt" value={excerptId} onChange={e=>{
+                      const next=excerpts.find(x=>x.id===e.target.value);sourceVersion.current++;
+                      setExcerptId(e.target.value);setSource(next?value(next,"text"):"");setAnswers({});setProvenance({});setSelected("");setTarget("");
+                      if(next){setEpisode(value(next,"episode_id"));setSession(value(next,"session_id"));}
+                    }}>
+                      {!record?.transcript_excerpt_id&&<option value="">Manual source or uploaded speech</option>}
+                      {excerptId&&!excerpts.some(x=>x.id===excerptId)&&<option value={excerptId}>Previously linked excerpt · check current version</option>}
+                      {excerpts.filter(x=>!record||(x.episode_id===record.episode_id&&x.session_id===record.session_id)).map(x=><option key={x.id} value={x.id}>{date(value(x,"created_at"))} · {value(x,"text").slice(0,90)}</option>)}
+                    </select>
+                    <small>Choose an excerpt to preserve its reviewed transcript version and visit. Changing it clears answers and evidence links for a fresh review.</small>
+                    {excerptError&&<p role="alert">{excerptError}</p>}
+                  </div>
+                  {!excerptId&&<><SpeechImport key={client} clientId={client} data={data} onTranscript={(text) => {
                     sourceVersion.current += 1;
                     setSource(text);
                     setProvenance({});
@@ -258,11 +281,12 @@ function ResponseEditor({
                         }
                       }}
                     />
-                  </label>
+                  </label></>}
                   <div className="form-field">
                     <label htmlFor="response-source">Source text</label>
                     <textarea
                       id="response-source"
+                      readOnly={!!excerptId}
                       rows={5}
                       value={source}
                       onChange={(e) => {

@@ -1,10 +1,12 @@
 //! Explicit participant agreement, encrypted media storage and scoped playback.
 mod crypto;
 mod tracks;
+pub(crate) mod transcripts;
 use super::*;
 use crate::AppState;
 use serde::Deserialize;
 pub(super) fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.configure(transcripts::configure);
     cfg.route("/recording-policies", web::get().to(policies))
         .route("/recording-policies", web::post().to(create_policy))
         .route(

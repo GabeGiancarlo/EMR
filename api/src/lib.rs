@@ -6,6 +6,7 @@ mod availability;
 mod clinical;
 mod exports;
 mod forms;
+mod media_transcription;
 mod readiness;
 mod records;
 mod routes;
@@ -20,6 +21,9 @@ use sqlx::PgPool;
 
 pub struct AppState {
     pub pool: PgPool,
+}
+pub fn start_background_workers(pool: PgPool) {
+    tokio::spawn(telehealth::recording::transcripts::worker::start(pool));
 }
 pub type Result<T> = std::result::Result<T, ApiError>;
 

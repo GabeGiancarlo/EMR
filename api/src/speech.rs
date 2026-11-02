@@ -53,6 +53,9 @@ fn jobs() -> &'static Semaphore {
 fn try_claim(sem: &Semaphore) -> std::result::Result<SemaphorePermit<'_>, ()> {
     sem.try_acquire().map_err(|_| ())
 }
+pub(crate) fn recognition_permit() -> Result<SemaphorePermit<'static>> {
+    try_claim(jobs()).map_err(|_| busy())
+}
 
 pub(crate) fn configuration_label() -> &'static str {
     match configured_paths(
