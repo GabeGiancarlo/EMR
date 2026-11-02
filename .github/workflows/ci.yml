@@ -90,6 +90,8 @@ jobs:
         run: cargo test --locked --test intake_postgres -- --ignored
       - name: PostgreSQL scheduling and availability integration
         run: cargo test --locked --test scheduling_postgres -- --ignored
+      - name: PostgreSQL telehealth participation and signaling integration
+        run: cargo test --locked --test telehealth_postgres -- --ignored
 
   frontend:
     name: Frontend build
