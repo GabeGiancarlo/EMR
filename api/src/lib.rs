@@ -10,6 +10,7 @@ mod exports;
 mod forms;
 mod knowledge;
 mod media_transcription;
+mod note_lineage;
 mod readiness;
 mod records;
 mod routes;

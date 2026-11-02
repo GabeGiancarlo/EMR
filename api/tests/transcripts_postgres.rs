@@ -423,6 +423,54 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
         .unwrap()
         .iter()
         .any(|r| r["source_kind"] == "form_response"));
+    // Explicit legacy-history fixture: a signed form-derived note without a visit link.
+    // This isolates amendment provenance from the separately tested future-visit guard.
+    sqlx::query(
+        "UPDATE notes SET session_id=NULL,status='signed',signed_at=now(),signed_by=$2 WHERE id=$1",
+    )
+    .bind(Uuid::parse_str(note["id"].as_str().unwrap()).unwrap())
+    .bind(Uuid::parse_str(actor).unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (status, amendment) = send(&pool,Some(actor),None,Method::POST,&format!("/api/notes/{}/amend",note["id"].as_str().unwrap()),json!({"reason":"Synthetic historical form correction review","body":"Synthetic amended observation."})).await;
+    assert_eq!(status, StatusCode::OK, "{amendment}");
+    assert_eq!(amendment["form_response_id"], response["id"]);
+    sqlx::query("UPDATE notes SET form_response_id=NULL WHERE id=$1")
+        .bind(Uuid::parse_str(amendment["id"].as_str().unwrap()).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, signed_amendment) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::POST,
+        &format!("/api/notes/{}/sign", amendment["id"].as_str().unwrap()),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{signed_amendment}");
+    let (_, current_index) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::GET,
+        &knowledge_path,
+        Value::Null,
+    )
+    .await;
+    assert!(
+        current_index["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["source_id"] == amendment["id"] && r["episode_id"] == episode["id"]),
+        "{current_index}"
+    );
+    let (status, pending_amendment) = send(&pool,Some(actor),None,Method::POST,&format!("/api/notes/{}/amend",amendment["id"].as_str().unwrap()),json!({"reason":"Synthetic follow-up source recheck","body":"Synthetic further correction."})).await;
+    assert_eq!(status, StatusCode::OK, "{pending_amendment}");
+    assert_eq!(pending_amendment["form_response_id"], response["id"]);
     let (_, options) = send(
         &pool,
         Some(actor),
@@ -486,6 +534,19 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
     )
     .await;
     assert_eq!(stale_index["total"], 0, "{stale_index}");
+    let (status, blocked) = send(
+        &pool,
+        Some(actor),
+        None,
+        Method::POST,
+        &format!(
+            "/api/notes/{}/sign",
+            pending_amendment["id"].as_str().unwrap()
+        ),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{blocked}");
     assert!(
         sqlx::query("UPDATE transcripts SET current_version_id=$2 WHERE id=$1")
             .bind(doc)
