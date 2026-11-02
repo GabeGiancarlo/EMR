@@ -1,27 +1,37 @@
-# api
+# Nexus API
 
-## Purpose
+Persistent local development API for the Nexus clinical, billing, and operations workspace. Actix Web serves JSON; SQLx applies versioned PostgreSQL migrations on startup. The database starts empty.
 
-Active Rust API backend foundation for Nexus.
+## Run
 
-## Current Status
+Start PostgreSQL using the repository development tooling. In PowerShell:
 
-Active, with prototype/scaffold behavior still present in parts of the API.
+```powershell
+$env:NEXUS_LOCAL_DEV = '1'
+$env:DATABASE_URL = 'postgres://nexus:nexus_local@127.0.0.1:55432/nexus'
+cargo run -p emr-api
+```
 
-## What Belongs Here
+The API defaults to 127.0.0.1:8090. Authentication is intentionally deferred. Startup refuses non-loopback binding and requires explicit local-development opt-in. `x-nexus-actor` selects an active staff record for policy testing and must never be treated as authentication. Public hosting requires a verified identity provider and a separate deployment review.
 
-- Actix app setup and route registration
-- HTTP handlers
-- service-layer business logic
-- repository-layer persistence logic
-- middleware, config, database wiring, and error handling
+## Implemented
 
-## What Does Not Belong Here
+Workspace onboarding; persisted facilities, staff, clients, episodes, sessions, clinical notes, tasks, policies, authorizations, claims, payments, form templates, consent attestations, and permission exceptions; immutable signed notes and append-only amendments; clinical/billing role boundaries; clinician assignment scope; claim readiness checks and authorization-unit reservations; external-submission recording; concurrent overpayment protection; discharge; staff offboarding and assignment transfer; transactional audit history. Treatment plans support measurable goals, attestation, immutable definitions, reviewed progress snapshots, completion, and revision. Shared groups support capacity-controlled enrollment and attendance-linked individual sessions. Structured forms retain template snapshots, typed draft answers, source-excerpt provenance, review/sign/amend history, and deterministic draft-note creation from actual answers.
 
-- frontend UI code
-- ad hoc scripts that bypass typed backend boundaries
-- domain logic that should live in `core/`
+Routes and frontend field definitions are in [the API contract](../docs/architecture/api-contract.md). `lib.rs` configures routes, `routes.rs` adapts HTTP, `records.rs` validates and persists records, `access.rs` evaluates policies, and `workflow.rs` coordinates transactional state changes.
 
-## Notes
+## Validation
 
-Current endpoints include mock responses while Postgres-backed workflows are implemented in upcoming milestones.
+```powershell
+cargo test --workspace
+$env:TEST_DATABASE_URL = 'postgres://nexus:nexus_local@127.0.0.1:55432/nexus_test'
+cargo test --test postgres -- --ignored
+```
+
+The explicitly ignored integration test resets only a database whose URL ends in `/nexus_test`. It verifies persistence and workflow boundaries against real PostgreSQL. Never point it at clinical data. All fixtures are confined to that disposable test database.
+
+## Boundaries
+
+No authentication, external claim transmission, eligibility lookup, payer adjudication, speech recognition, file storage, legal consent generation, or clinical decision support is represented as implemented. Group encounters have real participant rosters; each attendance record owns an individual session used by notes and billing. Form answers and transcript excerpts are user-entered, not model-generated. Claims cover one session/service line each, not complete X12 claim transactions. Payment adjustments reduce a balance but are separated from cash in metrics. Local attestations and role selections do not establish verified identity or legal electronic signatures. The local roles are a prototype policy matrix, not a claim of regulatory compliance.
+
+Signed records, coverage attached to advanced claims, and completed documented sessions are preserved. Payment mistakes use append-only full reversals with reason/date and balanced cash/adjustment reporting. Ready claims may return to draft, and unsubmitted claims may be voided and replaced without erasing history. Submitted claim corrections, payer resubmissions, and changed coverage for delivered care need separate workflows and are not disguised as destructive edits.

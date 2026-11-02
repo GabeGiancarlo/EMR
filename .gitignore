@@ -2,7 +2,7 @@
 
 # Rust
 /target/
-Cargo.lock
+# Cargo.lock is tracked for reproducible application builds.
 **/*.rs.bk
 *.pdb
 
@@ -39,9 +39,6 @@ yarn-error.log*
 *.pfx
 infra/certs/
 certs/
-
-# Docker
-.dockerignore
 
 # Node.js (for web tooling)
 node_modules/
@@ -82,6 +79,7 @@ playwright-report/
 *.bak
 *.backup
 backup-*
+!tools/backup-database.ps1
 config-backup-*
 
 # Local development
@@ -119,4 +117,4 @@ flamegraph.svg
 *.7z
 
 # Development containers
-.devcontainer/.env 
+.devcontainer/.env

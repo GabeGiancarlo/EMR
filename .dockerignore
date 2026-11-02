@@ -1,0 +1,12 @@
+.git
+.local
+.env
+.env.*
+target
+**/node_modules
+**/dist
+**/*.log
+**/*.pem
+**/*.key
+docs/research/snapshots
+docs/research/*.docx

@@ -1,8 +1,6 @@
 name: Publish API Container
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 env:
