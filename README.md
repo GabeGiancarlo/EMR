@@ -2,7 +2,7 @@
 
 Nexus connects recovery-center care, billing readiness and operational oversight. The local prototype uses a custom React/TypeScript interface, a Rust/Actix API and PostgreSQL. It starts with an empty database: organization setup and every client record come from user input.
 
-**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive homes, a day/week/month/agenda calendar and encounter-linked local telehealth work against persisted records. Telehealth passed a three-participant browser media check. Consented own-device recording, encrypted storage, archived playback and database/media recovery now have [local verification](docs/development/recording-checkpoint.md); recorded-media recognition, timestamped review, patient excerpts and source-linked form-to-note assembly now have [end-to-end local evidence](docs/development/transcript-checkpoint.md). Remote connectivity, automatic speaker separation, AI clinical drafting and the longitudinal knowledge base remain unfinished. Complete role journeys, recurring scheduling, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md), [telehealth evidence and limits](docs/development/telehealth-checkpoint.md) and the [original roadmap](docs/product/original-roadmap.md).
+**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive homes, a day/week/month/agenda calendar and encounter-linked local telehealth work against persisted records. Telehealth passed a three-participant browser media check. Consented own-device recording, encrypted storage, archived playback and database/media recovery have [local verification](docs/development/recording-checkpoint.md); recorded-media recognition, timestamped review, patient excerpts and source-linked form-to-note assembly have [end-to-end local evidence](docs/development/transcript-checkpoint.md). Approved patient-record search and local model proposals with explicit review, editable unsigned notes and separate signing now have [verification evidence](docs/development/knowledge-drafting-checkpoint.md). Semantic retrieval, clinical model accuracy, remote connectivity and automatic speaker separation remain unfinished. Complete role journeys, recurring scheduling, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md), [telehealth evidence and limits](docs/development/telehealth-checkpoint.md) and the [original roadmap](docs/product/original-roadmap.md).
 
 Authentication is deliberately deferred. Local operator selection exercises application permissions but does not verify identity. The API requires explicit development mode and refuses a non-loopback bind. Do not use real patient data or publish this mode.
 
@@ -57,6 +57,7 @@ Open http://127.0.0.1:5173. The API is at http://127.0.0.1:8090; `/healthz` chec
 - Draft edit conflict protection that preserves unsaved fields, and a billing checklist shared with the server's readiness rules.
 - Organization-authored form rules by care stage and level, with episode-specific completion status.
 - Optional local WAV transcription through whisper.cpp, recording consent checks, and reviewed source-to-field mapping.
+- Patient-scoped approved-record word search, source dates and version provenance; selected evidence can generate a local-model proposal, with statement-by-statement acceptance/exclusion before creating an unsigned note. [Local drafting setup](docs/setup/local-drafting.md) installs the optional model service.
 
 These are prototype workflows, not a claim of production or regulatory readiness. Exact record fields and boundaries are in [the API contract](docs/architecture/api-contract.md) and [backend notes](api/README.md). The [delivery plan](docs/development/delivery-plan.md) tracks the broader requested scope. External payer transmission, eligibility/remittance adapters and document attachment storage require further implementation and validation. [Local speech setup](docs/setup/local-speech.md) installs the optional recognizer; the application remains useful without it. Transcription has passed a synthetic local audio check, but clinical accuracy, live capture and diarization are not validated. Mapping and signing require human review.
 
@@ -74,6 +75,10 @@ cargo test --locked --test speech_postgres -- --ignored
 cargo test --locked --test telehealth_postgres -- --ignored
 cargo test --locked --test intake_postgres -- --ignored
 cargo test --locked --test scheduling_postgres -- --ignored
+cargo test --locked --test recordings_postgres -- --ignored
+cargo test --locked --test transcripts_postgres -- --ignored
+cargo test --locked --test knowledge_postgres -- --ignored
+cargo test --locked --test drafting_postgres -- --ignored
 cd frontend
 npm test
 npm run build

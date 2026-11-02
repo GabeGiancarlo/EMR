@@ -1,3 +1,4 @@
+import PatientKnowledge from "./PatientKnowledge";
 import Setup from "./Setup";
 import NoteComposer from "./NoteComposer";
 import CarePlanning from "./CarePlanning";
@@ -228,6 +229,12 @@ export default function App() {
   const [view, setView] = useState<View>("overview");
   const [clientId, setClientId] = useState("");
   const [chartTab, setChartTab] = useState("overview");
+  const [draftReviewDirty, setDraftReviewDirty] = useState(false);
+  const canLeaveDraftReview = () => {
+    if (!draftReviewDirty) return true;
+    setError("Your clinical draft review has unsaved choices. Record the review or use Discard review choices before leaving this chart section.");
+    return false;
+  };
   const [billingTab, setBillingTab] = useState("claims");
   const [settingsTab, setSettingsTab] = useState("templates");
   const [teamTab, setTeamTab] = useState("members");
@@ -298,6 +305,7 @@ export default function App() {
     }
   }, [toast]);
   const changeActor = (id: string) => {
+    if (!canLeaveDraftReview()) return;
     ++requestVersion.current;
     if (id) localStorage.setItem(actorStorageKey, id);
     else localStorage.removeItem(actorStorageKey);
@@ -321,6 +329,7 @@ export default function App() {
     if (id === actor) void reload();
   };
   const navigate = (next: View) => {
+    if (!canLeaveDraftReview()) return false;
     setView(next);
     setRecordFocus(null);
     setQueueScope(null);
@@ -334,6 +343,7 @@ export default function App() {
     setFilter("all");
     setMobile(false);
     setReadinessClaim(null);
+    return true;
   };
   const role = value(data?.actor, "role");
   const admin = role === "admin";
@@ -430,13 +440,14 @@ export default function App() {
     }
   }
   function openChart(row: Row) {
+    if (!canLeaveDraftReview()) return;
     setClientId(row.id);
     setChartTab("overview");
     setView("clients");
     setQuery("");
   }
   function openSearchResult(result: SearchResult) {
-    navigate(result.view);
+    if (!navigate(result.view)) return;
     if (result.resource === "clients") openChart(result.row);
     else if (result.resource === "notes") {
       setDocumentationTab("notes");
@@ -455,7 +466,7 @@ export default function App() {
     }
   }
   function openWorkspaceQueue(next: View, target = "all") {
-    navigate(next);
+    if (!navigate(next)) return;
     if (target.startsWith("record:")) {
       const resource = next === "notes" ? "notes" : "tasks";
       const row = data?.[resource].find(row => row.id === target.slice(7));
@@ -838,7 +849,7 @@ export default function App() {
     const sessions = data!.sessions.filter((s) => s.client_id === c.id);
     return (
       <>
-        <button className="back-link" onClick={() => setClientId("")}>
+        <button className="back-link" onClick={() => { if (canLeaveDraftReview()) setClientId(""); }}>
           <Icon name="back" size={16} /> All clients
         </button>
         <div className="chart-banner">
@@ -875,7 +886,7 @@ export default function App() {
         </div>
         <Tabs
           value={chartTab}
-          onChange={setChartTab}
+          onChange={next => { if (next === chartTab || canLeaveDraftReview()) setChartTab(next); }}
           tabs={[
             { id: "overview", label: "Overview" },
             { id: "episodes", label: "Care episodes", count: episodes.length },
@@ -891,6 +902,7 @@ export default function App() {
                 ]
               : []),
             ...(canRead("notes", clinical) ? [{ id: "notes", label: "Documentation", count: notes.length }] : []),
+            ...(["admin","clinical_lead","clinician"].includes(role)?[{id:"knowledge",label:"Knowledge & drafts"}]:[]),
             ...(canRead("form_responses", clinical)
               ? [
                   {
@@ -907,6 +919,7 @@ export default function App() {
             { id: "consents", label: "Consents", count: consents.length },
           ]}
         />
+        {chartTab === "knowledge" && <PatientKnowledge key={c.id} clientId={c.id} data={data!} onNoteCreated={async()=>{await reload();}} onReviewDirty={setDraftReviewDirty} />}
         {chartTab === "plan" && (
           <CarePlanning
             clientId={c.id}
@@ -2345,7 +2358,7 @@ export default function App() {
             <span>Recovery workspace</span>
           </div>
         </div>
-        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<select aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode)) return; localStorage.setItem(`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</select></label>}
+        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<select aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode) || !canLeaveDraftReview()) return; localStorage.setItem(`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</select></label>}
         <nav aria-label="Primary navigation">
           {nav.filter(item => visibleViews(data).includes(item.id)).sort((a,b)=>navOrder.indexOf(a.id)-navOrder.indexOf(b.id)).map((item) => (
             <div key={item.id}>
