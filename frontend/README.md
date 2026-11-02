@@ -36,11 +36,13 @@ Authentication is deferred. Local operator selection passes a staff identifier t
 - Treatment plans, measurable goals, plan signing, revisions, completion, and append-only reviews
 - Clinical note drafts, signatures, and amendments
 - User-authored form definitions and a note composer using those definitions
-- Reviewed text import with explicit excerpt-to-field mapping; no speech recognition or automatic AI generation is claimed
+- Reviewed text import and optional local WAV transcription with explicit excerpt-to-field mapping
+- Organization form rules by stage/care level and episode-specific completion status
+- Draft edit conflict protection and an explainable billing readiness checklist
 - Coverage, authorizations, internal claim readiness, external-submission recording, denial recording, and payment entry
 - Shared tasks, staff administration, offboarding with responsibility transfer, time-bound permission exceptions, facilities, and audit history
 
-The Connections view explains unconfigured services. It does not pretend to transmit claims, verify eligibility, perform sign-in, sync accounting, or transcribe audio.
+The Connections view explains service boundaries. Local speech requires the optional recognizer setup and an active recording consent. The interface does not transmit claims, verify eligibility, perform sign-in, or sync accounting.
 
 ## Validation
 
@@ -58,6 +60,8 @@ The build checks the complete TypeScript application and emits static assets to 
 - `NoteComposer.tsx`: note composition and human-reviewed source-text mapping
 - `CarePlanning.tsx`: treatment plans, goals, revisions, and reviews
 - `GroupEncounters.tsx`: group encounter roster and individual attendance
+- `StructuredForms.tsx`, `FormRequirements.tsx`, `SpeechImport.tsx`: authored forms, routing, local audio and reviewed provenance
+- `ClaimReadiness.tsx`: server-backed documentation and coverage checks
 - `forms.tsx`: resource form definitions, reference choices, field builder, and input normalization
 - `api.ts`: API contracts, requests, and display formatting
 - `ui.tsx`: custom SVG icons and reusable accessible interface primitives

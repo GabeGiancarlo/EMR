@@ -1,50 +1,23 @@
-# Local Setup
+# Local setup
 
-## Current Path
+Use the [root README](../../README.md) for complete commands. The checkout is `C:\Users\ganeg\source\EMR`.
 
-The active local development path is backend-first using the Rust API crate.
-
-## Prerequisites
-
-- Rust toolchain (stable)
-- `cargo`
-- optional: `just`
-
-## Run API
-
-```bash
-cargo run -p emr-api
+```powershell
+cd C:\Users\ganeg\source\EMR
+.\tools\start-database.ps1
+.\tools\start-api.ps1
 ```
 
-or:
+In a second terminal:
 
-```bash
-just dev
+```powershell
+cd C:\Users\ganeg\source\EMR\frontend
+npm ci
+npm run dev
 ```
 
-## Verify Endpoints
+The interface runs at `http://127.0.0.1:5173`, the API at `http://127.0.0.1:8090`, and PostgreSQL on port 55432. `/healthz` checks database connectivity; `/api/bootstrap` reports whether setup is required. Setup creates only the organization, facility and administrator entered by the operator.
 
-```bash
-curl http://127.0.0.1:8090/healthz
-curl http://127.0.0.1:8090/api/patients
-```
+Authentication remains deferred. The helper enables loopback-only development and uses a copied executable so Windows does not lock Cargo's build output. The API applies migrations automatically. Never put real patient data in this mode.
 
-## Quality Checks
-
-```bash
-cargo fmt --all
-cargo check --workspace
-cargo test --workspace
-```
-
-## Current Setup Gaps
-
-- Database-backed workflows are not fully wired.
-- Auth/RBAC/audit enforcement is not complete.
-- No active frontend workspace is included yet.
-
-## Next Setup Tasks
-
-- add migration workflow for Postgres schema evolution
-- add environment validation for required secrets/config keys
-- add integration test harness with test database lifecycle
+For isolated browser checks use `nexus_ui_test`, API port 8091 and Vite port 5174 with `NEXUS_API_PROXY` targeting 8091. Backend tests use only `nexus_test`. See [verification](verification.md), [delivery plan](delivery-plan.md) and [xAI workers](xai-workers.md).

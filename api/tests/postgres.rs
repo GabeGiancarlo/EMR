@@ -8,6 +8,51 @@ use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+async fn attach_loaded_updated_at(
+    pool: &PgPool,
+    method: &Method,
+    path: &str,
+    body: Value,
+) -> Value {
+    if *method != Method::PATCH {
+        return body;
+    }
+    let Some(mut object) = body.as_object().cloned() else {
+        return body;
+    };
+    // An explicit token, including a deliberately stale one or null, is preserved.
+    if object.contains_key("_expected_updated_at") {
+        return body;
+    }
+    let Some(rest) = path.strip_prefix("/api/") else {
+        return body;
+    };
+    let mut parts = rest.split('/');
+    let Some(resource) = parts.next() else {
+        return body;
+    };
+    let Some(id) = parts.next() else {
+        return body;
+    };
+    if parts.next().is_some() || !resource.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+        return body;
+    }
+    let Ok(id) = Uuid::parse_str(id) else {
+        return body;
+    };
+    let sql = format!("SELECT to_jsonb(updated_at) FROM {resource} WHERE id=$1");
+    let updated_at: Option<Value> = sqlx::query_scalar(&sql)
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
+    let Some(updated_at) = updated_at.filter(|value| value.is_string()) else {
+        return body;
+    };
+    object.insert("_expected_updated_at".into(), updated_at);
+    Value::Object(object)
+}
 async fn request(
     pool: &PgPool,
     method: Method,
@@ -15,6 +60,7 @@ async fn request(
     actor: Option<&str>,
     body: Value,
 ) -> (StatusCode, Value) {
+    let body = attach_loaded_updated_at(pool, &method, path, body).await;
     let app = test::init_service(
         App::new()
             .app_data(web::Data::new(AppState { pool: pool.clone() }))
@@ -101,6 +147,44 @@ async fn persistent_workflows_and_boundaries() {
     let authorization=create(&pool,actor,"authorizations",json!({"client_id":client["id"],"policy_id":policy["id"],"authorization_number":"TEST-AUTH","service_code":"TEST","units_approved":1,"starts_on":"2026-01-01","ends_on":"2026-12-31"})).await;
     let claim=create(&pool,actor,"claims",json!({"client_id":client["id"],"session_id":session["id"],"policy_id":policy["id"],"authorization_id":authorization["id"],"service_code":"TEST","diagnosis_code":"TEST","amount_cents":10000})).await;
     let claim_id = claim["id"].as_str().unwrap();
+    let (status, readiness) = request(
+        &pool,
+        Method::GET,
+        &format!("/api/claims/{claim_id}/readiness"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{readiness}");
+    assert_eq!(readiness["ready"], true, "{readiness}");
+    assert!(readiness.get("summary").is_none());
+    let checklist = readiness["checklist"].as_array().expect("checklist");
+    for code in [
+        "session_completed",
+        "session_ended",
+        "signed_note",
+        "policy_coverage",
+        "service_code",
+        "diagnosis_code",
+        "authorization_coverage",
+        "authorization_units",
+    ] {
+        let item = checklist
+            .iter()
+            .find(|item| item["code"] == code)
+            .unwrap_or_else(|| panic!("{code} missing in {readiness}"));
+        assert_eq!(item["passed"], true, "{item}");
+        assert!(!item["title"].as_str().unwrap_or_default().is_empty());
+        assert!(!item["message"].as_str().unwrap_or_default().is_empty());
+        assert!(matches!(
+            item["owner_role"].as_str(),
+            Some("clinical" | "billing")
+        ));
+        assert!(item.get("body").is_none());
+    }
+    assert!(!readiness
+        .to_string()
+        .contains("Synthetic integration-test note"));
     let (status, ready) = request(
         &pool,
         Method::POST,
@@ -151,6 +235,100 @@ async fn persistent_workflows_and_boundaries() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, billing_readiness) = request(
+        &pool,
+        Method::GET,
+        &format!("/api/claims/{claim_id}/readiness"),
+        Some(billing["id"].as_str().unwrap()),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{billing_readiness}");
+    assert_eq!(billing_readiness["ready"], true);
+    assert!(!billing_readiness
+        .to_string()
+        .contains("Synthetic integration-test note"));
+    let support = create(
+        &pool,
+        actor,
+        "staff",
+        json!({"name":"Test support","email":"support@example.invalid","role":"support","facility_id":facility}),
+    )
+    .await;
+    let support_id = support["id"].as_str().unwrap();
+    let (status, _) = request(
+        &pool,
+        Method::GET,
+        &format!("/api/claims/{claim_id}/readiness"),
+        Some(support_id),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = request(
+        &pool,
+        Method::POST,
+        &format!("/api/claims/{claim_id}/ready"),
+        Some(support_id),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let unsigned_session = create(
+        &pool,
+        actor,
+        "sessions",
+        json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"starts_at":"2026-02-01T18:00:00Z","ends_at":"2026-02-01T19:00:00Z","kind":"individual","status":"completed"}),
+    )
+    .await;
+    let blocked = create(
+        &pool,
+        actor,
+        "claims",
+        json!({"client_id":client["id"],"session_id":unsigned_session["id"],"policy_id":policy["id"],"service_code":"TEST","diagnosis_code":"TEST","amount_cents":500}),
+    )
+    .await;
+    let blocked_id = blocked["id"].as_str().unwrap();
+    let (status, failed) = request(
+        &pool,
+        Method::GET,
+        &format!("/api/claims/{blocked_id}/readiness"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{failed}");
+    assert_eq!(failed["ready"], false);
+    let note_rule = failed["checklist"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["code"] == "signed_note")
+        .expect("signed note rule");
+    assert_eq!(note_rule["passed"], false);
+    assert_eq!(note_rule["owner_role"], "clinical");
+    assert_eq!(
+        failed["checklist"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["code"] == "session_completed")
+            .unwrap()["passed"],
+        true
+    );
+    let (status, blocked_ready) = request(
+        &pool,
+        Method::POST,
+        &format!("/api/claims/{blocked_id}/ready"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{blocked_ready}");
+    assert!(blocked_ready["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("signed session note"));
     let (status, _) = request(&pool, Method::GET, "/api/clients", None, json!({})).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     let (status, _) = request(
@@ -629,8 +807,261 @@ async fn persistent_workflows_and_boundaries() {
     create(&pool,actor,"claims",json!({"client_id":client["id"],"session_id":attendance["session_id"],"policy_id":policy["id"],"service_code":"GROUP-TEST","diagnosis_code":"TEST","amount_cents":1700})).await;
     let(status,discharged)=request(&pool,Method::POST,&format!("/api/episodes/{}/discharge",episode["id"].as_str().unwrap()),Some(actor),json!({"end_date":"2026-02-03","discharge_reason":"Completed isolated integration scenario"})).await;
     assert_eq!(status, StatusCode::OK, "{discharged}");
+    // Two editors share the originally loaded version. The stale write must not land or be audited.
+    let draft = create(
+        &pool,
+        actor,
+        "tasks",
+        json!({"title":"Concurrent draft","description":"Original unsaved-safe text"}),
+    )
+    .await;
+    let draft_id = draft["id"].as_str().unwrap();
+    let stale = draft["updated_at"].clone();
+    let (status, first) = request(
+        &pool,
+        Method::PATCH,
+        &format!("/api/tasks/{draft_id}"),
+        Some(actor),
+        json!({"title":"First editor","description":"Kept","_expected_updated_at":stale}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first}");
+    assert_eq!(first["title"], "First editor");
+    assert_ne!(first["updated_at"], stale);
+    let (status, second) = request(
+        &pool,
+        Method::PATCH,
+        &format!("/api/tasks/{draft_id}"),
+        Some(actor),
+        json!({"title":"Second editor overwrite","description":"Lost","_expected_updated_at":stale}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{second}");
+    assert_eq!(second["error"]["code"], "conflict");
+    let message = second["error"]["message"]
+        .as_str()
+        .unwrap_or("")
+        .to_lowercase();
+    assert!(message.contains("reload"), "{message}");
+    assert!(
+        message.contains("preserve") && message.contains("unsaved"),
+        "{message}"
+    );
+    let (_, tasks_after) = request(&pool, Method::GET, "/api/tasks", Some(actor), json!({})).await;
+    let stored = tasks_after
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["id"] == draft["id"])
+        .unwrap();
+    assert_eq!(stored["title"], "First editor");
+    assert_eq!(stored["description"], "Kept");
+    assert_eq!(stored["updated_at"], first["updated_at"]);
+    let updates: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_events WHERE record_id=$1 AND action='update'",
+    )
+    .bind(Uuid::parse_str(draft_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(updates, 1, "stale PATCH must not append an update audit");
+    let (status, missing_token) = request(
+        &pool,
+        Method::PATCH,
+        &format!("/api/tasks/{draft_id}"),
+        Some(actor),
+        json!({"title":"No token","_expected_updated_at":Value::Null}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::PRECONDITION_REQUIRED, "{missing_token}");
+    assert_eq!(missing_token["error"]["code"], "precondition_required");
+    let updates_after_missing: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_events WHERE record_id=$1 AND action='update'",
+    )
+    .bind(Uuid::parse_str(draft_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(updates_after_missing, 1);
+    let (status, injected) = request(
+        &pool,
+        Method::PATCH,
+        &format!("/api/tasks/{draft_id}"),
+        Some(actor),
+        json!({"description":"Helper supplied current version"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{injected}");
+    assert_eq!(injected["title"], "First editor");
+    assert_eq!(injected["description"], "Helper supplied current version");
     verify_facility_service_dates(&pool, actor).await;
+    verify_admin_clinical_offboarding(&pool, actor, facility).await;
+    verify_assignment_waits_for_offboarding(&pool, actor, facility).await;
+    verify_role_changes_preserve_clinical_assignments(&pool, actor, facility).await;
     pool.close().await;
+}
+
+async fn verify_role_changes_preserve_clinical_assignments(
+    pool: &PgPool,
+    actor: &str,
+    facility: &Value,
+) {
+    let client = create(pool, actor, "clients", json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Role transition","birth_date":"1990-01-01"})).await;
+    let episode = create(pool, actor, "episodes", json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let future = chrono::Utc::now() + chrono::Duration::days(2);
+    for kind in ["client", "session", "group"] {
+        let staff = create(pool, actor, "staff", json!({"name":format!("Synthetic {kind} clinician"),"email":format!("role-{kind}@example.invalid"),"role":"clinician"})).await;
+        let staff_id = staff["id"].as_str().unwrap();
+        let (resource, assignment, field) = match kind {
+            "client" => {
+                let (status, row) = request(pool, Method::PATCH, &format!("/api/clients/{}",client["id"].as_str().unwrap()), Some(actor), json!({"primary_clinician_id":staff_id})).await;
+                assert_eq!(status, StatusCode::OK, "{row}");
+                ("clients", row, "primary_clinician_id")
+            },
+            "session" => ("sessions", create(pool, actor, "sessions", json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":staff_id,"kind":"individual","starts_at":future,"ends_at":future+chrono::Duration::hours(1)})).await, "clinician_id"),
+            _ => ("groups", create(pool, actor, "groups", json!({"facility_id":facility,"clinician_id":staff_id,"title":"Synthetic role guard group","kind":"skills","starts_at":future,"ends_at":future+chrono::Duration::hours(1),"capacity":4})).await, "clinician_id"),
+        };
+        let id = Uuid::parse_str(staff_id).unwrap();
+        let audit_before: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_events WHERE resource='staff' AND action='update' AND record_id=$1").bind(id).fetch_one(pool).await.unwrap();
+        for nonclinical in ["billing", "executive", "support"] {
+            let (status, body) = request(
+                pool,
+                Method::PATCH,
+                &format!("/api/staff/{staff_id}"),
+                Some(actor),
+                json!({"role":nonclinical}),
+            )
+            .await;
+            assert_eq!(status, StatusCode::CONFLICT, "{kind}/{nonclinical}: {body}");
+        }
+        let preserved: Value = sqlx::query_scalar("SELECT to_jsonb(s) FROM staff s WHERE id=$1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        assert_eq!(preserved["role"], staff["role"]);
+        assert_eq!(preserved["updated_at"], staff["updated_at"]);
+        let audit_after: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_events WHERE resource='staff' AND action='update' AND record_id=$1").bind(id).fetch_one(pool).await.unwrap();
+        assert_eq!(audit_before, audit_after);
+        let (status, body) = request(
+            pool,
+            Method::PATCH,
+            &format!("/api/staff/{staff_id}"),
+            Some(actor),
+            json!({"role":"clinical_lead"}),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "Clinical role changes remain allowed: {body}"
+        );
+        let (status, body) = request(
+            pool,
+            Method::PATCH,
+            &format!("/api/{resource}/{}", assignment["id"].as_str().unwrap()),
+            Some(actor),
+            json!({field:actor}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "Explicit reassignment: {body}");
+        let (status, body) = request(
+            pool,
+            Method::PATCH,
+            &format!("/api/staff/{staff_id}"),
+            Some(actor),
+            json!({"role":"billing"}),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "Role change after reassignment: {body}"
+        );
+    }
+}
+
+async fn verify_admin_clinical_offboarding(pool: &PgPool, actor: &str, facility: &Value) {
+    let departing = create(pool, actor, "staff", json!({"name":"Departing clinical administrator","email":"departing-admin@example.invalid","role":"admin"})).await;
+    let billing = create(pool, actor, "staff", json!({"name":"Billing replacement","email":"replacement-billing@example.invalid","role":"billing"})).await;
+    let client = create(pool, actor, "clients", json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Offboarding","birth_date":"1990-01-01","primary_clinician_id":departing["id"]})).await;
+    let departing_id = departing["id"].as_str().unwrap();
+    let path = format!("/api/staff/{departing_id}/offboard");
+    let (status, body) = request(
+        pool,
+        Method::POST,
+        &path,
+        Some(actor),
+        json!({"transfer_to":billing["id"]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    let assigned: Uuid = sqlx::query_scalar("SELECT primary_clinician_id FROM clients WHERE id=$1")
+        .bind(Uuid::parse_str(client["id"].as_str().unwrap()).unwrap())
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned.to_string(), departing_id);
+    let (status, body) = request(
+        pool,
+        Method::POST,
+        &path,
+        Some(actor),
+        json!({"transfer_to":actor}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let assigned: Uuid = sqlx::query_scalar("SELECT primary_clinician_id FROM clients WHERE id=$1")
+        .bind(Uuid::parse_str(client["id"].as_str().unwrap()).unwrap())
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned.to_string(), actor);
+}
+
+async fn verify_assignment_waits_for_offboarding(pool: &PgPool, actor: &str, facility: &Value) {
+    let departing = create(pool, actor, "staff", json!({"name":"Concurrent departing clinician","email":"concurrent-departing@example.invalid","role":"clinician"})).await;
+    let id = Uuid::parse_str(departing["id"].as_str().unwrap()).unwrap();
+    // Hold the same row lock used by offboarding, then attempt a new assignment.
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM staff WHERE id=$1 FOR UPDATE")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let pending = request(
+        pool,
+        Method::POST,
+        "/api/clients",
+        Some(actor),
+        json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Concurrent assignment","birth_date":"1990-01-01","primary_clinician_id":id}),
+    );
+    tokio::pin!(pending);
+    tokio::select! {
+        result = &mut pending => panic!("Assignment escaped the offboarding lock: {result:?}"),
+        _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+    }
+    sqlx::query("UPDATE staff SET active=false WHERE id=$1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let (status, body) = tokio::time::timeout(std::time::Duration::from_secs(5), pending)
+        .await
+        .unwrap();
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(body["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("active"));
+    let assigned: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM clients WHERE primary_clinician_id=$1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(assigned, 0);
 }
 
 async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
@@ -674,10 +1105,39 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
     let policy = create(pool, actor, "policies", json!({"client_id":client["id"], "payer_name":"QA", "member_id":"QA", "effective_date":"2026-02-01", "termination_date":"2026-02-01"})).await;
     let auth = create(pool, actor, "authorizations", json!({"client_id":client["id"], "policy_id":policy["id"], "authorization_number":"QA-PACIFIC", "service_code":"QA", "units_approved":1, "starts_on":"2026-02-01", "ends_on":"2026-02-01"})).await;
     let claim = create(pool, actor, "claims", json!({"client_id":client["id"], "policy_id":policy["id"], "authorization_id":auth["id"], "session_id":session["id"], "service_code":"QA", "diagnosis_code":"QA", "amount_cents":100})).await;
+    let pacific_id = claim["id"].as_str().unwrap();
+    let (status, readiness) = request(
+        pool,
+        Method::GET,
+        &format!("/api/claims/{pacific_id}/readiness"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{readiness}");
+    assert_eq!(readiness["ready"], true, "{readiness}");
+    assert_eq!(
+        readiness["checklist"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["code"] == "policy_coverage")
+            .unwrap()["passed"],
+        true
+    );
+    assert_eq!(
+        readiness["checklist"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["code"] == "authorization_coverage")
+            .unwrap()["passed"],
+        true
+    );
     let (status, response) = request(
         pool,
         Method::POST,
-        &format!("/api/claims/{}/ready", claim["id"].as_str().unwrap()),
+        &format!("/api/claims/{pacific_id}/ready"),
         Some(actor),
         json!({}),
     )
@@ -687,4 +1147,102 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
         StatusCode::OK,
         "Facility date must determine both policy and authorization coverage: {response}"
     );
+    let late_session = create(pool, actor, "sessions", json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T03:00:00Z", "ends_at":"2026-02-02T04:00:00Z", "status":"completed"})).await;
+    let late_note = create(pool, actor, "notes", json!({"client_id":client["id"], "session_id":late_session["id"], "title":"Late coverage QA", "body":"Synthetic boundary verification only."})).await;
+    let (status, _) = request(
+        pool,
+        Method::POST,
+        &format!("/api/notes/{}/sign", late_note["id"].as_str().unwrap()),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let late_policy = create(pool, actor, "policies", json!({"client_id":client["id"], "payer_name":"QA late", "member_id":"QA-LATE", "effective_date":"2026-02-02"})).await;
+    let late_claim = create(pool, actor, "claims", json!({"client_id":client["id"], "policy_id":late_policy["id"], "session_id":late_session["id"], "service_code":"QA", "diagnosis_code":"QA", "amount_cents":100})).await;
+    let late_id = late_claim["id"].as_str().unwrap();
+    let (status, failed_policy) = request(
+        pool,
+        Method::GET,
+        &format!("/api/claims/{late_id}/readiness"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{failed_policy}");
+    assert_eq!(failed_policy["ready"], false);
+    let policy_rule = failed_policy["checklist"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["code"] == "policy_coverage")
+        .unwrap();
+    assert_eq!(policy_rule["passed"], false);
+    assert_eq!(policy_rule["owner_role"], "billing");
+    let (status, denied_policy) = request(
+        pool,
+        Method::POST,
+        &format!("/api/claims/{late_id}/ready"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{denied_policy}");
+    assert!(denied_policy["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("policy"));
+    let reserved_session = create(pool, actor, "sessions", json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T05:00:00Z", "ends_at":"2026-02-02T06:00:00Z", "status":"completed"})).await;
+    let reserved_note = create(pool, actor, "notes", json!({"client_id":client["id"], "session_id":reserved_session["id"], "title":"Reserved units QA", "body":"Synthetic boundary verification only."})).await;
+    let (status, _) = request(
+        pool,
+        Method::POST,
+        &format!("/api/notes/{}/sign", reserved_note["id"].as_str().unwrap()),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let over_claim = create(pool, actor, "claims", json!({"client_id":client["id"], "policy_id":policy["id"], "authorization_id":auth["id"], "session_id":reserved_session["id"], "service_code":"QA", "diagnosis_code":"QA", "amount_cents":100})).await;
+    let over_id = over_claim["id"].as_str().unwrap();
+    let (status, failed_units) = request(
+        pool,
+        Method::GET,
+        &format!("/api/claims/{over_id}/readiness"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{failed_units}");
+    assert_eq!(failed_units["ready"], false);
+    let units_rule = failed_units["checklist"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["code"] == "authorization_units")
+        .unwrap();
+    assert_eq!(units_rule["passed"], false, "{units_rule}");
+    assert_eq!(units_rule["owner_role"], "billing");
+    assert_eq!(
+        failed_units["checklist"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["code"] == "authorization_coverage")
+            .unwrap()["passed"],
+        true
+    );
+    let (status, denied_units) = request(
+        pool,
+        Method::POST,
+        &format!("/api/claims/{over_id}/ready"),
+        Some(actor),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{denied_units}");
+    assert!(denied_units["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("authorized units"));
 }

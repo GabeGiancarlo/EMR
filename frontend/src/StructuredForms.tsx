@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { clientName, date, label, value } from "./api";
+import {
+  clientName,
+  date,
+  label,
+  value,
+  withOriginalUpdatedAt,
+} from "./api";
 import type { Bootstrap, FormField, Row } from "./api";
 import { Badge, Button, Empty, Icon, Modal, Panel } from "./ui";
 import type { WorkflowProps } from "./CarePlanning";
+import FormRequirements from "./FormRequirements";
+import SpeechImport from "./SpeechImport";
 type StructuredField = FormField & { options?: string[] };
 type Answers = Record<string, string | number | boolean | null>;
 type Provenance = Record<string, { excerpt: string }>;
@@ -14,21 +22,32 @@ function ResponseEditor({
   record,
   onClose,
   onSave,
+  templateId,
+  episodeId,
+  templateName,
 }: {
   data: Bootstrap;
   clientId?: string;
   record?: Row;
   onClose: () => void;
   onSave: (body: unknown) => Promise<void>;
+  templateId?: string;
+  episodeId?: string | null;
+  templateName?: string;
 }) {
   const [client, setClient] = useState(clientId || value(record, "client_id"));
   const [session, setSession] = useState(value(record, "session_id"));
-  const [episode, setEpisode] = useState(value(record, "episode_id"));
-  const [template, setTemplate] = useState(value(record, "template_id"));
+  const [episode, setEpisode] = useState(
+    value(record, "episode_id") || (episodeId ?? ""),
+  );
+  const [template, setTemplate] = useState(
+    value(record, "template_id") || templateId || "",
+  );
   const [answers, setAnswers] = useState<Answers>(
     (record?.answers || {}) as Answers,
   );
   const [source, setSource] = useState(value(record, "source_excerpt"));
+  const sourceVersion = useRef(0);
   const [selected, setSelected] = useState("");
   const [target, setTarget] = useState("");
   const [provenance, setProvenance] = useState<Provenance>(
@@ -87,9 +106,15 @@ function ResponseEditor({
                   required
                   value={client}
                   onChange={(e) => {
+                    sourceVersion.current += 1;
                     setClient(e.target.value);
                     setSession("");
                     setEpisode("");
+                    setAnswers({});
+                    setSource("");
+                    setProvenance({});
+                    setSelected("");
+                    setTarget("");
                   }}
                 >
                   <option value="">Choose a client</option>
@@ -121,6 +146,14 @@ function ResponseEditor({
                         {value(t, "name")}
                       </option>
                     ))}
+                  {templateId &&
+                    !data.templates.some(
+                      (t) => t.id === templateId && t.active !== false,
+                    ) && (
+                      <option value={templateId}>
+                        {templateName || "Selected form"}
+                      </option>
+                    )}
                 </select>
               </div>
               <div className="form-field">
@@ -171,6 +204,16 @@ function ResponseEditor({
               </div>
             </div>
           )}
+          {!record && templateId && (
+            <div className="quiet-note">
+              <Icon name="link" size={16} />
+              <span>
+                Started from an organization form rule
+                {templateName ? `: ${templateName}` : ""}. Review the client,
+                episode, and answers before saving.
+              </span>
+            </div>
+          )}
           {fields.length > 0 && (
             <>
               <details className="transcript-tool">
@@ -180,11 +223,17 @@ function ResponseEditor({
                 </summary>
                 <div className="transcript-tool-body">
                   <p>
-                    Paste reviewed text or import a transcript. Highlight an
-                    excerpt and choose a field. Source excerpts are retained
-                    with this form for traceability; no AI or speech service is
-                    called.
+                    Review the source text, highlight an excerpt, and choose
+                    its destination field. Each mapped answer keeps its source
+                    excerpt for traceability.
                   </p>
+                  <SpeechImport key={client} clientId={client} data={data} onTranscript={(text) => {
+                    sourceVersion.current += 1;
+                    setSource(text);
+                    setProvenance({});
+                    setSelected("");
+                    setTarget("");
+                  }} />
                   <label className="file-import">
                     Import .txt file
                     <input
@@ -197,9 +246,16 @@ function ResponseEditor({
                           setError("Choose a text file smaller than 1 MB.");
                           return;
                         }
-                        setSource(await file.text());
-                        setProvenance({});
-                        setSelected("");
+                        const version = ++sourceVersion.current;
+                        try {
+                          const text = await file.text();
+                          if (version !== sourceVersion.current) return;
+                          setSource(text);
+                          setProvenance({});
+                          setSelected("");
+                        } catch {
+                          if (version === sourceVersion.current) setError("That file could not be read.");
+                        }
                       }}
                     />
                   </label>
@@ -210,6 +266,7 @@ function ResponseEditor({
                       rows={5}
                       value={source}
                       onChange={(e) => {
+                        sourceVersion.current += 1;
                         setSource(e.target.value);
                         setProvenance({});
                         setSelected("");
@@ -382,16 +439,43 @@ export default function StructuredForms({
   canWrite,
   action,
   mutate,
-}: WorkflowProps & { clientId?: string }) {
+  onAuthorRules,
+}: WorkflowProps & { clientId?: string; onAuthorRules?: () => void }) {
   const all =
     (data as Bootstrap & { form_responses?: Row[] }).form_responses || [];
   const responses = all.filter((r) => !clientId || r.client_id === clientId);
   const [editor, setEditor] = useState<Row | null | undefined>(undefined);
+  const [preset, setPreset] = useState<{
+    templateId: string;
+    episodeId: string | null;
+    templateName?: string;
+  } | null>(null);
   const [view, setView] = useState<Row | null>(null);
+  const openNew = (next?: {
+    templateId: string;
+    episodeId: string | null;
+    templateName?: string;
+  }) => {
+    setPreset(next ?? null);
+    setEditor(null);
+  };
   const rowTitle = (r: Row) =>
     value(r.template_snapshot as Row, "name") || "Form response";
   return (
     <>
+      {clientId && (
+        <FormRequirements
+          clientId={clientId}
+          data={data}
+          canStart={canWrite}
+          onAuthorRules={onAuthorRules}
+          onStart={(templateId, episodeId, templateName) =>
+            openNew(
+              templateId ? { templateId, episodeId, templateName } : undefined,
+            )
+          }
+        />
+      )}
       <Panel
         title="Structured forms"
         subtitle="Answers stay linked to their original form, review history, and source excerpts."
@@ -399,7 +483,7 @@ export default function StructuredForms({
           canWrite ? (
             <Button
               variant="secondary small"
-              onClick={() => setEditor(null)}
+              onClick={() => openNew()}
               disabled={!data.templates.some((t) => t.active !== false)}
             >
               <Icon name="plus" size={16} /> Start a form
@@ -447,7 +531,10 @@ export default function StructuredForms({
                         {canWrite && r.status !== "signed" && (
                           <Button
                             variant="text small"
-                            onClick={() => setEditor(r)}
+                            onClick={() => {
+                              setPreset(null);
+                              setEditor(r);
+                            }}
                           >
                             Edit draft
                           </Button>
@@ -555,7 +642,7 @@ export default function StructuredForms({
             }
             action={
               canWrite && data.templates.some((t) => t.active !== false) ? (
-                <Button variant="secondary" onClick={() => setEditor(null)}>
+                <Button variant="secondary" onClick={() => openNew()}>
                   Start the first response
                 </Button>
               ) : undefined
@@ -565,14 +652,21 @@ export default function StructuredForms({
       </Panel>
       {editor !== undefined && (
         <ResponseEditor
+          key={`${editor?.id || "new"}-${preset?.templateId || ""}-${preset?.episodeId || ""}`}
           data={data}
           clientId={clientId}
           record={editor || undefined}
-          onClose={() => setEditor(undefined)}
+          templateId={preset?.templateId}
+          episodeId={preset?.episodeId}
+          templateName={preset?.templateName}
+          onClose={() => {
+            setPreset(null);
+            setEditor(undefined);
+          }}
           onSave={(body) =>
             mutate(
               `/api/form_responses${editor ? `/${editor.id}` : ""}`,
-              body,
+              editor ? withOriginalUpdatedAt(editor, body) : body,
               editor ? "PATCH" : "POST",
             )
           }

@@ -270,7 +270,10 @@ pub async fn action(
             if replacement["active"] != true {
                 return Err(ApiError::invalid("Replacement must be active"));
             }
-            if matches!(old["role"].as_str(), Some("clinician" | "clinical_lead"))
+            let has_clinical_assignments: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clients WHERE organization_id=$1 AND primary_clinician_id=$2) OR EXISTS(SELECT 1 FROM sessions WHERE organization_id=$1 AND clinician_id=$2 AND status='scheduled' AND starts_at>now()) OR EXISTS(SELECT 1 FROM groups WHERE organization_id=$1 AND clinician_id=$2 AND status='scheduled' AND starts_at>now())")
+                .bind(actor.org).bind(id).fetch_one(&mut *tx).await?;
+            if (has_clinical_assignments
+                || matches!(old["role"].as_str(), Some("clinician" | "clinical_lead")))
                 && !matches!(
                     replacement["role"].as_str(),
                     Some("admin" | "clinical_lead" | "clinician")
@@ -320,74 +323,9 @@ async fn validate_claim(
     actor: &access::Actor,
     claim: &Value,
 ) -> Result<()> {
-    let session = records::get(
-        tx,
-        "sessions",
-        records::uuid(claim, "session_id")?,
-        actor.org,
-        true,
-    )
-    .await?;
-    if session["status"] != "completed" {
-        return Err(ApiError::conflict(
-            "Complete the session before marking the claim ready",
-        ));
-    }
-    records::ensure_session_ended(&session)?;
-    let signed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM notes WHERE organization_id=$1 AND session_id=$2 AND status='signed')").bind(actor.org).bind(records::uuid(claim,"session_id")?).fetch_one(&mut **tx).await?;
-    if !signed {
-        return Err(ApiError::conflict(
-            "A signed session note is required for billing readiness",
-        ));
-    }
-    let policy = records::get(
-        tx,
-        "policies",
-        records::uuid(claim, "policy_id")?,
-        actor.org,
-        true,
-    )
-    .await?;
-    let service_date: NaiveDate = sqlx::query_scalar("SELECT (s.starts_at AT TIME ZONE f.timezone)::date FROM sessions s JOIN episodes e ON e.id=s.episode_id AND e.organization_id=s.organization_id JOIN facilities f ON f.id=e.facility_id AND f.organization_id=e.organization_id WHERE s.id=$1 AND s.organization_id=$2")
-        .bind(records::uuid(claim, "session_id")?).bind(actor.org).fetch_one(&mut **tx).await?;
-    let date_text = service_date.to_string();
-    let date = date_text.as_str();
-    if policy["status"] != "active"
-        || date < policy["effective_date"].as_str().unwrap_or_default()
-        || policy["termination_date"]
-            .as_str()
-            .map(|d| date > d)
-            .unwrap_or(false)
-    {
-        return Err(ApiError::conflict("The policy must cover the session date"));
-    }
-    if !claim["authorization_id"].is_null() {
-        let authorization = records::get(
-            tx,
-            "authorizations",
-            records::uuid(claim, "authorization_id")?,
-            actor.org,
-            true,
-        )
-        .await?;
-        if authorization["policy_id"] != claim["policy_id"]
-            || authorization["service_code"] != claim["service_code"]
-            || authorization["status"] != "active"
-            || date < authorization["starts_on"].as_str().unwrap_or_default()
-            || date > authorization["ends_on"].as_str().unwrap_or_default()
-        {
-            return Err(ApiError::conflict(
-                "Authorization must cover this policy, service and service date",
-            ));
-        }
-        let used:i64=sqlx::query_scalar("SELECT COALESCE(sum(units),0)::bigint FROM claims WHERE organization_id=$1 AND authorization_id=$2 AND id<>$3 AND status IN ('ready','submitted','denied','paid')").bind(actor.org).bind(records::uuid(claim,"authorization_id")?).bind(records::uuid(claim,"id")?).fetch_one(&mut **tx).await?;
-        if used + claim["units"].as_i64().unwrap_or(1)
-            > authorization["units_approved"].as_i64().unwrap_or_default()
-        {
-            return Err(ApiError::conflict(
-                "This claim exceeds the remaining authorized units",
-            ));
-        }
+    let evaluation = crate::readiness::evaluate(tx, actor, claim).await?;
+    if let Some(blocker) = evaluation.checklist.iter().find(|item| !item.passed) {
+        return Err(ApiError::conflict(blocker.message.clone()));
     }
     Ok(())
 }

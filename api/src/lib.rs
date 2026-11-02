@@ -1,10 +1,13 @@
 //! Persistent Nexus application API. Local actors exercise policies, not authentication.
 mod access;
+mod applicability;
 mod clinical;
 mod exports;
 mod forms;
+mod readiness;
 mod records;
 mod routes;
+mod speech;
 mod workflow;
 
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
@@ -49,6 +52,13 @@ impl ApiError {
         Self {
             status: StatusCode::CONFLICT,
             code: "conflict",
+            message: message.into(),
+        }
+    }
+    pub fn precondition(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::PRECONDITION_REQUIRED,
+            code: "precondition_required",
             message: message.into(),
         }
     }
@@ -100,6 +110,11 @@ impl From<sqlx::Error> for ApiError {
 pub async fn migrate(pool: &PgPool) -> std::result::Result<(), sqlx::migrate::MigrateError> {
     sqlx::migrate!("../migrations").run(pool).await
 }
+pub use speech::MAX_WAV_BYTES;
+
+pub fn speech_configuration_label() -> &'static str {
+    speech::configuration_label()
+}
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/healthz", web::get().to(routes::health))
         .service(
@@ -109,8 +124,21 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                     web::get().to(exports::accounting),
                 )
                 .route("/exports/claims.csv", web::get().to(exports::claims))
+                .route(
+                    "/clients/{id}/form-requirements",
+                    web::get().to(applicability::client_requirements),
+                )
                 .route("/setup", web::post().to(routes::setup))
                 .route("/bootstrap", web::get().to(routes::bootstrap))
+                .service(
+                    web::resource("/speech/transcribe")
+                        .app_data(web::PayloadConfig::new(speech::MAX_WAV_BYTES))
+                        .route(web::post().to(speech::transcribe)),
+                )
+                .route(
+                    "/claims/{id}/readiness",
+                    web::get().to(readiness::claim_readiness),
+                )
                 .route(
                     "/{resource}/{id}/{action}",
                     web::post().to(workflow::action),

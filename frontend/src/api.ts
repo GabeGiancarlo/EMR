@@ -52,6 +52,7 @@ const base =
     "",
   ) ?? "";
 export const actorStorageKey = "nexus.local-operator";
+export const apiUrl = (path: string): string => `${base}${path}`;
 export async function request<T>(
   path: string,
   method = "GET",
@@ -74,6 +75,17 @@ export async function request<T>(
         `Request could not be completed (${response.status}).`,
     );
   return data as T;
+}
+export function withOriginalUpdatedAt(
+  record: Row | null | undefined,
+  body: unknown,
+): Record<string, unknown> {
+  const fields =
+    typeof body === "object" && body !== null && !Array.isArray(body)
+      ? { ...(body as Record<string, unknown>) }
+      : {};
+  // Token is the row already loaded for this edit. Do not refetch updated_at.
+  return { ...fields, _expected_updated_at: record?.updated_at };
 }
 export const value = (row: Row | undefined | null, key: string): string =>
   row?.[key] == null ? "" : String(row[key]);
