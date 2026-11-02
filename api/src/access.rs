@@ -103,6 +103,51 @@ pub async fn require(pool: &PgPool, actor: &Actor, resource: &str, write: bool) 
         Err(ApiError::denied())
     }
 }
+/// Serialize an organization's mutations before taking record locks, then recheck
+/// the operator and permission so a request waiting behind offboarding cannot act
+/// with the role it held before waiting. Identity remains deliberately deferred.
+pub async fn lock_mutation(
+    req: &HttpRequest,
+    tx: &mut Transaction<'_, Postgres>,
+    org: Uuid,
+    resource: &str,
+) -> Result<Actor> {
+    crate::scheduling::lock_org(tx, org).await?;
+    let id = req
+        .headers()
+        .get("x-nexus-actor")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| Uuid::parse_str(value).ok())
+        .ok_or_else(ApiError::denied)?;
+    let value: Value = sqlx::query_scalar(
+        "SELECT to_jsonb(s) FROM staff s WHERE id=$1 AND organization_id=$2 AND active",
+    )
+    .bind(id)
+    .bind(org)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(ApiError::denied)?;
+    let current = Actor {
+        id,
+        org,
+        role: value["role"].as_str().unwrap_or_default().into(),
+        value,
+    };
+    if !role_allows(&current.role, resource, true) {
+        if matches!(
+            resource,
+            "staff" | "exceptions" | "facilities" | "organizations" | "audit" | "payment_reversals"
+        ) {
+            return Err(ApiError::denied());
+        }
+        let allowed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM exceptions WHERE organization_id=$1 AND staff_id=$2 AND resource=$3 AND NOT revoked AND expires_at>clock_timestamp() AND access_mode='write')")
+            .bind(org).bind(id).bind(resource).fetch_one(&mut **tx).await?;
+        if !allowed {
+            return Err(ApiError::denied());
+        }
+    }
+    Ok(current)
+}
 pub async fn audit(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,

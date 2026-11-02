@@ -4,6 +4,7 @@ import { clientName, date, label, value } from "./api";
 import type { Bootstrap, FormField, Resource, Row } from "./api";
 import { Button, Icon } from "./ui";
 import { normalizeFieldValue } from "./serialize";
+import { facilityWallTime, occurrenceLabel, resolveFacilityTime, schedulingZone, wallTimeCandidates } from "./schedulingTime";
 import {
   ADULT_PROGRAM_HINT,
   facilityLocalToday,
@@ -563,6 +564,7 @@ export function RecordForm({
   submitLabel?: string;
 }) {
   const fields = customFields || (resource ? definitions[resource].fields : []);
+  const scheduling = resource === "sessions" || resource === "groups";
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(
       fields.map((f) => {
@@ -575,7 +577,8 @@ export function RecordForm({
           const d = new Date(String(v));
           if (!Number.isNaN(d.getTime())) {
             const offset = d.getTimezoneOffset() * 60000;
-            v = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+            v = scheduling ? facilityWallTime(d.toISOString(), schedulingZone(data, initial, resource))
+              : new Date(d.getTime() - offset).toISOString().slice(0, 16);
           }
         }
         if (f.type === "select" && f.required && v === "")
@@ -584,10 +587,26 @@ export function RecordForm({
       }),
     ),
   );
+  const zone = schedulingZone(data, { ...initial, ...values }, resource);
+  const [occurrences, setOccurrences] = useState<Record<string, string>>(() => Object.fromEntries(
+    fields.filter(f => scheduling && !initial._require_time_occurrence && f.type === "datetime-local" && initial[f.key]).map(f => {
+      const instant = new Date(String(initial[f.key]));
+      return [f.key, Number.isFinite(instant.getTime()) ? new Date(Math.floor(instant.getTime() / 60_000) * 60_000).toISOString() : ""];
+    }),
+  ));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const set = (key: string, v: unknown) =>
-    setValues((prev) => ({ ...prev, [key]: v }));
+  const set = (key: string, v: unknown) => {
+    setValues((prev) => {
+      const next = { ...prev, [key]: v };
+      if (key === "client_id" && v !== prev.client_id) {
+        for (const field of fields) if (["episode_id", "session_id", "policy_id", "authorization_id"].includes(field.key)) next[field.key] = "";
+      }
+      return next;
+    });
+    if (["facility_id", "client_id", "episode_id"].includes(key)) setOccurrences({});
+    else if (key === "starts_at" || key === "ends_at") setOccurrences(prev => ({ ...prev, [key]: "" }));
+  };
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -625,8 +644,11 @@ export function RecordForm({
               "Add at least one choice for each selection field.",
             );
         }
-        body[f.key] = normalizeFieldValue(f, v);
+        body[f.key] = scheduling && f.type === "datetime-local" && v
+          ? resolveFacilityTime(String(v), zone, occurrences[f.key], typeof initial[f.key] === "string" ? initial[f.key] as string : undefined) : normalizeFieldValue(f, v);
       }
+      if (scheduling && body.starts_at && body.ends_at && Date.parse(String(body.ends_at)) <= Date.parse(String(body.starts_at)))
+        throw new Error("End time must be after start time.");
       await onSubmit(body);
     } catch (err) {
       setError(
@@ -641,6 +663,7 @@ export function RecordForm({
   return (
     <form onSubmit={submit}>
       <div className="form-body">
+        {scheduling && <p className="scheduling-zone-note">Appointment times use <strong>{zone}</strong>. The selected episode or facility sets the timezone.</p>}
         <div className="form-grid">
           {fields.map((f) => {
             let choices = f.ref ? data[f.ref] || [] : [];
@@ -766,6 +789,14 @@ export function RecordForm({
                   </>
                 )}
                 {f.hint && <small id={`${id}-hint`}>{f.hint}</small>}
+                {scheduling && f.type === "datetime-local" && wallTimeCandidates(String(values[f.key] || ""), zone).length > 1 && (
+                  <label className="scheduling-occurrence">This time occurs twice. Choose an occurrence:
+                    <select value={occurrences[f.key] || ""} required onChange={event => setOccurrences(prev => ({ ...prev, [f.key]: event.target.value }))}>
+                      <option value="">Choose first or second…</option>
+                      {wallTimeCandidates(String(values[f.key]), zone).map((instant, i) => <option key={instant} value={instant}>{occurrenceLabel(instant, zone, i)}</option>)}
+                    </select>
+                  </label>
+                )}
               </div>
             );
           })}

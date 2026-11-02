@@ -34,7 +34,7 @@ export type Bootstrap = Record<Resource, Row[]> & {
   organizations: Row[];
   audit: Row[];
   payment_reversals: Row[];
-  permissions?: Partial<Record<Resource, { read: boolean; write: boolean }>>;
+  permissions?: Partial<Record<Resource | "audit" | "payment_reversals", { read: boolean; write: boolean }>>;
   metrics: {
     active_clients: number;
     open_tasks: number;
