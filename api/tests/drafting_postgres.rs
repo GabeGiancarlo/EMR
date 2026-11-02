@@ -100,8 +100,9 @@ async fn proposals_require_current_scoped_evidence_and_explicit_review_before_no
     assert_eq!(s, StatusCode::OK, "{k}");
     let chunk = &k["results"][0];
     assert!(chunk["id"].is_string(), "{k}");
+    let episode = post(&pool, actor, "/api/episodes", json!({"client_id":client_id,"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
     let url = format!("/api/clients/{client_id}/clinical-drafts");
-    let body = json!({"template_id":template["id"],"source_ids":[chunk["id"]],"episode_id":null,"session_id":null,"title":"Synthetic reviewed proposal","purpose":"Summarize the explicitly synthetic appointment evidence."});
+    let body = json!({"template_id":template["id"],"source_ids":[chunk["id"]],"episode_id":episode["id"],"session_id":null,"title":"Synthetic reviewed proposal","purpose":"Summarize the explicitly synthetic appointment evidence."});
     let job = post(&pool, actor, &url, body.clone()).await;
     assert_eq!(job["state"], "queued");
     assert_eq!(
@@ -224,6 +225,69 @@ async fn proposals_require_current_scoped_evidence_and_explicit_review_before_no
     );
     let pending = post(&pool, actor, &url, body.clone()).await;
     fixture_ready(&pool, &pending, chunk).await;
+    // A database-linked unrelated note cannot borrow the acceptance of the actual reviewed note.
+    let unrelated = post(&pool,actor,"/api/notes",json!({"client_id":client_id,"title":"Unrelated synthetic note","body":"Unrelated evidence."})).await;
+    sqlx::query("UPDATE notes SET clinical_draft_job_id=$1 WHERE id=$2")
+        .bind(ready_id)
+        .bind(Uuid::parse_str(unrelated["id"].as_str().unwrap()).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, denied) = send(
+        &pool,
+        Some(actor),
+        Method::POST,
+        &format!("/api/notes/{}/sign", unrelated["id"].as_str().unwrap()),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{denied}");
+    post(
+        &pool,
+        actor,
+        &format!(
+            "/api/notes/{}/sign",
+            accepted["note"]["id"].as_str().unwrap()
+        ),
+        json!({}),
+    )
+    .await;
+    let derived = post(&pool,actor,&format!("/api/notes/{}/amend",accepted["note"]["id"].as_str().unwrap()),json!({"reason":"Synthetic clarification retains reviewed evidence.","body":"Synthetic clarified observation from Monday."})).await;
+    assert_eq!(derived["clinical_draft_job_id"], ready["id"]);
+    // Simulate an older amendment created before source links were copied.
+    sqlx::query("UPDATE notes SET clinical_draft_job_id=NULL WHERE id=$1")
+        .bind(Uuid::parse_str(derived["id"].as_str().unwrap()).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    post(
+        &pool,
+        actor,
+        &format!("/api/notes/{}/sign", derived["id"].as_str().unwrap()),
+        json!({}),
+    )
+    .await;
+    let (_, indexed) = send(
+        &pool,
+        Some(actor),
+        Method::GET,
+        &format!(
+            "{knowledge_url}?episode_id={}",
+            episode["id"].as_str().unwrap()
+        ),
+        Value::Null,
+    )
+    .await;
+    assert!(
+        indexed["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["source_id"] == derived["id"] && r["episode_id"] == episode["id"]),
+        "{indexed}"
+    );
+    let next_derived = post(&pool,actor,&format!("/api/notes/{}/amend",derived["id"].as_str().unwrap()),json!({"reason":"Synthetic second clarification for source recheck.","body":"Synthetic further clarification."})).await;
+    assert_eq!(next_derived["clinical_draft_job_id"], ready["id"]);
     let amendment=post(&pool,actor,&format!("/api/notes/{}/amend",note["id"].as_str().unwrap()),json!({"reason":"Synthetic correction changes the appointment day.","body":"Synthetic correction: the appointment is on Tuesday."})).await;
     post(
         &pool,
@@ -252,10 +316,7 @@ async fn proposals_require_current_scoped_evidence_and_explicit_review_before_no
             &pool,
             Some(actor),
             Method::POST,
-            &format!(
-                "/api/notes/{}/sign",
-                accepted["note"]["id"].as_str().unwrap()
-            ),
+            &format!("/api/notes/{}/sign", next_derived["id"].as_str().unwrap()),
             json!({})
         )
         .await

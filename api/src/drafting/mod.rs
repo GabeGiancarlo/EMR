@@ -121,8 +121,9 @@ pub(super) async fn current_sources(
 pub(crate) async fn validate_note(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
-    note: &Value,
+    lineage: &crate::note_lineage::NoteLineage,
 ) -> Result<()> {
+    let note = &lineage.row;
     if note["clinical_draft_job_id"].is_null() {
         return Ok(());
     }
@@ -132,9 +133,12 @@ pub(crate) async fn validate_note(
     }
     current_sources(tx, actor, &row).await?;
     let reviewed: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM clinical_draft_reviews WHERE job_id=$1 AND decision='accept')",
+        "SELECT EXISTS(SELECT 1 FROM clinical_draft_reviews WHERE job_id=$1 AND decision='accept' AND note_id=ANY($2) AND organization_id=$3 AND client_id=$4)",
     )
     .bind(uid(&row, "id")?)
+    .bind(&lineage.ids)
+    .bind(actor.org)
+    .bind(uid(note, "client_id")?)
     .fetch_one(&mut **tx)
     .await?;
     if !reviewed {

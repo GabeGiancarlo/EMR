@@ -87,8 +87,10 @@ pub(super) async fn collect(
     client: Uuid,
 ) -> Result<Vec<Document>> {
     let mut out = Vec::new();
-    let notes=rows(tx,"SELECT to_jsonb(n) || jsonb_build_object('episode_id',COALESCE(s.episode_id,j.episode_id)) FROM notes n LEFT JOIN sessions s ON s.id=n.session_id LEFT JOIN clinical_draft_jobs j ON j.id=n.clinical_draft_job_id WHERE n.organization_id=$1 AND n.client_id=$2 AND n.status='signed' AND NOT EXISTS(SELECT 1 FROM notes newer WHERE newer.amends_note_id=n.id AND newer.organization_id=$1 AND newer.client_id=$2 AND newer.status='signed') ORDER BY n.id LIMIT 1001",actor,client).await?;
+    let notes=rows(tx,"SELECT to_jsonb(n) FROM notes n WHERE n.organization_id=$1 AND n.client_id=$2 AND n.status='signed' AND NOT EXISTS(SELECT 1 FROM notes newer WHERE newer.amends_note_id=n.id AND newer.organization_id=$1 AND newer.client_id=$2 AND newer.status='signed') ORDER BY n.id LIMIT 1001",actor,client).await?;
     for n in notes {
+        let mut n = crate::note_lineage::resolve(tx, actor, &n).await?.row;
+        n["episode_id"] = json!(crate::note_lineage::episode(tx, actor, &n).await?);
         if let Some(form) = optional(&n, "form_response_id")? {
             let f = records::get(tx, "form_responses", form, actor.org, false).await?;
             if let Err(e) = excerpts::validate_form(tx, actor, &f).await {
@@ -181,7 +183,7 @@ pub(super) async fn collect(
             "signed_at",
         )?);
     }
-    let reviews=rows(tx,"SELECT to_jsonb(r) || jsonb_build_object('episode_id',p.episode_id,'plan_title',p.title) FROM plan_reviews r JOIN treatment_plans p ON p.id=r.plan_id WHERE r.organization_id=$1 AND r.client_id=$2 AND p.signed_at IS NOT NULL AND p.status IN ('active','completed') ORDER BY r.id LIMIT 1001",actor,client).await?;
+    let reviews=rows(tx,"SELECT to_jsonb(r) || jsonb_build_object('episode_id',p.episode_id,'plan_title',p.title) FROM plan_reviews r JOIN treatment_plans p ON p.id=r.plan_id AND p.organization_id=r.organization_id AND p.client_id=r.client_id WHERE r.organization_id=$1 AND r.client_id=$2 AND p.signed_at IS NOT NULL AND p.status IN ('active','completed') ORDER BY r.id LIMIT 1001",actor,client).await?;
     for r in reviews {
         let mut parts = vec![text(&r, "summary")];
         if let Some(progress) = r["goal_progress"].as_array() {
