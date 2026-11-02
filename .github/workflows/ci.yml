@@ -82,6 +82,10 @@ jobs:
         run: cargo test --locked --test postgres -- --ignored
       - name: PostgreSQL CSV export integration
         run: cargo test --locked --test exports_postgres -- --ignored
+      - name: PostgreSQL form routing integration
+        run: cargo test --locked --test form_requirements_postgres -- --ignored
+      - name: PostgreSQL speech authorization integration
+        run: cargo test --locked --test speech_postgres -- --ignored
 
   frontend:
     name: Frontend build

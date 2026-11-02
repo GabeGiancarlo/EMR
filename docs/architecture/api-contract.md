@@ -12,7 +12,7 @@ Authentication is deliberately deferred. Local development uses `x-nexus-actor: 
 
 ## Records
 
-GET `/api/{resource}` returns array. POST creates and returns record (201). PATCH `/api/{resource}/{id}` merges permitted fields and returns record. All writes audit actor/action/resource/id without duplicating clinical body. IDs, organization_id, created_at, updated_at are server managed. No hard deletion of clinical or financial history.
+GET `/api/{resource}` returns array. POST creates and returns record (201). PATCH `/api/{resource}/{id}` merges permitted fields and returns record. Mutable PATCH bodies must include reserved `_expected_updated_at`, the `updated_at` timestamp from the row originally loaded for the edit. It is removed before field cleaning and is not stored. A missing or null token returns 428 `precondition_required`. After the row is locked, a token that does not match `updated_at` returns 409 `conflict` and does not write or audit; the message tells the client to reload the latest version and preserve unsaved edits. Do not fetch a newer `updated_at` immediately before saving. First-party editors pass the loaded row timestamp for form responses, goals, group attendance, modal edits, and inline task changes. POST workflow actions do not require this token; they use locked state checks. All writes audit actor/action/resource/id without duplicating clinical body. IDs, organization_id, created_at, updated_at are server managed. No hard deletion of clinical or financial history.
 
 Resource and editable fields:
 
@@ -27,7 +27,7 @@ Resource and editable fields:
 - authorizations: client_id, policy_id, authorization_number, service_code, units_approved (integer), starts_on, ends_on, status (active|expired|exhausted)
 - claims: client_id, policy_id, session_id, authorization_id (nullable), service_code, diagnosis_code, amount_cents, units (positive integer, default 1), status initially draft. External transmission is not implemented.
 - payments: claim_id, amount_cents (>0), received_on, reference, source (payer|client|adjustment). Append only; prevent overpayment.
-- templates: name, kind (intake|progress|assessment|discharge|consent), description, fields (array of {key,label,type,required}), active. These are user-authored form definitions, not clinical advice.
+- templates: name, kind (intake|progress|assessment|discharge|consent), description, fields (array of {key,label,type,required}), active, applies_to_stage (any|intake|active|discharged, default any), applies_to_care_level (any|outpatient|iop|php, default any), required_for_stage (boolean, default false). These are user-authored form definitions and organization applicability rules, not clinical or legal advice. Changing a rule does not rewrite form response snapshots.
 - consents: client_id, kind, granted_on, expires_on (nullable), revoked_on (nullable), scope. This records an attestation; does not produce legal sufficiency.
 - exceptions: staff_id, resource, reason, expires_at, revoked (bool), access_mode (read|write, default read). Admin grant; auditable temporary resource access. Write also permits read. Cannot grant admin/staff/exception management, signed note mutation, or bypass clinician client-assignment scope.
 
@@ -35,8 +35,9 @@ Resource and editable fields:
 
 POST `/api/notes/{id}/sign` with `{}`: author or clinical_lead/admin; body required, immutable signed content.
 POST `/api/notes/{id}/amend` with `{body,reason}`: creates new draft amendment linked by amends_note_id; preserves original signed note.
-POST `/api/claims/{id}/ready` with `{}`: validate completed session, signed note for session, active policy/date coverage, required billing codes and authorization coverage if selected. Ready means internally validated, NOT submitted.
-POST `/api/claims/{id}/record-submission` with `{external_reference}`: records a submission performed outside Nexus, requires ready state; does not send a claim.
+GET `/api/claims/{id}/readiness`: claims readers in the same organization receive `{ready, checklist:[{code,title,passed,message,owner_role}]}`. `owner_role` is `clinical` or `billing`. The checklist is the same evaluation used by mark-ready and record-submission. It does not include clinical narrative. `ready` means the rules passed, not that the claim was transmitted.
+POST `/api/claims/{id}/ready` with `{}`: mark a draft claim ready only when that evaluation has no blockers. Ready means internally validated, NOT submitted.
+POST `/api/claims/{id}/record-submission` with `{external_reference}`: records a submission performed outside Nexus, requires ready state and the same evaluation; does not send a claim.
 POST `/api/claims/{id}/deny` with `{reason}`: records denial on a submitted claim.
 POST `/api/episodes/{id}/discharge` with `{end_date,discharge_reason}`: closes episode and sets client discharged only when no other active episodes remain.
 POST `/api/staff/{id}/offboard` with `{transfer_to}`: deactivate and transfer open tasks/future sessions/client assignment atomically; cannot offboard current actor or last admin.
@@ -45,7 +46,7 @@ Frontend should hide unavailable actions according to role, display actual serve
 
 ## Integrity and reporting
 
-Facility timezone names are validated against PostgreSQL's timezone catalog. Claim coverage and authorization checks use the session's facility calendar date. Future sessions cannot be marked completed or used for signed session notes or billing readiness. Discharge cancellations also use the facility calendar date.
+Facility timezone names are validated against PostgreSQL's timezone catalog. Claim coverage and authorization checks use the session's facility calendar date. Checklist display and claim transitions share that readiness evaluation, including reserved authorization units. Future sessions cannot be marked completed or used for signed session notes or billing readiness. Discharge cancellations also use the facility calendar date.
 
 Linked client, episode, session, policy and authorization IDs cannot be reassigned after creation. Signed notes are immutable at both API and database levels. Sessions with signed documentation or advanced claims cannot be rewritten. Coverage referenced by a non-draft claim is preserved; enter a new coverage record for new terms. Payments and audit events are append only. Authorized units are reserved by ready claims and remain consumed for submitted, denied and paid claims; denial does not undo care delivered. Payment reference is unique per claim, preventing duplicate postings; repeated writes return 409 rather than adding another entry.
 
@@ -74,10 +75,28 @@ PATCH accepts answers, source_type, source_excerpt and field_provenance; an edit
 - POST `/api/form_responses/{id}/amend` `{reason}` copies the original snapshot and answers into a new draft linked by amends_response_id, preserving original history.
 - POST `/api/form_responses/{id}/create-note` `{title}` creates one draft note from a signed form's actual answers and field labels, using its client/session references. The note has form_response_id provenance. It still requires normal clinical review and signing; no clinical content is invented.
 
-These are local workflow attestations; verified identity and legal electronic-signature controls remain deferred with authentication. Pasted transcript excerpts are manually supplied. Speech recognition and model-based field extraction are not advertised as running services.
+These are local workflow attestations; verified identity and legal electronic-signature controls remain deferred with authentication. Source text may be entered, imported, or generated by the optional local whisper.cpp adapter. Field extraction remains an explicit human selection; clinical meaning is not generated.
+
+## Organization form applicability
+
+Template applicability is organization-authored. `applies_to_stage` and `applies_to_care_level` default to `any`. `required_for_stage` defaults to false. These fields do not encode statute, payer policy, or clinical standards. Nexus never infers a requirement that an author did not store on an active template. No form content is seeded.
+
+GET `/api/clients/{id}/form-requirements` requires `form_responses` read and the existing client-assignment scope (clinicians only for clients they are assigned as primary clinician; admin and clinical lead remain organization-scoped). It returns `{client_id, client_status, relevant_episode_id, relevant_stage, relevant_care_level, disclaimer, requirements:[{template_id, template_name, disposition: required|suggested, completion: needed|draft|signed, response_status, reason, episode_id, applies_to_stage, applies_to_care_level, required_for_stage}]}`.
+
+`relevant_stage` is the client status. It is not derived from the episode. `relevant_episode_id` is the current active episode, otherwise the latest discharged episode (latest end date, then start date, then creation time, then id). Planned episodes are ignored. `relevant_care_level` is that episode's level of care, or null when none exists. Care-level-specific rules match only `outpatient`, `iop`, or `php`. Residential and detox episodes match only rules set to `any`. Inquiry matches only stage `any`.
+
+A rule matches when the template is active, its stage is `any` or equals the client status, and its care level is `any` or equals the relevant care level. Matching rules with `required_for_stage` true are `required`; other matches are `suggested`. Inactive and non-matching templates are omitted.
+
+`completion=signed` only when a signed form response exists for the same client, template, and relevant episode. When no relevant episode exists, including intake with no episode, the signed row must have `episode_id` null. Draft and reviewed rows for that same key yield `completion=draft` (`response_status` distinguishes them). Otherwise `needed`. A signed row wins over a draft. Reasons restate the organization-authored rule; they do not determine legal or clinical requirements. Editing applicability does not rewrite `form_responses.template_snapshot`.
 
 ## Billing corrections
 
 `payment_reversals` is a read-only bootstrap/list resource with payment_id, claim_id, copied positive amount_cents, reversed_on, reason, actor_id and timestamps. POST `/api/payments/{id}/reverse` `{reason,reversed_on}` appends a full reversal once. A reason of at least 10 characters and a date from original received_on through today are required. A second reversal returns 409. The original receipt and its source remain untouched. Claim balance and cash/adjustment metrics subtract reversals. A fully paid claim reopens to submitted (or denied if it has a recorded denial) when a reversal makes its balance positive. Cash exports book the negative movement on reversed_on, separately from original received_on.
 
 POST `/api/claims/{id}/return-to-draft` `{}` returns a ready, unsubmitted claim to editable draft and releases its reserved authorization units. POST `/api/claims/{id}/void` `{reason}` marks a draft or ready claim voided; submitted/denied/paid claims cannot use this action. The original claim is retained with void_reason, and a replacement draft may use the same session/service. Voiding an unsubmitted record releases its reservation; it does not erase actual care or manufacture a payer reversal. Claim network correction/resubmission remains outside this local workflow.
+
+## Optional local transcription
+
+POST `/api/speech/transcribe` accepts a raw `audio/wav` body and `x-nexus-client` / `x-nexus-consent` UUID headers in addition to the local actor header. Only administrators, clinical leads, and primary-assigned clinicians can transcribe. An active same-client recording consent is required using the client's facility calendar date. Resource exceptions cannot extend this role set. Authorization is re-read under locks before processing and in the completion-audit transaction.
+
+Input is PCM16 mono 16 kHz, at most 20 MiB / 10 minutes. One whisper.cpp process runs at a time, with a 120-second execution limit and no hosted fallback. Missing local configuration returns 503, occupied worker 429, invalid WAV 400, and oversized input 413. A successful no-store response is `{transcript, engine: "whisper.cpp", manual_review_required: true}`. Nothing is signed or saved as a form automatically. See [setup, provenance and observed verification](../setup/local-speech.md).

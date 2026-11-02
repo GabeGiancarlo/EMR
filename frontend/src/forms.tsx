@@ -259,6 +259,25 @@ export const definitions: Record<
         "consent",
       ]),
       f("description", "When to use this form", { type: "textarea" }),
+      f("applies_to_stage", "Applies to client stage", {
+        type: "select",
+        options: ["any", "intake", "active", "discharged"],
+        required: true,
+        default: "any",
+        hint: "Any matches every client stage. Set this rule according to your organization's workflow.",
+      }),
+      f("applies_to_care_level", "Applies to care level", {
+        type: "select",
+        options: ["any", "outpatient", "iop", "php"],
+        required: true,
+        default: "any",
+        hint: "Residential and detox episodes match only Any.",
+      }),
+      f("required_for_stage", "Required when this rule matches", {
+        type: "checkbox",
+        default: false,
+        hint: "Leave unchecked to suggest the form. This does not create a legal or clinical requirement.",
+      }),
       f("fields", "Form fields", { type: "fields", required: true }),
       f("active", "Available for documentation", {
         type: "checkbox",

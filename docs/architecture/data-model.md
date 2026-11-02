@@ -45,6 +45,10 @@ A client is longitudinal; an episode is one course of care. Plans define goals w
 
 Form responses snapshot the template that was actually used. Required-field validation occurs on review and signing; partial drafts are permitted. Edited reviewed responses return to draft. Exact source excerpts can be linked to answers, with explicit human review. Signed notes and responses preserve originals through linked amendments. A note generated from a form uses the actual labels and answers and remains a draft.
 
+Templates also carry organization-authored stage/care-level rules and a required/suggested flag. Matching considers client stage and the current active episode, otherwise the latest discharged episode. Planned episodes are excluded. Completion counts only responses for that template and relevant episode; a signed response takes precedence, while reviewed responses remain unsigned. Rules guide the chart but do not block admission or discharge or infer legal requirements. Rule edits do not change prior response snapshots.
+
+PATCH uses `_expected_updated_at` to compare the loaded version under the record lock. Missing versions return 428, stale versions 409, and neither creates an update audit. Signed-record immutability remains an additional constraint. Local audio is transient: whisper.cpp produces draft text, authorization/recording consent is checked before and after processing, and only deliberately saved source text becomes part of the form record. Consent calendar dates follow the client's facility timezone.
+
 Discharge closes the episode, completes its active plans and cancels scheduled activity after its end date. It does not erase history or settle receivables. Staff offboarding preserves authorship and transfers open tasks, future appointments and current client assignments.
 
 ## Financial integrity
@@ -57,6 +61,6 @@ Payment posting and full payment reversals lock the claim and recompute net allo
 
 ## Current boundaries
 
-The prototype has one service line per claim. It does not implement payer adjudication, remittance allocations, direct submission, refunds, a general ledger, prescribing, laboratory networks, document attachments, speech recognition or automated clinical decisions. Consent rows record attestations and scope; they are not a complete consent/disclosure policy engine or legal signature service. Separate psychotherapy/SUD counseling-note storage is not implemented. Care-team membership beyond the primary clinician, effective-dated facility permissions, concurrent draft edit conflict handling and richer retention policies remain next-stage work.
+The prototype has one service line per claim. It does not implement payer adjudication, remittance allocations, direct submission, refunds, a general ledger, prescribing, laboratory networks, document attachments or automated clinical decisions. Speech recognition is an optional local adapter; live recording, speaker separation and clinical accuracy validation remain open. Consent rows record attestations and scope; they are not a complete consent/disclosure policy engine or legal signature service. Separate psychotherapy/SUD counseling-note storage is not implemented. Care-team membership beyond the primary clinician, effective-dated facility permissions and richer retention policies remain next-stage work.
 
 Runtime state is PostgreSQL. Test fixtures use separate disposable databases; the ordinary workspace starts empty. Audit events identify actor, action, resource and record without copying clinical bodies into logs. Backups can be restored locally, but production backup encryption, disaster recovery and incident response remain deployment work.

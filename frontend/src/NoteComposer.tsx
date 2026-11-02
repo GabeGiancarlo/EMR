@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { clientName, date, label, value } from "./api";
 import type { Bootstrap, FormField } from "./api";
@@ -27,6 +27,7 @@ export default function NoteComposer({
   const [target, setTarget] = useState("narrative");
   const [mapped, setMapped] = useState(false);
   const [reviewed, setReviewed] = useState(false);
+  const sourceVersion = useRef(0);
   const template = data.templates.find((t) => t.id === templateId);
   const fields = (template?.fields || []) as FormField[];
   async function save(e: FormEvent) {
@@ -68,8 +69,17 @@ export default function NoteComposer({
               required
               value={clientId}
               onChange={(e) => {
+                sourceVersion.current += 1;
                 setClient(e.target.value);
                 setSession("");
+                setTitle("");
+                setBody("");
+                setAnswers({});
+                setSource("");
+                setExcerpt("");
+                setMapped(false);
+                setReviewed(false);
+                setError("");
               }}
             >
               <option value="">Choose a client</option>
@@ -79,6 +89,7 @@ export default function NoteComposer({
                 </option>
               ))}
             </select>
+            <small>Changing clients clears this draft's text and source excerpts.</small>
           </div>
           <div className="form-field">
             <label htmlFor="note-session">Linked session</label>
@@ -150,11 +161,15 @@ export default function NoteComposer({
                     setError("Choose a text file smaller than 1 MB.");
                     return;
                   }
+                  const version = ++sourceVersion.current;
                   try {
-                    setSource(await file.text());
+                    const text = await file.text();
+                    if (version !== sourceVersion.current) return;
+                    setSource(text);
                     setExcerpt("");
                     setReviewed(false);
                   } catch {
+                    if (version !== sourceVersion.current) return;
                     setError("That file could not be read.");
                   }
                 }}
@@ -168,6 +183,7 @@ export default function NoteComposer({
                 value={source}
                 placeholder="Paste source text, then highlight an excerpt to use."
                 onChange={(e) => {
+                  sourceVersion.current += 1;
                   setSource(e.target.value);
                   setExcerpt("");
                 }}
@@ -287,7 +303,7 @@ export default function NoteComposer({
           />
           <small>
             Imported or transcribed content should be reviewed by the author.
-            Automatic transcription is not connected.
+            Local audio transcription is available when completing a structured form.
           </small>
         </div>
         {error && (

@@ -5,7 +5,7 @@ Verified November 2, 2026 against the local PostgreSQL/API and custom frontend. 
 ## Isolation
 
 - `nexus`: ordinary workspace; no sample clients or demo fixtures seeded.
-- `nexus_test`: explicitly disposable backend integration database. Export tests create and remove an isolated schema inside it.
+- `nexus_test`: explicitly disposable backend integration database. Export, form-routing and speech authorization tests each create and remove their own isolated schema inside it.
 - `nexus_ui_test`: isolated browser QA database. All names, records, codes, references and amounts are clearly labeled synthetic QA fixtures. No payer submission or real payment occurs.
 - xAI receives development source files only. No clinical content, credentials, database dumps or user records are included.
 
@@ -27,12 +27,28 @@ Rust unit and real PostgreSQL workflow checks cover tenant/panel access, role ex
 
 Run the commands in the root README for current results. Browser verification complements those checks; a successful build alone is not acceptance.
 
-Latest checkpoint: 14 Rust unit tests passed, both comprehensive PostgreSQL/HTTP integration scenarios passed, 3 frontend serialization regressions passed, strict Clippy and formatting passed, and the production frontend build passed. The workflow integration scenario also checks a Pacific-time evening service crossing the UTC date boundary against one-day coverage/authorization and rejects completion of future sessions. Claims readiness and discharge scheduling use the facility calendar date.
+Latest expanded checkpoint: 39 Rust unit tests, four real PostgreSQL/HTTP integration scenarios, and eight frontend serializer/WAV validation tests passed. Strict Clippy, Rust formatting, TypeScript and the Vite build passed. Operational JavaScript and PowerShell helpers passed syntax checks. CI now includes the form-routing and speech authorization database scenarios explicitly.
+
+The workflow integration scenario also checks a Pacific-time evening service crossing the UTC date boundary against one-day coverage/authorization and rejects completion of future sessions. Claims readiness and discharge scheduling use the facility calendar date. Additional speech checks use facilities on opposite sides of UTC midnight and verify that concurrent consent revocation and operator deactivation are observed after their locks are released.
 
 ## Operational evidence and limits
+
+Expanded Grok implementation work added mandatory loaded-version tokens for PATCH and an explainable billing checklist using the same backend rules as claim transitions. A two-tab browser check confirmed that the first edit persists, the stale second edit is rejected, and its unsaved text remains visible. Database checks confirm that rejected stale writes do not append update audits. The billing browser check identified a missing signed group-session note, cleared that blocker after signing, and persisted internal readiness without payer submission.
+
+Offboarding regressions additionally cover administrators with clinical assignments and concurrent new assignments during deactivation. Clinical work cannot transfer to billing-only staff, and assignment validation waits for the staff lock before checking active status.
+
+Staff role changes reject a move to billing, executive or support while primary clients or future scheduled individual/group encounters remain assigned. Each assignment type is covered independently; rejected changes preserve both the staff version and update-audit count. Reassignment allows the role change. Browser verification also confirms that changing a new note's client clears its title, narrative and source text before another chart can be selected.
+
+A second backup/restore check after the expanded schema restored 24 public tables into `nexus_restore_20261102120013`, leaving the source database unchanged. Backup filenames now include a unique suffix and the helpers preserve a caller's existing database-password environment value.
+
+After migration 009 and the final API restart, the ordinary workspace still returned `setup_required=true` and a healthy database connection. A new hashed backup restored successfully into `nexus_restore_20261102122846_00ab15e6` with 24 public tables. The restore helper now uses a unique destination suffix and checks the inspection command's exit status.
+
+Form-rule browser verification changed an existing authored template from a general suggestion to required for discharged IOP clients. The matching chart displayed the saved rule and its signed completion status, and prior responses remained unchanged. The API tests cover active/discharged episode selection, unrelated signatures, empty matches, inactive templates and tenant/panel access.
+
+The official pinned whisper.cpp CPU build and model checksum passed. A 13.6-second locally generated synthetic recording was transcribed through the actual API and browser. The known verification sentence matched the returned text. The browser then mapped that text into a form answer, saved a draft, and reopened it with the exact source excerpt still linked. Audio remained local. This demonstrates functioning recognition and persistence; it does not validate clinical speech accuracy, live capture or speaker identification.
 
 An actual local backup was hashed and restored into a newly created isolated database; the ordinary workspace was left unchanged. Docker execution on this machine is unavailable because Docker Desktop reports an internal inference-manager socket error. PostgreSQL therefore runs using the official portable EDB distribution. The Docker image is prepared for CI, but a local container runtime check has not passed.
 
 The research HTML report was opened and visually reviewed. The DOCX passed structural validation, but visual rendering could not run because the bundled LibreOffice binary is unavailable on this Windows host; the DOCX is not described as visually verified.
 
-Authentication is intentionally absent. Local actor policies do not establish identity. Public deployment, real patient use, external payer exchange, speech recognition and production operational controls are outside the evidence above.
+Authentication is intentionally absent. Local actor policies do not establish identity. Public deployment, real patient use, external payer exchange, clinical speech accuracy and production operational controls are outside the evidence above.

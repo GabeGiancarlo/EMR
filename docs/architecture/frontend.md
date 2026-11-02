@@ -1,23 +1,9 @@
-# Frontend Direction
+# Frontend architecture
 
-## Current Status
+The active `frontend/` workspace uses React, TypeScript and Vite. Interface primitives, SVG icons, forms, tables and responsive styling are custom repository code. Runtime dependencies are React and React DOM; no component framework, remote fonts or analytics service is required.
 
-There is no active frontend implementation in this repository at the moment.
+The workspace connects onboarding, intake, client charts, care plans, individual/group sessions, documentation, forms, billing, tasks, team access and settings. Empty states guide real record creation. Totals and effective permissions come from the API, which independently enforces access.
 
-## Decision
+Warm neutral surfaces, green accents and readable typography support practical work areas. Tables scroll within their containers on small screens and modals use native dialogs. Local storage contains only the selected development operator identifier, not clinical records or imported text.
 
-Nexus frontend direction is React + TypeScript unless changed by a future ADR.
-
-## Context
-
-The previous Leptos/Rust frontend was removed during the architecture reset and should not be reintroduced in this commit.
-
-## Rationale
-
-React + TypeScript is currently preferred for this team because it better supports:
-
-- dashboard-heavy experiences
-- form-heavy workflows
-- table/grid-heavy data operations
-- scheduling/calendar interactions
-- faster product iteration with broad ecosystem support
+See [the frontend README](../../frontend/README.md) for setup and source organization and [verification](../development/verification.md) for browser evidence. Authentication and public deployment remain deferred.

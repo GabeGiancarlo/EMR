@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { clientName, date, initials, label, numeric, value } from "./api";
+import {
+  clientName,
+  date,
+  initials,
+  label,
+  numeric,
+  value,
+  withOriginalUpdatedAt,
+} from "./api";
 import type { WorkflowProps } from "./CarePlanning";
 import { Badge, Button, Empty, Icon, Panel } from "./ui";
 
@@ -13,6 +21,10 @@ export default function GroupEncounters({
 }: WorkflowProps) {
   const [selectedId, setSelectedId] = useState("");
   const [error, setError] = useState("");
+  const [savingAttendance, setSavingAttendance] = useState<Record<string, boolean>>({});
+  const [pendingStatus, setPendingStatus] = useState<Record<string, string>>(
+    {},
+  );
   const groups = [...data.groups].sort((a, b) =>
     value(b, "starts_at").localeCompare(value(a, "starts_at")),
   );
@@ -26,13 +38,27 @@ export default function GroupEncounters({
       "name",
     );
   async function setStatus(id: string, status: string) {
+    const row = data.group_attendance.find((item) => item.id === id);
+    setPendingStatus((current) => ({ ...current, [id]: status }));
+    setSavingAttendance((current) => ({ ...current, [id]: true }));
     setError("");
     try {
-      await mutate(`/api/group_attendance/${id}`, { status }, "PATCH");
+      await mutate(
+        `/api/group_attendance/${id}`,
+        withOriginalUpdatedAt(row, { status }),
+        "PATCH",
+      );
+      setPendingStatus((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Attendance could not be updated.",
       );
+    } finally {
+      setSavingAttendance((current) => ({ ...current, [id]: false }));
     }
   }
   if (!groups.length)
@@ -201,7 +227,8 @@ export default function GroupEncounters({
                         <select
                           aria-label={`Attendance for ${clientName(client)}`}
                           className="compact-select"
-                          value={value(a, "status")}
+                          value={pendingStatus[a.id] ?? value(a, "status")}
+                          disabled={savingAttendance[a.id] === true}
                           onChange={(e) => void setStatus(a.id, e.target.value)}
                         >
                           {["scheduled", "attended", "no_show", "excused"].map(

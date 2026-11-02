@@ -1,6 +1,7 @@
 // Read-only review worker. No agent tool execution; no secrets in source packets.
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 const root = path.resolve(import.meta.dirname, '..');
 const dir = path.join(root, '.local', 'xai');
 fs.mkdirSync(dir, { recursive: true });
@@ -12,12 +13,14 @@ const lockFile = path.join(dir, 'review.lock');
 const lock = fs.openSync(lockFile, 'wx');
 try {
   const ledger = fs.existsSync(ledgerFile) ? JSON.parse(fs.readFileSync(ledgerFile, 'utf8')) : { priorReviewUsd: 0.262386, requests: [] };
-  // A deliberately low operational ceiling, far below the user maximum of $5000.
-  // Reserve $20 for each attempted call, including unknown failed calls; never auto-retry.
-  if (ledger.requests.length >= 10 || ledger.priorReviewUsd + ledger.requests.length * 20 + 20 > 250) throw Error('Local review allowance exhausted. Inspect ledger before changing policy.');
+  // Shared ledger with implementation workers. Unknown charges retain a hold.
+  const exposure = ledger.priorReviewUsd + ledger.requests.reduce((sum, r) => sum + (typeof r.costUsd === 'number' && !r.status?.includes('unknown') ? r.costUsd : r.reservedUsd), 0);
+  if (exposure + 20 > 5000) throw Error('User-approved total budget would be exceeded.');
+  if (ledger.requests.some(r => r.name === name)) throw Error('Use unique review names; no implicit retries.');
   const packet = files.map(file => {
     const resolved = path.resolve(root, file);
     if (!resolved.startsWith(root + path.sep) || /(^|[\\/])(\.env|\.local|\.git)([./\\]|$)/.test(file)) throw Error('Excluded path');
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', file], { cwd: root, stdio: 'pipe' });
     return `FILE ${file}\n` + fs.readFileSync(resolved, 'utf8').split('\n').map((l,i)=>`${i+1}: ${l}`).join('\n');
   }).join('\n\n');
   if (packet.length > 130000) throw Error('Packet exceeds 130k characters; scope the review.');
@@ -36,7 +39,8 @@ try {
     const result = await response.json();
     entry.status = result.status;
     entry.usage = result.usage;
-    entry.costUsd = Number(result.usage?.cost_in_usd_ticks ?? 0) / 1e10;
+    if (typeof result.usage?.cost_in_usd_ticks === 'number') entry.costUsd = result.usage.cost_in_usd_ticks / 1e10;
+    else entry.status = `${entry.status}-cost-unknown`;
     entry.model = result.model;
     const text = (result.output ?? []).filter(x=>x.type==='message').flatMap(x=>x.content ?? []).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
     fs.writeFileSync(path.join(dir, `${name}.md`), text);

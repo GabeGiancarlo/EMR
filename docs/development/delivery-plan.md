@@ -34,14 +34,18 @@ Each item requires working user flows, persisted state, meaningful validation, a
 
 ## Speech and external billing
 
-Speech recognition cannot responsibly be invented or clinically validated within a short prototype sprint. First deliver transcript import and human-reviewed mapping to form fields, with source provenance. Evaluate an optional locally hosted open-weight recognizer through an adapter, consent controls and accuracy testing. The app must remain useful without it. Never silently use browser cloud dictation or send clinical content to development-review models.
+Transcript import, human-reviewed field mapping and an optional local whisper.cpp adapter are implemented. The pinned recognizer passed a synthetic WAV test through the actual UI; this is not clinical accuracy validation. Recording consent, role and clinician-assignment checks gate transcription, and a person reviews the words and selects each excerpt. Live capture, diarization and domain-specific accuracy evaluation remain open. The app remains useful without the recognizer. Never silently use browser cloud dictation or send clinical content to development-review models.
 
 Claims preparation and reconciliation can be owned by Nexus. Actual payer transmission, eligibility and remittance require trading-partner enrollment, format/licensing decisions and adapter validation; a local status change must never imply successful external transmission. Keep accounting exports free of patient identifiers unless the receiving system and agreement explicitly support that use.
 
 ## Working conventions
 
+Current local checkpoint includes intake, episodes, care plans, individual/group encounters, reviewed/signed documentation, stage/care-level form routing, local WAV transcription, billing readiness, manual external references, payments/reversals, exports and staff handoffs. Browser and database evidence is recorded in [verification](verification.md). Five scoped Grok implementation proposals were integrated and checked locally; a failed staff-role worker was completed by the root agent. This is an expanded working prototype, not completion of the entire EMR scope.
+
+Next development priorities are document attachments with access/audit/retention handling, broader care-team and facility access scopes, and billing import/reconciliation workflows. Live therapy capture and clinical speech evaluation remain separate from the verified WAV adapter. External payer connectivity needs actual trading-partner inputs. Authentication stays explicitly deferred.
+
 - Checkout: C:/Users/ganeg/source/EMR, branch nexus/integrated-prototype.
 - Root agent owns integration, operations and verification; specialist agents own backend, frontend and research during their work.
-- xAI reviewers receive scoped development source packets only. tools/xai-review.mjs records billed usage in ignored .local/xai/usage.json and caps attempts at ten with conservative per-call reservations. No automatic retry loops.
+- xAI reviewers and implementation workers receive scoped development source packets only. The shared ledger records known billed usage and conservative holds for pending/unknown charges against the owner's $5,000 total ceiling. Up to four implementation workers run in parallel; proposals require local review and verification. See [the worker workflow](xai-workers.md). No automatic retry loops.
 - Original Figma references were absent from repository/history as of November 2, 2026; the owner confirmed proceeding with a fresh custom interface without them.
 - Keep acceptance status honest; do not label a prototype complete merely because builds pass.

@@ -41,7 +41,7 @@ pub fn fields(resource: &str) -> Result<Vec<&'static str>> {
         "claims"=>"client_id policy_id session_id authorization_id service_code diagnosis_code amount_cents units",
         "payments"=>"claim_id amount_cents received_on reference source",
         "payment_reversals"=>"",
-        "templates"=>"name kind description fields active",
+        "templates"=>"name kind description fields active applies_to_stage applies_to_care_level required_for_stage",
         "consents"=>"client_id kind granted_on expires_on revoked_on scope",
         "exceptions"=>"staff_id resource reason expires_at revoked access_mode",
         "treatment_plans"=>"client_id episode_id title presenting_needs strengths next_review_date",
@@ -103,7 +103,9 @@ pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
                 "{key} cannot be null; omit an unused optional field or provide its value"
             )));
         }
-        if matches!(key.as_str(), "active" | "revoked") && !value.is_boolean() {
+        if matches!(key.as_str(), "active" | "revoked" | "required_for_stage")
+            && !value.is_boolean()
+        {
             return Err(ApiError::invalid(format!("{key} must be true or false")));
         }
         if value.as_str().map(|s| s.len() > 100_000).unwrap_or(false) {
@@ -174,6 +176,23 @@ pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
         result.insert(key.clone(), value);
     }
     if resource == "templates" {
+        if let Some(value) = result.get("applies_to_stage") {
+            if !matches!(
+                value.as_str(),
+                Some("any" | "intake" | "active" | "discharged")
+            ) {
+                return Err(ApiError::invalid(
+                    "applies_to_stage must be any, intake, active, or discharged",
+                ));
+            }
+        }
+        if let Some(value) = result.get("applies_to_care_level") {
+            if !matches!(value.as_str(), Some("any" | "outpatient" | "iop" | "php")) {
+                return Err(ApiError::invalid(
+                    "applies_to_care_level must be any, outpatient, iop, or php",
+                ));
+            }
+        }
         if let Some(value) = result.get("fields") {
             let arr = value
                 .as_array()
@@ -340,7 +359,9 @@ pub async fn validate_links(
         if let Some(v) = data.get(key).filter(|v| !v.is_null()) {
             let id = Uuid::parse_str(v.as_str().unwrap_or_default())
                 .map_err(|_| ApiError::invalid("Invalid staff reference"))?;
-            let staff = get(tx, "staff", id, actor.org, false).await?;
+            // Serialize assignment with offboarding so a newly inserted record
+            // cannot retain an operator who was deactivated after this check.
+            let staff = get(tx, "staff", id, actor.org, true).await?;
             if staff["active"] != true {
                 return Err(ApiError::invalid("Assigned staff must be active"));
             }
@@ -414,5 +435,30 @@ mod tests {
         let err = clean("clients", &json!({"phone":null})).unwrap_err();
         assert!(err.message.contains("phone"));
         assert!(clean("clients", &json!({"primary_clinician_id":null})).is_ok());
+    }
+    #[test]
+    fn validates_template_applicability() {
+        let ok = clean(
+            "templates",
+            &json!({
+                "name": "Packet",
+                "applies_to_stage": " intake ",
+                "applies_to_care_level": "iop",
+                "required_for_stage": false,
+                "fields": [{"key": "a", "label": "A", "type": "text"}]
+            }),
+        )
+        .unwrap();
+        assert_eq!(ok["applies_to_stage"], "intake");
+        assert_eq!(ok["required_for_stage"], false);
+        assert!(clean("templates", &json!({"applies_to_stage": "inquiry"})).is_err());
+        assert!(clean(
+            "templates",
+            &json!({"applies_to_care_level": "residential"})
+        )
+        .is_err());
+        assert!(clean("templates", &json!({"applies_to_care_level": "IOP"})).is_err());
+        let err = clean("templates", &json!({"required_for_stage": "true"})).unwrap_err();
+        assert!(err.message.contains("required_for_stage"));
     }
 }
