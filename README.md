@@ -2,7 +2,7 @@
 
 Nexus connects recovery-center care, billing readiness and operational oversight. The local prototype uses a custom React/TypeScript interface, a Rust/Actix API and PostgreSQL. It starts with an empty database: organization setup and every client record come from user input.
 
-**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive homes, a day/week/month/agenda calendar and encounter-linked local telehealth work against persisted records. Telehealth passed a three-participant browser media check; remote connectivity, recording and the transcript-to-reviewed-note chain remain unfinished. Complete role journeys, recurring scheduling, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md), [telehealth evidence and limits](docs/development/telehealth-checkpoint.md) and the [original roadmap](docs/product/original-roadmap.md).
+**Current stage: functional engineering prototype, not a completed initial product.** Distinct clinical/billing/executive homes, a day/week/month/agenda calendar and encounter-linked local telehealth work against persisted records. Telehealth passed a three-participant browser media check. Consented own-device recording, encrypted storage, archived playback and database/media recovery now have [local verification](docs/development/recording-checkpoint.md); remote connectivity and the recording-to-reviewed-note chain remain unfinished. Complete role journeys, recurring scheduling, the client portal and records lifecycle remain incomplete. The [50-capability acceptance ledger](docs/product/acceptance-ledger.md) tracks the objective, with [direct Figma inspection](docs/product/figma-source-inspection.md), a [workspace checkpoint](docs/development/workspace-rebuild-checkpoint.md), [telehealth evidence and limits](docs/development/telehealth-checkpoint.md) and the [original roadmap](docs/product/original-roadmap.md).
 
 Authentication is deliberately deferred. Local operator selection exercises application permissions but does not verify identity. The API requires explicit development mode and refuses a non-loopback bind. Do not use real patient data or publish this mode.
 
@@ -24,6 +24,8 @@ In a terminal, start the API:
 ```powershell
 .\tools\start-api.ps1
 ```
+
+The startup script also initializes the local recording key under ignored `.local/keys/media-v1.key` with restricted Windows permissions. Database backups exclude this key. Preserve a separate protected recovery copy before relying on retained media; losing the key makes encrypted recordings unrecoverable. See the [recording checkpoint](docs/development/recording-checkpoint.md) for the tested recovery boundary.
 
 In another terminal, start the interface:
 

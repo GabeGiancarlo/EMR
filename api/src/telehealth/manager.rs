@@ -14,6 +14,39 @@ pub struct Invite {
     client_id: Uuid,
 }
 
+pub async fn list(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    query: web::Query<Create>,
+) -> Result<HttpResponse> {
+    let initial = access::actor(&req, &state.pool).await?;
+    let mut tx = state.pool.begin().await?;
+    let actor = access::lock_mutation(
+        &req,
+        &mut tx,
+        initial.org,
+        if query.group_id.is_some() {
+            "groups"
+        } else {
+            "sessions"
+        },
+    )
+    .await?;
+    encounter(&mut tx, &actor, query.session_id, query.group_id).await?;
+    let rows: Vec<Value> = sqlx::query_scalar("SELECT to_jsonb(r) FROM telehealth_rooms r WHERE organization_id=$1 AND (session_id=$2 OR group_id=$3) ORDER BY created_at DESC,id DESC LIMIT 100")
+        .bind(actor.org).bind(query.session_id).bind(query.group_id).fetch_all(&mut *tx).await?;
+    access::audit(
+        &mut tx,
+        &actor,
+        "read",
+        "telehealth_rooms",
+        query.session_id.or(query.group_id),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(no_store(json!({"rooms":rows})))
+}
+
 pub async fn create(
     req: HttpRequest,
     state: web::Data<AppState>,
@@ -52,7 +85,7 @@ pub async fn create(
     tx.commit().await?;
     Ok(no_store(room))
 }
-async fn managed(
+pub(super) async fn managed(
     req: &HttpRequest,
     _state: &AppState,
     id: Uuid,

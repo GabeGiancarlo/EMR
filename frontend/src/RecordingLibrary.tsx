@@ -1,0 +1,34 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { actorStorageKey, apiUrl, request } from "./api";
+import type { Row } from "./api";
+import { Button } from "./ui";
+import type { RecordingPolicy } from "./recordingTypes";
+import "./recording.css";
+
+type Track={recording_id:string;id:string;state:string;mime_type:string;label:string;role:string;byte_count:number;created_at:string};
+type Saved={id:string;state:string;mode:string;created_at:string;retain_until:string;reason:string;tracks:Track[]};
+type Archive={recordings:Omit<Saved,"tracks">[];tracks:Track[]};
+const hydrate=(archive:Archive):Saved[]=>archive.recordings.map(r=>({...r,tracks:archive.tracks.filter(t=>t.recording_id===r.id)}));
+export default function RecordingLibrary({roomId,actor,zone}:{roomId:string;actor:Row|null;zone:string}) {
+  const[recordings,setRecordings]=useState<Saved[]>([]),[policies,setPolicies]=useState<RecordingPolicy[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[media,setMedia]=useState<{url:string;mime:string;label:string}|null>(null);
+  const[title,setTitle]=useState(""),[purpose,setPurpose]=useState(""),[days,setDays]=useState(""),[video,setVideo]=useState(false),[showPolicy,setShowPolicy]=useState(false);
+  const generation=useRef(0),url=useRef("");
+  const date=(input:string)=>new Intl.DateTimeFormat("en-US",{timeZone:zone,dateStyle:"medium",timeStyle:"short"}).format(new Date(input));
+  const reload=useCallback(async()=>{const result=await request<Archive>(`/api/telehealth/rooms/${roomId}/recordings`);setRecordings(hydrate(result));},[roomId]);
+  useEffect(()=>{let alive=true;void Promise.all([request<Archive>(`/api/telehealth/rooms/${roomId}/recordings`),request<{policies:RecordingPolicy[]}>("/api/recording-policies")]).then(([r,p])=>{if(alive){setRecordings(hydrate(r));setPolicies(p.policies);}}).catch(e=>{if(alive)setError(e.message);});return()=>{alive=false;generation.current++;if(url.current)URL.revokeObjectURL(url.current);};},[roomId,actor?.id]);
+  async function play(recording:Saved,track:Track){const turn=++generation.current;const operator=localStorage.getItem(actorStorageKey);setBusy(true);setError("");try{const response=await fetch(apiUrl(`/api/telehealth/rooms/${roomId}/recordings/${recording.id}/tracks/${track.id}`),{headers:operator?{"x-nexus-actor":operator}:{},cache:"no-store",signal:AbortSignal.timeout(30000)});if(!response.ok){const body=await response.json().catch(()=>null);throw new Error(body?.error?.message||"Playback could not be opened.");}const blob=await response.blob();if(turn!==generation.current||localStorage.getItem(actorStorageKey)!==operator)return;if(url.current)URL.revokeObjectURL(url.current);url.current=URL.createObjectURL(blob);setMedia({url:url.current,mime:track.mime_type,label:track.label});}catch(e){if(turn===generation.current)setError(e instanceof Error?e.message:"Playback could not be opened.");}finally{if(turn===generation.current)setBusy(false);}}
+  async function savePolicy(event:FormEvent){event.preventDefault();setBusy(true);setError("");try{await request("/api/recording-policies","POST",{title,purpose,retention_days:Number(days),allow_video:video});const result=await request<{policies:RecordingPolicy[]}>("/api/recording-policies");setPolicies(result.policies);setTitle("");setPurpose("");setDays("");setVideo(false);setShowPolicy(false);}catch(e){setError(e instanceof Error?e.message:"The policy could not be saved.");}finally{setBusy(false);}}
+  async function retire(id:string){setBusy(true);setError("");try{await request(`/api/recording-policies/${id}/retire`,"POST",{});setPolicies(current=>current.map(p=>p.id===id?{...p,active:false}:p));}catch(e){setError(e instanceof Error?e.message:"The policy could not be retired.");}finally{setBusy(false);}}
+  const manage=actor?.role==="admin"||actor?.role==="clinical_lead";
+  return <section className="rec-library" aria-label="Saved visit recordings"><div className="visit-section-heading"><h3>Saved recordings</h3><Button variant="text small" disabled={busy} onClick={()=>void reload().catch(e=>setError(e.message))}>Refresh recordings</Button></div>
+    {error&&<p className="error-banner" role="alert">{error}</p>}
+    <p>Each participant device saves a separate segment. A device label does not verify the identity of every speaker heard on it.</p>
+    {!recordings.length&&<p>No recordings have been requested for this room.</p>}
+    {recordings.map(r=><article key={r.id} className="rec-saved"><h4>{date(r.created_at)} · {r.mode} · {r.state}</h4><p>{r.reason} Retention review due {date(r.retain_until)}. This date does not automatically delete media.</p>{!r.tracks.length&&<p>No media was saved.</p>}{r.tracks.map(t=><div className="visit-invite-row" key={t.id}><span>{t.label} · {t.state} · {Math.ceil(t.byte_count/1024)} KB</span><Button variant="secondary small" disabled={busy||t.state!=="complete"} onClick={()=>void play(r,t)}>Review {t.label} segment</Button></div>)}</article>)}
+    {media&&<div className="rec-playback"><h4>{media.label} · recorded device</h4>{media.mime.startsWith("video/")?<video src={media.url} controls playsInline aria-label="Saved recording playback"/>:<audio src={media.url} controls aria-label="Saved recording playback"/>}<Button variant="text small" onClick={()=>{if(url.current)URL.revokeObjectURL(url.current);url.current="";setMedia(null);}}>Close playback</Button></div>}
+    {manage&&<details><summary>Recording policies ({policies.filter(p=>p.active).length} active)</summary><p>Policies describe the purpose and retention review period before participants agree. Create a new version to change these terms. Retiring a policy stops further capture under it.</p>{policies.filter(p=>p.active).map(p=><div className="visit-invite-row" key={p.id}><span><strong>{p.title}</strong> · review after {p.retention_days} days<br/>{p.purpose}</span><Button variant="text small" disabled={busy} onClick={()=>void retire(p.id)}>Retire {p.title}</Button></div>)}<Button variant="secondary small" onClick={()=>setShowPolicy(!showPolicy)}>{showPolicy?"Cancel new policy":"Create recording policy"}</Button>
+      {showPolicy&&<form className="rec-form" onSubmit={savePolicy}><label>Policy title<input value={title} onChange={e=>setTitle(e.target.value)} required maxLength={120}/></label><label>Purpose presented to participants<textarea value={purpose} onChange={e=>setPurpose(e.target.value)} required minLength={10} maxLength={2000}/></label><label>Retention review period in days<input type="number" min={1} max={3650} step={1} required value={days} onChange={e=>setDays(e.target.value)}/></label><label className="rec-check"><input type="checkbox" checked={video} onChange={e=>setVideo(e.target.checked)}/>Allow participants' cameras as well as microphones</label><Button type="submit" disabled={busy}>Save policy version</Button></form>}
+    </details>}
+  </section>;
+}

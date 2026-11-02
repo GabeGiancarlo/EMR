@@ -1,5 +1,6 @@
 //! Encounter-bound local telehealth. Admission is authorization, not identity verification.
 mod manager;
+mod recording;
 mod visitor;
 
 use crate::{
@@ -14,7 +15,9 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.configure(recording::configure);
     cfg.route("/telehealth/rooms", web::post().to(manager::create))
+        .route("/telehealth/rooms", web::get().to(manager::list))
         .route("/telehealth/rooms/{id}", web::get().to(manager::read))
         .route(
             "/telehealth/rooms/{id}/invite",
