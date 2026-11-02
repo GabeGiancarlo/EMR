@@ -70,3 +70,9 @@ Verified on November 2 after the owner's review:
 - No existing ordinary or QA client was changed or deleted. API services were restarted on their existing ports after the test checks. No public deployment or GitHub push was performed.
 
 Read-only design screenshots and the corrected dark overview are retained under ignored `.local/design-review`. Neither these visual checks nor the additional tests close the missing dedicated workspaces, full calendar, telehealth, client portal, retention/deletion or complete revenue workflows.
+
+## Patient identity and admission checkpoint
+
+November 2: see the [full intake contract and evidence](patient-intake-contract.md#verified-checkpoint--november-2). This checkpoint adds immutable MRNs, explicit duplicate review, referral and identity histories, planned-episode form requirements, role-checked admission and intake-owner offboarding. Current validation is 90 Rust unit tests, 13 real PostgreSQL scenarios, 73 frontend tests, strict Clippy, formatting and a successful TypeScript/Vite build. Final owner/panel changes were followed by passing targeted admission, identity and general persistence scenarios.
+
+The browser completed registration → referral → identity → treatment consent → required form review/signature → ready → admission in the isolated synthetic QA workspace. It also verified age rejection, retained unsaved inputs, duplicate resolution and the support role boundary. Admission survived restart. A fresh database backup restored with identical counts/content digests across all 46 tables; ordinary workspace patient count remains zero and the earlier QA patients were preserved. Desktop light/dark evidence and machine-readable proofs live under ignored `.local`. The complete product remains in progress; program policy, legacy-episode enforcement and other open capabilities remain explicit in the acceptance ledger.

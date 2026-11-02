@@ -572,6 +572,37 @@ async fn form_requirements_follow_authored_rules_scope_and_preserve_snapshots() 
     );
     assert!(!has_rule(&final_rules, "IOP rule"));
     assert!(!has_rule(&final_rules, "Inactive rule"));
+    // Intake explicitly targets its planned episode, even when older care exists.
+    let (status, planned) = call(&pool,"POST","/api/episodes",Some(&admin),Some(json!({"client_id":client_id,"facility_id":facility,"status":"planned","level_of_care":"iop","start_date":"2026-11-02"}))).await;
+    assert_status(status, StatusCode::CREATED, &planned);
+    let (status, planned_rules) = call(
+        &pool,
+        "GET",
+        &format!("{path}?episode_id={}", planned["id"].as_str().unwrap()),
+        Some(&clinician),
+        None,
+    )
+    .await;
+    assert_status(status, StatusCode::OK, &planned_rules);
+    assert_eq!(planned_rules["client_status"], "discharged");
+    assert_eq!(planned_rules["relevant_stage"], "intake");
+    assert_eq!(planned_rules["relevant_episode_id"], planned["id"]);
+    assert_eq!(
+        requirement(&planned_rules, "Any packet")["completion"],
+        "needed"
+    );
+    assert_eq!(
+        call(
+            &pool,
+            "GET",
+            &format!("{path}?episode_id={}", Uuid::new_v4()),
+            Some(&clinician),
+            None
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
     let audits: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM audit_events WHERE resource='form_requirements' AND action='read' AND record_id=$1",
     )

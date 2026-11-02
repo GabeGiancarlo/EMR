@@ -269,7 +269,7 @@ export function Modal({
     <dialog
       ref={ref}
       className={`modal ${wide ? "wide" : ""}`}
-      onCancel={onClose}
+      onCancel={event => { event.preventDefault(); onClose(); }}
       aria-labelledby="modal-title"
     >
       <div className="modal-head">

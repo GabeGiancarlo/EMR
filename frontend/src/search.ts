@@ -3,7 +3,7 @@ import type { Bootstrap, Resource, Row } from "./api.ts";
 export type WorkspaceView = "overview" | "clients" | "schedule" | "notes" | "billing" | "tasks" | "team" | "settings";
 export type SearchResult = { key: string; resource: Resource; row: Row; title: string; detail: string; view: WorkspaceView };
 const sources: { resource: Resource; view: WorkspaceView; label: string; fields: string[] }[] = [
-  { resource: "clients", view: "clients", label: "Client", fields: ["first_name", "last_name", "preferred_name"] },
+  { resource: "clients", view: "clients", label: "Client", fields: ["first_name", "last_name", "preferred_name", "mrn"] },
   { resource: "sessions", view: "schedule", label: "Session", fields: ["kind", "location", "starts_at"] },
   { resource: "groups", view: "schedule", label: "Group", fields: ["title", "location", "starts_at"] },
   { resource: "notes", view: "notes", label: "Note", fields: ["title"] },
@@ -36,7 +36,7 @@ export function searchWorkspace(data: Bootstrap, query: string, limit = 30): Sea
         : ["sessions", "claims", "authorizations", "policies"].includes(source.resource)
           ? `${clientTitle || source.label} · ${fields[0] || source.label}`
           : fields[0] || source.label;
-      const detail = [source.label, text(row, "status") || text(row, "role"), source.resource === "clients" ? text(row, "preferred_name") : clientTitle].filter(Boolean).join(" · ");
+      const detail = [source.label, text(row, "status") || text(row, "role"), source.resource === "clients" ? [text(row, "mrn"), text(row, "preferred_name")].filter(Boolean).join(" · ") : clientTitle].filter(Boolean).join(" · ");
       const searchable = normalize([row.id, source.label, ...fields, clientTitle, text(row, "status")].join(" "));
       if (!terms.every(term => searchable.includes(term))) continue;
       results.push({ key: `${source.resource}:${row.id}`, resource: source.resource, row, title, detail, view: source.view,

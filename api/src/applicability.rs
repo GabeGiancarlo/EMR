@@ -3,10 +3,10 @@
 //! episode, otherwise the latest discharged episode. Nothing here infers a legal
 //! or clinical requirement, and template edits do not rewrite response snapshots.
 
-use crate::{access, records, AppState, Result};
+use crate::{access, records, ApiError, AppState, Result};
 use actix_web::{web, HttpRequest, HttpResponse};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -156,6 +156,12 @@ fn completion_for(
     {
         return ("draft".into(), Some("reviewed".into()));
     }
+    if matching
+        .iter()
+        .any(|response| response.status == "source_review")
+    {
+        return ("source_review".into(), Some("signed".into()));
+    }
     if matching.iter().any(|response| response.status == "draft") {
         return ("draft".into(), Some("draft".into()));
     }
@@ -169,6 +175,15 @@ fn evaluate(
     responses: &[ResponseFact],
 ) -> Evaluation {
     let episode = select_relevant_episode(episodes);
+    evaluate_context(client_status, episode, templates, responses)
+}
+
+fn evaluate_context(
+    client_status: &str,
+    episode: Option<&EpisodeCandidate>,
+    templates: &[TemplateRule],
+    responses: &[ResponseFact],
+) -> Evaluation {
     let relevant_episode_id = episode.map(|item| item.id);
     let relevant_care_level = episode.map(|item| item.level_of_care.clone());
     let mut requirements = Vec::new();
@@ -226,15 +241,25 @@ fn map_episode(row: &sqlx::postgres::PgRow) -> EpisodeCandidate {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequirementsQuery {
+    episode_id: Option<Uuid>,
+}
+
 pub async fn client_requirements(
     req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<Uuid>,
+    query: web::Query<RequirementsQuery>,
 ) -> Result<HttpResponse> {
     let client_id = path.into_inner();
     let actor = access::actor(&req, &state.pool).await?;
     access::require(&state.pool, &actor, "form_responses", false).await?;
     let mut tx = state.pool.begin().await?;
+    crate::scheduling::lock_org(&mut tx, actor.org).await?;
+    let actor = access::actor(&req, &state.pool).await?;
+    access::require(&state.pool, &actor, "form_responses", false).await?;
     let client = records::get(&mut tx, "clients", client_id, actor.org, false).await?;
     records::scope(&mut tx, &actor, "clients", &client).await?;
     let client_status = client
@@ -268,21 +293,63 @@ pub async fn client_requirements(
         active: row.get("active"),
     })
     .collect::<Vec<_>>();
-    let responses = sqlx::query(
-        "SELECT template_id, episode_id, status FROM form_responses WHERE organization_id=$1 AND client_id=$2",
+    let response_rows: Vec<serde_json::Value> = sqlx::query_scalar(
+        "SELECT to_jsonb(f) FROM form_responses f WHERE organization_id=$1 AND client_id=$2",
     )
     .bind(actor.org)
     .bind(client_id)
     .fetch_all(&mut *tx)
-    .await?
-    .iter()
-    .map(|row| ResponseFact {
-        template_id: row.get("template_id"),
-        episode_id: row.get("episode_id"),
-        status: row.get("status"),
-    })
-    .collect::<Vec<_>>();
-    let evaluation = evaluate(&client_status, &episodes, &templates, &responses);
+    .await?;
+    let mut responses = Vec::new();
+    for row in response_rows {
+        let mut status = row["status"].as_str().unwrap_or_default().to_owned();
+        if status == "signed" {
+            if let Err(error) = crate::telehealth::recording::transcripts::excerpts::validate_form(
+                &mut tx, &actor, &row,
+            )
+            .await
+            {
+                if matches!(
+                    error.status,
+                    actix_web::http::StatusCode::FORBIDDEN
+                        | actix_web::http::StatusCode::CONFLICT
+                        | actix_web::http::StatusCode::NOT_FOUND
+                ) {
+                    status = "source_review".into();
+                } else {
+                    return Err(error);
+                }
+            }
+        }
+        responses.push(ResponseFact {
+            template_id: records::uuid(&row, "template_id")?,
+            episode_id: if row["episode_id"].is_null() {
+                None
+            } else {
+                Some(records::uuid(&row, "episode_id")?)
+            },
+            status,
+        });
+    }
+    let evaluation = if let Some(id) = query.episode_id {
+        let episode = episodes
+            .iter()
+            .find(|episode| episode.id == id)
+            .ok_or_else(ApiError::missing)?;
+        let stage = match episode.status.as_str() {
+            "planned" => "intake",
+            "active" => "active",
+            "discharged" => "discharged",
+            _ => {
+                return Err(ApiError::conflict(
+                    "This episode has no supported form context",
+                ))
+            }
+        };
+        evaluate_context(stage, Some(episode), &templates, &responses)
+    } else {
+        evaluate(&client_status, &episodes, &templates, &responses)
+    };
     access::audit(
         &mut tx,
         &actor,

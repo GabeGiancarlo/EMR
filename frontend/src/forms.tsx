@@ -59,7 +59,7 @@ export const definitions: Record<
   clients: {
     title: "Client",
     description:
-      "Start a connected care record. Add an episode and coverage after saving.",
+      "Register the patient, then continue to referral review and admission.",
     fields: [
       f("first_name", "First name", { required: true }),
       f("last_name", "Last name", { required: true }),
@@ -303,7 +303,7 @@ export const definitions: Record<
       reference("client_id", "Client", "clients"),
       f("kind", "Consent type", {
         required: true,
-        hint: "For example, treatment consent or a specific release of information.",
+        hint: "Use treatment for treatment consent. Describe the permitted use in the scope below.",
       }),
       f("granted_on", "Granted on", { type: "date", required: true }),
       f("expires_on", "Expires on", { type: "date" }),

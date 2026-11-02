@@ -1,4 +1,6 @@
 import PatientKnowledge from "./PatientKnowledge";
+import { ClientRegistration } from "./ClientRegistration";
+import PatientIntake from "./PatientIntake";
 import Setup from "./Setup";
 import NoteComposer from "./NoteComposer";
 import CarePlanning from "./CarePlanning";
@@ -230,7 +232,13 @@ export default function App() {
   const [clientId, setClientId] = useState("");
   const [chartTab, setChartTab] = useState("overview");
   const [draftReviewDirty, setDraftReviewDirty] = useState(false);
+  const [registrationDirty, setRegistrationDirty] = useState(false);
+  const [intakeDirty, setIntakeDirty] = useState(false);
+  const [formEpisodeId, setFormEpisodeId] = useState<string | undefined>();
+  const [registrationNotice, setRegistrationNotice] = useState("");
   const canLeaveDraftReview = () => {
+    if (registrationDirty) { setRegistrationNotice("Save your registration or discard its changes before leaving."); return false; }
+    if (intakeDirty) { setError("Save your intake form or discard its changes before leaving this section."); return false; }
     if (!draftReviewDirty) return true;
     setError("Your clinical draft review has unsaved choices. Record the review or use Discard review choices before leaving this chart section.");
     return false;
@@ -286,6 +294,7 @@ export default function App() {
     }
   }, []);
   const refreshWorkspace = async () => {
+    if (!canLeaveDraftReview()) return;
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
     setRefreshing(true);
@@ -372,7 +381,8 @@ export default function App() {
   const staff = (id: unknown) => data?.staff.find((s) => s.id === id);
   const facility = (id: unknown) => data?.facilities.find((f) => f.id === id);
   const selectedClient = data?.clients.find((c) => c.id === clientId);
-  const create = (resource: Resource, initial: Record<string, unknown> = {}) =>
+  const create = (resource: Resource, initial: Record<string, unknown> = {}) => {
+    if (!canLeaveDraftReview()) return;
     setDialog({
       resource,
       title: `New ${definitions[resource].title.toLowerCase()}`,
@@ -385,7 +395,9 @@ export default function App() {
       },
       ...(resource === "notes" ? { kind: "note" as const } : {}),
     });
-  const edit = (resource: Resource, record: Row) =>
+  };
+  const edit = (resource: Resource, record: Row) => {
+    if (!canLeaveDraftReview()) return;
     setDialog({
       resource,
       record,
@@ -406,6 +418,7 @@ export default function App() {
           ].includes(f.key) && !(resource === "staff" && f.key === "active"),
       ),
     });
+  };
   const action = (
     path: string,
     title: string,
@@ -757,7 +770,7 @@ export default function App() {
     return (
       <Panel>
         {toolbar(
-          "Search by name, email, or record…",
+          "Search by name, MRN, or email…",
           <select
             aria-label="Filter client status"
             className="compact-select"
@@ -786,9 +799,7 @@ export default function App() {
                   <Person
                     name={clientName(c)}
                     sub={
-                      value(c, "preferred_name")
-                        ? `Goes by ${value(c, "preferred_name")}`
-                        : `Record ${c.id.slice(0, 8).toUpperCase()}`
+                      `${value(c, "mrn") || "MRN unavailable"}${value(c, "preferred_name") ? ` · Goes by ${value(c, "preferred_name")}` : ""}`
                     }
                   />
                 </button>
@@ -862,6 +873,10 @@ export default function App() {
             }
           />
           <div className="chart-key">
+            <span>Medical record</span>
+            <strong>{value(c, "mrn") || "Not assigned"}</strong>
+          </div>
+          <div className="chart-key">
             <span>Date of birth</span>
             <strong>{date(c.birth_date)}</strong>
           </div>
@@ -889,6 +904,7 @@ export default function App() {
           onChange={next => { if (next === chartTab || canLeaveDraftReview()) setChartTab(next); }}
           tabs={[
             { id: "overview", label: "Overview" },
+            ...(["admin", "clinical_lead", "clinician", "support"].includes(role) ? [{ id: "intake", label: "Intake" }] : []),
             { id: "episodes", label: "Care episodes", count: episodes.length },
             ...((data!.permissions?.treatment_plans?.read ?? clinical)
               ? [
@@ -919,6 +935,11 @@ export default function App() {
             { id: "consents", label: "Consents", count: consents.length },
           ]}
         />
+        {chartTab === "intake" && ["admin", "clinical_lead", "clinician", "support"].includes(role) && <PatientIntake key={`${c.id}:${data!.actor!.id}`} clientId={c.id} data={data!} onChanged={async () => { if (!await reload()) throw Error("Workspace refresh failed."); }} onDirtyChange={setIntakeDirty}
+          onOpenForms={episodeId => { if (!canRead("form_responses", clinical)) { setError("The clinical team must review and sign this patient's intake forms."); return; } if (canLeaveDraftReview()) { setFormEpisodeId(episodeId); setChartTab("forms"); } }}
+          onOpenConsent={() => { if (canLeaveDraftReview()) { setChartTab("consents"); if (canConsents) create("consents", { client_id: c.id, kind: "treatment" }); } }}
+          onEditPatient={() => { if (canLeaveDraftReview()) edit("clients", c); }}
+        />}
         {chartTab === "knowledge" && <PatientKnowledge key={c.id} clientId={c.id} data={data!} onNoteCreated={async()=>{await reload();}} onReviewDirty={setDraftReviewDirty} />}
         {chartTab === "plan" && (
           <CarePlanning
@@ -935,6 +956,8 @@ export default function App() {
           <div className="chart-grid">
             <Panel title="Client information">
               <dl className="detail-list">
+                <div><dt>Pronouns</dt><dd>{value(c, "pronouns") || "Not provided"}</dd></div>
+                <div><dt>Preferred language</dt><dd>{value(c, "preferred_language") || "Not provided"}</dd></div>
                 <div>
                   <dt>Email</dt>
                   <dd>{value(c, "email") || "Not provided"}</dd>
@@ -943,6 +966,7 @@ export default function App() {
                   <dt>Phone</dt>
                   <dd>{value(c, "phone") || "Not provided"}</dd>
                 </div>
+                <div><dt>Address</dt><dd>{["address_line1", "address_line2", "city", "region", "postal_code", "country"].map(key=>value(c,key)).filter(Boolean).join(", ") || "Not provided"}</dd></div>
                 <div>
                   <dt>Facility</dt>
                   <dd>
@@ -967,14 +991,10 @@ export default function App() {
                 {[
                   {
                     done: episodes.length > 0,
-                    title: "Open a care episode",
-                    sub: "Set the level of care and admission date.",
-                    fn: () =>
-                      create("episodes", {
-                        client_id: c.id,
-                        facility_id: c.facility_id,
-                      }),
-                    allowed: canClients,
+                    title: "Review intake & admission",
+                    sub: "Connect the referral, documents, and planned care.",
+                    fn: () => setChartTab("intake"),
+                    allowed: ["admin", "clinical_lead", "clinician", "support"].includes(role),
                   },
                   {
                     done: !!c.primary_clinician_id,
@@ -1135,7 +1155,7 @@ export default function App() {
                 {
                   label: "Actions",
                   render: (e) =>
-                    canEpisodes && e.status !== "discharged" ? (
+                    canEpisodes && e.status === "active" ? (
                       <Button
                         variant="text small"
                         onClick={() =>
@@ -1180,7 +1200,9 @@ export default function App() {
         )}
         {chartTab === "forms" && (
           <StructuredForms
+            key={`${c.id}:${formEpisodeId || "current"}`}
             clientId={c.id}
+            episodeId={data!.episodes.some(e => e.id === formEpisodeId && e.client_id === c.id) ? formEpisodeId : undefined}
             data={data!}
             canWrite={can("form_responses", clinical)}
             create={create}
@@ -2535,14 +2557,22 @@ export default function App() {
         <Modal
           title={dialog.title}
           description={dialog.description}
-          onClose={() => setDialog(null)}
+          onClose={() => { if (registrationDirty) setRegistrationNotice("Save your registration or discard its changes before closing."); else { setDialog(null); setRegistrationNotice(""); } }}
           wide={
+            dialog.resource === "clients" ||
             dialog.resource === "notes" ||
             dialog.resource === "templates" ||
             dialog.kind === "viewnote"
           }
         >
-          {dialog.kind === "note" ? (
+          {dialog.resource === "clients" && !dialog.path ? <>
+            {registrationNotice && <div className="error-banner" role="alert">{registrationNotice}</div>}
+            <ClientRegistration key={dialog.record?.id || "new-client"} data={data} initial={dialog.record}
+              onDirtyChange={setRegistrationDirty}
+              onOpenExisting={id=>{ if(draftReviewDirty || intakeDirty) {setRegistrationNotice("Finish or discard the open chart review before changing patients.");return;} const found=data.clients.find(row=>row.id===id);if(!found){setRegistrationNotice("Refresh the workspace to open that record.");return;} setRegistrationDirty(false);setRegistrationNotice("");setDialog(null);setClientId(id);setChartTab("overview");setView("clients");setQuery(""); }}
+              onSubmit={async body=>{const saved=await request<Row>(`/api/clients${dialog.record ? `/${dialog.record.id}` : ""}`,dialog.record ? "PATCH" : "POST",body);setRegistrationDirty(false);setRegistrationNotice("");setDialog(null);await reload();setClientId(saved.id);setChartTab("intake");setView("clients");setToast("Patient registration saved.");}}
+            />
+          </> : dialog.kind === "note" ? (
             <NoteComposer
               data={data}
               initial={dialog.initial}

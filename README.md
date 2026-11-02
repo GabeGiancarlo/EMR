@@ -41,7 +41,7 @@ Open http://127.0.0.1:5173. The API is at http://127.0.0.1:8090; `/healthz` chec
 
 - Organization and facility setup; team roles and expiring permission exceptions.
 - Permission-filtered global search and separate clinical, billing and executive home screens; local workspace and light/dark/system preferences.
-- Client intake, care episodes, clinician assignment and discharge.
+- Patient registration with immutable MRNs and duplicate review; referral, identity attestation, episode-specific required forms and admission history ([verified scope](docs/development/patient-intake-contract.md#verified-checkpoint--november-2)); care episodes, clinician assignment and discharge.
 - Session scheduling, authored clinical notes, signing and append-only amendments.
 - Facility-time calendar entry with DST occurrence selection; transactional clinician/client conflicts, audited staff time away and an attendance queue.
 - Shared group encounters, attendance and linked individual documentation.

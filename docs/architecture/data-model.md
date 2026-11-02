@@ -76,6 +76,10 @@ The prototype has one service line per claim. It does not implement payer adjudi
 
 Runtime state is PostgreSQL. Test fixtures use separate disposable databases; the ordinary workspace starts empty. Audit events identify actor, action, resource and record without copying clinical bodies into logs. Backups can be restored locally, but production backup encryption, disaster recovery and incident response remain deployment work.
 
+## Patient identity and admission
+
+Migrations 018–019 introduce immutable organization-unique patient MRNs and demographic fields; append-only duplicate-review evidence; `intake_cases` with one nonterminal case per patient and a unique linked planned episode; immutable `intake_events`; and immutable `patient_identity_checks` with a current-identity fingerprint. Composite foreign keys preserve patient/organization scope. Admission changes case, episode, patient and event within one locked transaction. Decline/withdrawal preserves the planned episode and derives the patient stage from remaining active or discharged care. Open-case ownership transfers during offboarding. See the [intake contract and verification](../development/patient-intake-contract.md).
+
 ## Recorded media, reviewed sources and derived knowledge
 
 The [recording](../development/recording-checkpoint.md) and [transcript](../development/transcript-checkpoint.md) checkpoints supersede the earlier transient-only audio boundary above: encounter-linked consented WebM can now be retained as encrypted PostgreSQL media and processed locally into versioned, reviewed patient excerpts. Live streaming, automatic speaker identification and clinical accuracy remain unverified.

@@ -1,5 +1,6 @@
 //! Persistent Nexus application API. Local actors exercise policies, not authentication.
 mod access;
+mod admissions;
 mod adult;
 mod applicability;
 mod availability;
@@ -11,6 +12,7 @@ mod forms;
 mod knowledge;
 mod media_transcription;
 mod note_lineage;
+mod patient_identity;
 mod readiness;
 mod records;
 mod routes;
@@ -137,6 +139,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .configure(telehealth::configure)
                 .configure(knowledge::configure)
                 .configure(drafting::configure)
+                .configure(patient_identity::configure)
+                .configure(admissions::configure)
                 .route(
                     "/exports/accounting.csv",
                     web::get().to(exports::accounting),
