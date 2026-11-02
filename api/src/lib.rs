@@ -11,6 +11,7 @@ mod records;
 mod routes;
 mod scheduling;
 mod speech;
+mod telehealth;
 mod workflow;
 
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
@@ -122,6 +123,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/healthz", web::get().to(routes::health))
         .service(
             web::scope("/api")
+                .configure(telehealth::configure)
                 .route(
                     "/exports/accounting.csv",
                     web::get().to(exports::accounting),

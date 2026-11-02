@@ -1,5 +1,9 @@
 # Implemented data model
 
+Migration 011 adds four telehealth tables. `telehealth_rooms` references exactly one session or shared group with organization-scoped foreign keys and one unended room per encounter. It stores creation/expiry/end and a bounded whiteboard. `telehealth_participants` references a staff member or client, uniquely per room, and stores a SHA-256 capability digest, expiry, invitation/admission state, connection generation and heartbeat. Raw invitations are never stored. `telehealth_events` retains append-only participation/moderation history. `telehealth_signals` stores bounded SDP/ICE with sender/recipient generations and two-minute delivery expiry; it is transient transport state, not clinical documentation.
+
+No table stores session media or a transcript in this checkpoint. Whiteboard retention/destruction and unattended expired-signal cleanup remain unfinished. Invitation expiry, removal, offboarding, assignment, enrollment, episode and encounter state are rechecked by the API. Peer-to-peer media termination is cooperative; see the [telehealth limits](../development/telehealth-checkpoint.md).
+
 The schema in `migrations/` is the source of truth. This document describes the implemented local prototype; the broader proposals in the market research are not all implemented.
 
 Adult-first intake is now an API invariant: new clients, changed birth dates, transitions into intake/active status, and new/activated episodes require age 18 on the facility-local calendar date. Existing records remain intact and permit unrelated corrections. The detailed policy and error contract are in [the API contract](api-contract.md). Persistence is implemented; the complete archive/deletion/retention lifecycle is still open as described in [the scope audit](../development/roadmap-gap-audit.md).
