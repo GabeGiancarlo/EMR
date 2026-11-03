@@ -13,6 +13,7 @@ mod knowledge;
 mod media_transcription;
 mod note_lineage;
 mod patient_identity;
+mod programs;
 mod readiness;
 mod records;
 mod routes;
@@ -141,6 +142,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .configure(drafting::configure)
                 .configure(patient_identity::configure)
                 .configure(admissions::configure)
+                .configure(programs::configure)
                 .route(
                     "/exports/accounting.csv",
                     web::get().to(exports::accounting),

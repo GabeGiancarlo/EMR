@@ -1,4 +1,5 @@
 //! Real telehealth authorization and signaling persistence, never ordinary workspace data.
+mod support;
 use actix_web::{http::StatusCode, test, web, App};
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
@@ -104,8 +105,8 @@ async fn encounter_participation_and_signaling_enforce_current_access() {
     let actor = setup["actor"]["id"].as_str().unwrap();
     let facility = &setup["facility"]["id"];
     let client=create(&pool,actor,"clients",json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Participant","birth_date":"1990-01-01","primary_clinician_id":actor})).await;
-    let episode=create(&pool,actor,"episodes",json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
-    let session=create(&pool,actor,"sessions",json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
+    let episode=support::legacy_episode(&pool,actor,json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let session=support::legacy_session(&pool,actor,json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
     let (room, concurrent_room) = tokio::join!(
         create(
             &pool,
@@ -319,7 +320,7 @@ async fn encounter_participation_and_signaling_enforce_current_access() {
     // not chart access to participants assigned to another primary clinician.
     let facilitator=create(&pool,actor,"staff",json!({"name":"Synthetic facilitator","email":"facilitator@example.invalid","role":"clinician","facility_id":facility})).await;
     let fid = facilitator["id"].as_str().unwrap();
-    let group=create(&pool,actor,"groups",json!({"facility_id":facility,"clinician_id":fid,"title":"Synthetic shared encounter","kind":"skills","starts_at":"2030-01-02T09:00:00Z","ends_at":"2030-01-02T10:00:00Z","capacity":4})).await;
+    let group=support::legacy_group(&pool,actor,json!({"facility_id":facility,"clinician_id":fid,"title":"Synthetic shared encounter","kind":"skills","starts_at":"2030-01-02T09:00:00Z","ends_at":"2030-01-02T10:00:00Z","capacity":4})).await;
     let attendance = create(
         &pool,
         actor,

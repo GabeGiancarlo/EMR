@@ -231,6 +231,10 @@ pub async fn evaluate(
         "billing",
     );
     let diagnosis_ok = code_present(&claim["diagnosis_code"]);
+    if !session["program_service_id"].is_null() {
+        let problem = crate::programs::services::claim_code_error(&session, &claim);
+        check(&mut checklist,"program_service_code","Encounter service code",problem.is_none(),problem.unwrap_or("The claim code matches the encounter's saved service code. Payer acceptance still requires review."),"billing");
+    }
     check(
         &mut checklist,
         "diagnosis_code",

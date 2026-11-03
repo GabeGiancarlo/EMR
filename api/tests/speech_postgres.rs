@@ -67,7 +67,8 @@ async fn consent(pool: &PgPool, org: Uuid, client: Uuid, kind: &str, window: &st
         "revoked" => (-10, 10, Some(0)),
         _ => (-1, 1, None),
     };
-    sqlx::query("INSERT INTO consents(id,organization_id,client_id,kind,scope,granted_on,expires_on,revoked_on) VALUES($1,$2,$3,$4,'Synthetic local speech verification only',CURRENT_DATE + $5::int,CURRENT_DATE + $6::int,CASE WHEN $7::int IS NULL THEN NULL ELSE CURRENT_DATE + $7::int END)")
+    // Consent windows are facility-calendar dates, including after UTC midnight.
+    sqlx::query("INSERT INTO consents(id,organization_id,client_id,kind,scope,granted_on,expires_on,revoked_on) SELECT $1,$2,$3,$4,'Synthetic local speech verification only',today + $5::int,today + $6::int,CASE WHEN $7::int IS NULL THEN NULL ELSE today + $7::int END FROM (SELECT (CURRENT_TIMESTAMP AT TIME ZONE f.timezone)::date AS today FROM clients c JOIN facilities f ON f.id=c.facility_id AND f.organization_id=c.organization_id WHERE c.id=$3 AND c.organization_id=$2) calendar")
         .bind(id).bind(org).bind(client).bind(kind).bind(start).bind(end).bind(revoked).execute(pool).await.unwrap();
     id
 }

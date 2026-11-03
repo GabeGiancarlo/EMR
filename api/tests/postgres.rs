@@ -1,4 +1,5 @@
 //! Real database integration test. Uses an isolated, explicitly named disposable database.
+mod support;
 use actix_web::{
     http::{Method, StatusCode},
     test, web, App,
@@ -117,8 +118,8 @@ async fn persistent_workflows_and_boundaries() {
     let actor = setup["actor"]["id"].as_str().unwrap();
     let facility = &setup["facility"]["id"];
     let client=create(&pool,actor,"clients",json!({"facility_id":facility,"first_name":"Test","last_name":"Client","birth_date":"1990-01-01","primary_clinician_id":actor})).await;
-    let episode=create(&pool,actor,"episodes",json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
-    let session=create(&pool,actor,"sessions",json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"starts_at":"2026-02-01T14:00:00Z","ends_at":"2026-02-01T15:00:00Z","kind":"individual","status":"completed"})).await;
+    let episode=support::legacy_episode(&pool,actor,json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let session=support::legacy_session(&pool,actor,json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"starts_at":"2026-02-01T14:00:00Z","ends_at":"2026-02-01T15:00:00Z","kind":"individual","status":"completed"})).await;
     let note=create(&pool,actor,"notes",json!({"client_id":client["id"],"session_id":session["id"],"title":"Test progress","body":"Synthetic integration-test note, never used in live workspace."})).await;
     let note_id = note["id"].as_str().unwrap();
     let (status, signed) = request(
@@ -274,10 +275,9 @@ async fn persistent_workflows_and_boundaries() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    let unsigned_session = create(
+    let unsigned_session = support::legacy_session(
         &pool,
         actor,
-        "sessions",
         json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"starts_at":"2026-02-01T18:00:00Z","ends_at":"2026-02-01T19:00:00Z","kind":"individual","status":"completed"}),
     )
     .await;
@@ -702,14 +702,14 @@ async fn persistent_workflows_and_boundaries() {
     assert_eq!(status, StatusCode::OK, "{new_active}");
     // A shared group produces a real attendance-linked session, enforces capacity,
     // and preserves signed clinical/billing evidence.
-    let group=create(&pool,actor,"groups",json!({"facility_id":facility,"clinician_id":actor,"title":"Test skills group","kind":"skills","starts_at":"2026-02-02T14:00:00Z","ends_at":"2026-02-02T15:00:00Z","capacity":1})).await;
+    let group=support::legacy_group(&pool,actor,json!({"facility_id":facility,"clinician_id":actor,"title":"Test skills group","kind":"skills","starts_at":"2026-02-02T14:00:00Z","ends_at":"2026-02-02T15:00:00Z","capacity":1})).await;
     let attendance=create(&pool,actor,"group_attendance",json!({"group_id":group["id"],"client_id":client["id"],"episode_id":episode["id"],"status":"attended"})).await;
     assert!(attendance["session_id"].as_str().is_some());
     let other_clinician=create(&pool,actor,"staff",json!({"name":"Other group clinician","email":"other-clinician@example.invalid","role":"clinician","facility_id":facility})).await;
     let other_clinician_id = other_clinician["id"].as_str().unwrap();
     let own_client=create(&pool,actor,"clients",json!({"facility_id":facility,"first_name":"Group","last_name":"Test","birth_date":"1990-01-01","primary_clinician_id":other_clinician["id"]})).await;
-    let own_episode=create(&pool,actor,"episodes",json!({"client_id":own_client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
-    let other_group=create(&pool,actor,"groups",json!({"facility_id":facility,"clinician_id":actor,"title":"Facilitator scope test","kind":"skills","starts_at":"2026-02-02T16:00:00Z","ends_at":"2026-02-02T17:00:00Z","capacity":3})).await;
+    let own_episode=support::legacy_episode(&pool,actor,json!({"client_id":own_client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let other_group=support::legacy_group(&pool,actor,json!({"facility_id":facility,"clinician_id":actor,"title":"Facilitator scope test","kind":"skills","starts_at":"2026-02-02T16:00:00Z","ends_at":"2026-02-02T17:00:00Z","capacity":3})).await;
     let(status,_)=request(&pool,Method::POST,"/api/group_attendance",Some(other_clinician_id),json!({"group_id":other_group["id"],"client_id":own_client["id"],"episode_id":own_episode["id"]})).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     let other_attendance=create(&pool,actor,"group_attendance",json!({"group_id":other_group["id"],"client_id":own_client["id"],"episode_id":own_episode["id"]})).await;
@@ -907,7 +907,7 @@ async fn verify_role_changes_preserve_clinical_assignments(
     facility: &Value,
 ) {
     let client = create(pool, actor, "clients", json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Role transition","birth_date":"1990-01-01"})).await;
-    let episode = create(pool, actor, "episodes", json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let episode = support::legacy_episode(pool, actor, json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
     let future = chrono::Utc::now() + chrono::Duration::days(2);
     for (index, kind) in ["client", "session", "group"].into_iter().enumerate() {
         // Each assignment is eventually transferred to the same administrator.
@@ -921,8 +921,8 @@ async fn verify_role_changes_preserve_clinical_assignments(
                 assert_eq!(status, StatusCode::OK, "{row}");
                 ("clients", row, "primary_clinician_id")
             },
-            "session" => ("sessions", create(pool, actor, "sessions", json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":staff_id,"kind":"individual","starts_at":future,"ends_at":future+chrono::Duration::hours(1)})).await, "clinician_id"),
-            _ => ("groups", create(pool, actor, "groups", json!({"facility_id":facility,"clinician_id":staff_id,"title":"Synthetic role guard group","kind":"skills","starts_at":future,"ends_at":future+chrono::Duration::hours(1),"capacity":4})).await, "clinician_id"),
+            "session" => ("sessions", support::legacy_session(pool, actor, json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":staff_id,"kind":"individual","starts_at":future,"ends_at":future+chrono::Duration::hours(1)})).await, "clinician_id"),
+            _ => ("groups", support::legacy_group(pool, actor, json!({"facility_id":facility,"clinician_id":staff_id,"title":"Synthetic role guard group","kind":"skills","starts_at":future,"ends_at":future+chrono::Duration::hours(1),"capacity":4})).await, "clinician_id"),
         };
         let id = Uuid::parse_str(staff_id).unwrap();
         let audit_before: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_events WHERE resource='staff' AND action='update' AND record_id=$1").bind(id).fetch_one(pool).await.unwrap();
@@ -1085,7 +1085,7 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
     )
     .await;
     let client = create(pool, actor, "clients", json!({"facility_id":facility["id"], "first_name":"Timezone", "last_name":"QA", "birth_date":"1990-01-01"})).await;
-    let episode = create(pool, actor, "episodes", json!({"client_id":client["id"], "facility_id":facility["id"], "level_of_care":"outpatient", "start_date":"2026-02-01"})).await;
+    let episode = support::legacy_episode(pool, actor, json!({"client_id":client["id"], "facility_id":facility["id"], "level_of_care":"outpatient", "start_date":"2026-02-01"})).await;
     let future = chrono::Utc::now() + chrono::Duration::days(1);
     let (status, _) = request(pool, Method::POST, "/api/sessions", Some(actor), json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":future, "ends_at":future+chrono::Duration::hours(1), "status":"completed"})).await;
     assert_eq!(
@@ -1094,7 +1094,7 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
         "Future care cannot be recorded as completed"
     );
     // Feb 2 in UTC is still Feb 1 at this facility. Coverage is intentionally only one day.
-    let session = create(pool, actor, "sessions", json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T01:00:00Z", "ends_at":"2026-02-02T02:00:00Z", "status":"completed"})).await;
+    let session = support::legacy_session(pool, actor, json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T01:00:00Z", "ends_at":"2026-02-02T02:00:00Z", "status":"completed"})).await;
     let note = create(pool, actor, "notes", json!({"client_id":client["id"], "session_id":session["id"], "title":"Timezone QA", "body":"Synthetic boundary verification only."})).await;
     let (status, _) = request(
         pool,
@@ -1150,7 +1150,7 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
         StatusCode::OK,
         "Facility date must determine both policy and authorization coverage: {response}"
     );
-    let late_session = create(pool, actor, "sessions", json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T03:00:00Z", "ends_at":"2026-02-02T04:00:00Z", "status":"completed"})).await;
+    let late_session = support::legacy_session(pool, actor, json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T03:00:00Z", "ends_at":"2026-02-02T04:00:00Z", "status":"completed"})).await;
     let late_note = create(pool, actor, "notes", json!({"client_id":client["id"], "session_id":late_session["id"], "title":"Late coverage QA", "body":"Synthetic boundary verification only."})).await;
     let (status, _) = request(
         pool,
@@ -1195,7 +1195,7 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
         .as_str()
         .unwrap_or_default()
         .contains("policy"));
-    let reserved_session = create(pool, actor, "sessions", json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T05:00:00Z", "ends_at":"2026-02-02T06:00:00Z", "status":"completed"})).await;
+    let reserved_session = support::legacy_session(pool, actor, json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":"2026-02-02T05:00:00Z", "ends_at":"2026-02-02T06:00:00Z", "status":"completed"})).await;
     let reserved_note = create(pool, actor, "notes", json!({"client_id":client["id"], "session_id":reserved_session["id"], "title":"Reserved units QA", "body":"Synthetic boundary verification only."})).await;
     let (status, _) = request(
         pool,

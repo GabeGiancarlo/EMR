@@ -1,4 +1,5 @@
 //! Scheduling invariants exercised through HTTP against an isolated PostgreSQL schema.
+mod support;
 use actix_web::{http::StatusCode, test, web, App};
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
@@ -58,7 +59,7 @@ async fn patch(
     .await
 }
 fn session(client: &Value, episode: &Value, clinician: &Value, start: &str, end: &str) -> Value {
-    json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":clinician["id"],"kind":"individual","starts_at":start,"ends_at":end})
+    json!({"program_service_id":episode["fixture_service_id"],"client_id":client["id"],"episode_id":episode["id"],"clinician_id":clinician["id"],"kind":"individual","starts_at":start,"ends_at":end})
 }
 async fn client(
     pool: &PgPool,
@@ -68,7 +69,15 @@ async fn client(
     name: &str,
 ) -> (Value, Value) {
     let c=create(pool,actor,"clients",json!({"first_name":"Synthetic","last_name":name,"birth_date":"1990-01-01","facility_id":facility,"primary_clinician_id":clinician["id"]})).await;
-    let e=create(pool,actor,"episodes",json!({"client_id":c["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let e=support::legacy_episode(pool,actor,json!({"client_id":c["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let program: Value =
+        sqlx::query_scalar("SELECT to_jsonb(p) FROM care_programs p WHERE facility_id=$1")
+            .bind(Uuid::parse_str(facility.as_str().unwrap()).unwrap())
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let mut e = support::link_fixture_episode(pool, &e, &program).await;
+    e["fixture_service_id"]=sqlx::query_scalar("SELECT to_jsonb(id) FROM program_services WHERE program_id=$1 AND session_kind='individual'").bind(Uuid::parse_str(program["id"].as_str().unwrap()).unwrap()).fetch_one(pool).await.unwrap();
     (c, e)
 }
 
@@ -110,6 +119,8 @@ async fn bookings_groups_availability_and_transfers_are_atomic() {
     let actor = setup["actor"]["id"].as_str().unwrap();
     let org = Uuid::parse_str(setup["actor"]["organization_id"].as_str().unwrap()).unwrap();
     let facility = &setup["facility"]["id"];
+    let (_program, _individual, group_service) =
+        support::scheduling_catalog(&pool, actor, facility).await;
     let a=create(&pool,actor,"staff",json!({"name":"Clinician A","email":"a@example.invalid","role":"clinician","facility_id":facility})).await;
     let b=create(&pool,actor,"staff",json!({"name":"Clinician B","email":"b@example.invalid","role":"clinician","facility_id":facility})).await;
     let (one, e1) = client(&pool, actor, facility, &a, "One").await;
@@ -222,7 +233,7 @@ async fn bookings_groups_availability_and_transfers_are_atomic() {
         "{left:?} {right:?}"
     );
 
-    let group=create(&pool,actor,"groups",json!({"facility_id":facility,"clinician_id":a["id"],"title":"Synthetic group","kind":"skills","starts_at":"2030-01-09T09:00:00Z","ends_at":"2030-01-09T10:00:00Z","capacity":4})).await;
+    let group=create(&pool,actor,"groups",json!({"facility_id":facility,"clinician_id":a["id"],"title":"Synthetic group","program_service_id":group_service["id"],"kind":"skills","starts_at":"2030-01-09T09:00:00Z","ends_at":"2030-01-09T10:00:00Z","capacity":4})).await;
     let (status, _) = send(
         &pool,
         actor,

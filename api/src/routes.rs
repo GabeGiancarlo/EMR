@@ -100,7 +100,7 @@ pub async fn rows(
     })
 }
 pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse> {
-    let mut data = json!({"setup_required":false,"authentication":"deferred-local-only","actor":null,"organizations":[],"audit":[],"metrics":{}});
+    let mut data = json!({"setup_required":false,"program_configuration":true,"authentication":"deferred-local-only","actor":null,"organizations":[],"audit":[],"metrics":{}});
     for resource in RESOURCES {
         data[*resource] = json!([]);
     }
@@ -253,6 +253,20 @@ pub async fn create(
         None
     };
     let mut data = records::clean(&resource, &input)?;
+    if resource == "episodes" {
+        return Err(ApiError::conflict(
+            "Start an intake under a configured care program to create an episode.",
+        ));
+    }
+    if resource == "clients"
+        && data
+            .get("status")
+            .is_some_and(|value| value == "active" || value == "discharged")
+    {
+        return Err(ApiError::invalid(
+            "New patient records begin as inquiry or intake. Use admission to start care.",
+        ));
+    }
     if resource == "sessions" && data.get("kind") == Some(&json!("group")) {
         return Err(ApiError::invalid(
             "Create a shared group and enroll attendance to generate group sessions",
@@ -275,6 +289,15 @@ pub async fn create(
     }
     records::scope(&mut tx, &actor, &resource, &Value::Object(data.clone())).await?;
     records::validate_links(&mut tx, &actor, &resource, &Value::Object(data.clone())).await?;
+    if resource == "claims" {
+        crate::programs::services::validate_claim(&mut tx, &actor, &Value::Object(data.clone()))
+            .await?;
+    }
+    if resource == "sessions" {
+        crate::programs::services::validate_session(&mut tx, &actor, &mut data, None).await?;
+    } else if resource == "groups" {
+        crate::programs::services::validate_group(&mut tx, &actor, &mut data, None).await?;
+    }
     if resource == "clients" {
         ensure_new_client_is_adult(&mut tx, &actor, &Value::Object(data.clone())).await?;
     }
@@ -514,12 +537,22 @@ pub async fn update(
     if resource == "episodes" && data.get("status") == Some(&json!("discharged")) {
         return Err(ApiError::conflict("Use the discharge workflow"));
     }
+    if resource == "sessions" {
+        crate::programs::services::validate_session(&mut tx, &actor, &mut data, Some(&before))
+            .await?;
+    } else if resource == "groups" {
+        crate::programs::services::validate_group(&mut tx, &actor, &mut data, Some(&before))
+            .await?;
+    }
     let mut merged = before.clone();
     for (k, v) in &data {
         merged[k] = v.clone();
     }
     records::scope(&mut tx, &actor, &resource, &merged).await?;
     records::validate_links(&mut tx, &actor, &resource, &merged).await?;
+    if resource == "claims" {
+        crate::programs::services::validate_claim(&mut tx, &actor, &merged).await?;
+    }
     if schedule_changed(&before, &merged) {
         if resource == "sessions" {
             crate::scheduling::check_session(&mut tx, &actor, &merged).await?;

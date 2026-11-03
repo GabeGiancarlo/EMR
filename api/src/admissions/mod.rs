@@ -1,6 +1,5 @@
 //! Intake cases and local staff identity attestations.
-//! Program-capacity configuration stays separate. Legacy episode workflows remain
-//! available until a configurable admission policy exists; linked cases do not.
+//! Admission is linked to an organization-authored care program and its current rules.
 mod checklist;
 
 use crate::patient_identity::fingerprint;
@@ -230,6 +229,17 @@ async fn case_view(tx: &mut Transaction<'_, Postgres>, actor: &Actor, id: Uuid) 
     )
     .await?;
     row["events"] = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'from_status',from_status,'to_status',to_status,'reason',reason,'actor_id',actor_id,'created_at',created_at) ORDER BY created_at ASC, id ASC), '[]'::jsonb) FROM intake_events WHERE organization_id=$1 AND intake_case_id=$2").bind(actor.org).bind(id).fetch_one(&mut **tx).await?;
+    row["program_id"] = episode["program_id"].clone();
+    row["episode_updated_at"] = episode["updated_at"].clone();
+    if let Some(program_id) = episode["program_id"]
+        .as_str()
+        .and_then(|id| Uuid::parse_str(id).ok())
+    {
+        let program = crate::programs::rules::program(tx, actor, program_id, false).await?;
+        row["program_name"] = program["name"].clone();
+        row["program_version"] = program["version"].clone();
+    }
+    row["decision_evidence"] = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.created_at,d.id),'[]'::jsonb) FROM intake_decision_evidence d WHERE organization_id=$1 AND intake_case_id=$2").bind(actor.org).bind(id).fetch_one(&mut **tx).await?;
     row["checklist"] = json!(checklist::evaluate(tx, actor, &client, &episode).await?);
     Ok(row)
 }
@@ -350,8 +360,10 @@ async fn create_identity(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateCase {
-    facility_id: Uuid,
-    level_of_care: String,
+    program_id: Uuid,
+    facility_id: Option<Uuid>,
+    level_of_care: Option<String>,
+    legacy_episode_id: Option<Uuid>,
     starts_on: NaiveDate,
     owner_id: Uuid,
     referral_type: String,
@@ -367,11 +379,6 @@ async fn create_case(
     body: web::Json<CreateCase>,
 ) -> Result<HttpResponse> {
     let client_id = path.into_inner();
-    let level = one_of(
-        &body.level_of_care,
-        &["outpatient", "iop", "php"],
-        "level_of_care",
-    )?;
     let referral = one_of(
         &body.referral_type,
         &["self", "provider", "facility", "family", "justice", "other"],
@@ -382,7 +389,21 @@ async fn create_case(
     let referral_reason = bounded(&body.referral_reason, 1, 2000, "referral_reason")?;
     let (mut tx, actor) = open(&req, &state).await?;
     let client = load_client(&mut tx, &actor, client_id).await?;
-    let (facility, today) = facility_context(&mut tx, &actor, body.facility_id).await?;
+    let program = crate::programs::rules::program(&mut tx, &actor, body.program_id, true).await?;
+    crate::programs::rules::require_available(&mut tx, &actor, &program, &client).await?;
+    let facility_id = records::uuid(&program, "facility_id")?;
+    let level = records::text(&program, "level_of_care")?;
+    if body.facility_id.is_some_and(|id| id != facility_id)
+        || body
+            .level_of_care
+            .as_ref()
+            .is_some_and(|value| value != level)
+    {
+        return Err(ApiError::invalid(
+            "The selected program determines the facility and care level.",
+        ));
+    }
+    let (facility, today) = facility_context(&mut tx, &actor, facility_id).await?;
     if facility["active"] != true {
         return Err(ApiError::invalid(
             "The intended facility must be active in this workspace.",
@@ -404,7 +425,8 @@ async fn create_case(
     }
     let mut episode_data = Map::new();
     episode_data.insert("client_id".into(), json!(client_id));
-    episode_data.insert("facility_id".into(), json!(body.facility_id));
+    episode_data.insert("facility_id".into(), json!(facility_id));
+    episode_data.insert("program_id".into(), json!(body.program_id));
     episode_data.insert("level_of_care".into(), json!(level));
     episode_data.insert("start_date".into(), json!(body.starts_on));
     episode_data.insert("status".into(), json!("planned"));
@@ -415,7 +437,55 @@ async fn create_case(
         &Value::Object(episode_data.clone()),
     )
     .await?;
-    let episode = records::insert(&mut tx, "episodes", episode_data, &actor).await?;
+    let episode = if let Some(legacy_id) = body.legacy_episode_id {
+        let prior = records::get(&mut tx, "episodes", legacy_id, actor.org, true).await?;
+        records::scope(&mut tx, &actor, "episodes", &prior).await?;
+        if prior["client_id"] != json!(client_id)
+            || prior["status"] != "planned"
+            || prior["facility_id"] != json!(facility_id)
+            || prior["level_of_care"] != level
+            || prior["start_date"] != json!(body.starts_on)
+        {
+            return Err(ApiError::invalid("The existing planned episode must match this patient, program context, and intended start date."));
+        }
+        let linked: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM intake_cases WHERE organization_id=$1 AND episode_id=$2)",
+        )
+        .bind(actor.org)
+        .bind(legacy_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if linked {
+            return Err(ApiError::conflict("This episode already has an intake case. Continue that case or start a new intake for another course of care."));
+        }
+        if prior["program_id"].is_null() {
+            crate::programs::adoptions::attach(
+                &mut tx,
+                &actor,
+                &prior,
+                &program,
+                "Existing planned care assigned during intake referral review.",
+            )
+            .await?
+        } else if prior["program_id"] == json!(body.program_id) {
+            prior
+        } else {
+            return Err(ApiError::invalid(
+                "The planned episode is assigned to a different program.",
+            ));
+        }
+    } else {
+        let created = records::insert(&mut tx, "episodes", episode_data, &actor).await?;
+        access::audit(
+            &mut tx,
+            &actor,
+            "create",
+            "episodes",
+            Some(records::uuid(&created, "id")?),
+        )
+        .await?;
+        created
+    };
     let case_id = Uuid::new_v4();
     sqlx::query("INSERT INTO intake_cases(id,organization_id,client_id,episode_id,owner_id,referral_type,referrer_name,referrer_contact,referral_reason,received_on,status,disposition_reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open','')").bind(case_id).bind(actor.org).bind(client_id).bind(records::uuid(&episode, "id")?).bind(body.owner_id).bind(referral).bind(&referrer_name).bind(&referrer_contact).bind(&referral_reason).bind(body.received_on).execute(&mut *tx).await?;
     sqlx::query("UPDATE clients SET status='intake', updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2 AND status IS DISTINCT FROM 'intake' AND NOT EXISTS (SELECT 1 FROM episodes e WHERE e.organization_id=$2 AND e.client_id=$1 AND e.status='active')").bind(client_id).bind(actor.org).execute(&mut *tx).await?;
@@ -638,7 +708,12 @@ async fn transition(
     if matches!(to_status, "declined" | "withdrawn") {
         sqlx::query("UPDATE clients SET status=CASE WHEN EXISTS(SELECT 1 FROM episodes WHERE organization_id=$1 AND client_id=$2 AND status='active') THEN 'active' WHEN EXISTS(SELECT 1 FROM episodes WHERE organization_id=$1 AND client_id=$2 AND status='discharged') THEN 'discharged' ELSE 'inquiry' END,updated_at=clock_timestamp() WHERE organization_id=$1 AND id=$2").bind(actor.org).bind(client_id).execute(&mut *tx).await?;
     }
-    sqlx::query("INSERT INTO intake_events(id,organization_id,client_id,intake_case_id,from_status,to_status,reason,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)").bind(Uuid::new_v4()).bind(actor.org).bind(client_id).bind(id).bind(from).bind(to_status).bind(&reason).bind(actor.id).execute(&mut *tx).await?;
+    let event_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO intake_events(id,organization_id,client_id,intake_case_id,from_status,to_status,reason,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)").bind(event_id).bind(actor.org).bind(client_id).bind(id).bind(from).bind(to_status).bind(&reason).bind(actor.id).execute(&mut *tx).await?;
+    if matches!(to_status, "ready" | "admitted") {
+        crate::programs::rules::record_decision(&mut tx, &actor, id, event_id, &episode, &items)
+            .await?;
+    }
     access::audit(&mut tx, &actor, "transition", "intake_cases", Some(id)).await?;
     let view = case_view(&mut tx, &actor, id).await?;
     tx.commit().await?;
@@ -652,6 +727,11 @@ pub(crate) async fn before_episode_update(
     data: &Map<String, Value>,
 ) -> Result<()> {
     let activating = changed(before, data, "status");
+    if activating {
+        return Err(ApiError::conflict(
+            "Use intake admission or episode discharge to change the care status.",
+        ));
+    }
     let context = [
         "facility_id",
         "level_of_care",
@@ -697,6 +777,16 @@ pub(crate) async fn before_client_update(
     if !changed(before, data, "status") {
         return Ok(());
     }
+    if data
+        .get("status")
+        .is_some_and(|value| value == "active" || value == "discharged")
+    {
+        return Err(ApiError::conflict("Patient care status follows admission and discharge. Use those workflows to change it."));
+    }
+    let ongoing:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM episodes WHERE organization_id=$1 AND client_id=$2 AND status='active')").bind(actor.org).bind(records::uuid(before,"id")?).fetch_one(&mut **tx).await?;
+    if ongoing {
+        return Err(ApiError::conflict("This patient has active care. Discharge the appropriate episodes before changing their stage."));
+    }
     let pending: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM intake_cases WHERE organization_id=$1 AND client_id=$2 AND status IN ('open','screening','ready'))").bind(actor.org).bind(records::uuid(before,"id")?).fetch_one(&mut **tx).await?;
     if pending {
         return Err(ApiError::conflict(
@@ -734,6 +824,12 @@ pub(crate) async fn before_discharge(
     actor: &Actor,
     episode: &Value,
 ) -> Result<()> {
+    if episode["status"] == "planned" {
+        return Err(ApiError::conflict(
+            "This episode has not been admitted. Record its disposition in intake.",
+        ));
+    }
+    crate::programs::rules::require_discharge_forms(tx, actor, episode).await?;
     let pending: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM intake_cases WHERE organization_id=$1 AND episode_id=$2 AND status<>'admitted')").bind(actor.org).bind(records::uuid(episode,"id")?).fetch_one(&mut **tx).await?;
     if pending {
         return Err(ApiError::conflict("This intake has not been admitted. Record a declined or withdrawn disposition in the intake case."));

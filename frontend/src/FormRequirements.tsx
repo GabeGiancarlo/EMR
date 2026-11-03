@@ -33,6 +33,7 @@ export default function FormRequirements({
   onStart,
   onAuthorRules,
   episodeId,
+  stage,
 }: {
   clientId: string;
   data: Bootstrap;
@@ -44,6 +45,7 @@ export default function FormRequirements({
   ) => void;
   onAuthorRules?: () => void;
   episodeId?: string;
+  stage?:string;
 }) {
   const [payload, setPayload] = useState<FormRequirementsPayload | null>(null);
   const [error, setError] = useState("");
@@ -58,7 +60,7 @@ export default function FormRequirements({
     let cancelled = false;
     setLoading(true);
     request<FormRequirementsPayload>(
-      `/api/clients/${clientId}/form-requirements${episodeId ? `?episode_id=${encodeURIComponent(episodeId)}` : ""}`,
+      `/api/clients/${clientId}/form-requirements${episodeId ? `?episode_id=${encodeURIComponent(episodeId)}${stage?`&stage=${encodeURIComponent(stage)}`:""}` : ""}`,
     )
       .then((result) => {
         if (cancelled) return;
@@ -80,7 +82,7 @@ export default function FormRequirements({
     return () => {
       cancelled = true;
     };
-  }, [clientId, data, episodeId]);
+  }, [clientId, data, episodeId, stage]);
 
   const rules = Array.isArray(payload?.requirements) ? payload.requirements : [];
   const unsignedRequired = rules.filter(
@@ -96,7 +98,7 @@ export default function FormRequirements({
 
   return (
     <Panel
-      title="Organization form rules"
+      title="Organization & program form rules"
       subtitle={
         payload?.disclaimer ||
         "Active organization-authored rules only. Nexus does not infer legal or clinical requirements."
@@ -175,7 +177,7 @@ export default function FormRequirements({
                       {item.completion === "source_review" && <small>The signed history is preserved, but its source changed or is unavailable. Complete a response from current evidence.</small>}
                     </td>
                     <td>
-                      {canStart && (
+                      {canStart && item.completion!=="configuration_review" && (
                         <Button
                           variant="text small"
                           onClick={() =>

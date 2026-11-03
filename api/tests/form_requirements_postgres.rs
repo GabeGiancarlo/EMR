@@ -1,5 +1,6 @@
 //! Form applicability contract tests against real PostgreSQL.
 //! Synthetic fixtures exist only in a uniquely named schema inside nexus_test.
+mod support;
 use actix_web::{http::StatusCode, test, web, App};
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
@@ -414,21 +415,7 @@ async fn form_requirements_follow_authored_rules_scope_and_preserve_snapshots() 
         "signed"
     );
 
-    let (status, iop) = call(
-        &pool,
-        "POST",
-        "/api/episodes",
-        Some(&admin),
-        Some(json!({
-            "client_id": client_id,
-            "facility_id": facility,
-            "level_of_care": "iop",
-            "start_date": "2020-01-01",
-            "status": "active"
-        })),
-    )
-    .await;
-    assert_status(status, StatusCode::CREATED, &iop);
+    let iop=support::legacy_episode(&pool,&admin,json!({"client_id":client_id,"facility_id":facility,"level_of_care":"iop","start_date":"2020-01-01","status":"active"})).await;
     let iop_id = iop["id"].as_str().unwrap().to_string();
     let (status, with_episode) = call(&pool, "GET", &path, Some(&admin), None).await;
     assert_status(status, StatusCode::OK, &with_episode);
@@ -480,21 +467,7 @@ async fn form_requirements_follow_authored_rules_scope_and_preserve_snapshots() 
     )
     .await;
     assert_status(status, StatusCode::OK, &discharged_iop);
-    let (status, php) = call(
-        &pool,
-        "POST",
-        "/api/episodes",
-        Some(&admin),
-        Some(json!({
-            "client_id": client_id,
-            "facility_id": facility,
-            "level_of_care": "php",
-            "start_date": "2020-03-01",
-            "status": "active"
-        })),
-    )
-    .await;
-    assert_status(status, StatusCode::CREATED, &php);
+    let php=support::legacy_episode(&pool,&admin,json!({"client_id":client_id,"facility_id":facility,"level_of_care":"php","start_date":"2020-03-01","status":"active"})).await;
     let php_id = php["id"].as_str().unwrap().to_string();
     let (status, php_rules) = call(&pool, "GET", &path, Some(&admin), None).await;
     assert_status(status, StatusCode::OK, &php_rules);
@@ -573,8 +546,7 @@ async fn form_requirements_follow_authored_rules_scope_and_preserve_snapshots() 
     assert!(!has_rule(&final_rules, "IOP rule"));
     assert!(!has_rule(&final_rules, "Inactive rule"));
     // Intake explicitly targets its planned episode, even when older care exists.
-    let (status, planned) = call(&pool,"POST","/api/episodes",Some(&admin),Some(json!({"client_id":client_id,"facility_id":facility,"status":"planned","level_of_care":"iop","start_date":"2026-11-02"}))).await;
-    assert_status(status, StatusCode::CREATED, &planned);
+    let planned=support::legacy_episode(&pool,&admin,json!({"client_id":client_id,"facility_id":facility,"level_of_care":"iop","start_date":"2026-11-02","status":"planned"})).await;
     let (status, planned_rules) = call(
         &pool,
         "GET",
