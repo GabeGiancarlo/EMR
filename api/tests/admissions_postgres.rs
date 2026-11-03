@@ -1,4 +1,5 @@
 //! Intake cases and identity attestations against an isolated PostgreSQL schema.
+mod support;
 use actix_web::{
     http::{Method, StatusCode},
     test, web, App,
@@ -172,14 +173,16 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
             .await
             .is_err()
     );
-    let active = post(
+    let active = support::legacy_episode(
         &pool,
         &admin,
-        "/api/episodes",
         json!({"facility_id":facility,"client_id":cid,"level_of_care":"outpatient","start_date":"2024-01-01","status":"active"}),
     )
     .await;
-    let body = json!({"facility_id":facility,"level_of_care":"php","starts_on":today,"received_on":today,"owner_id":support["id"],"referral_type":"provider","referrer_name":"Synthetic referrer","referrer_contact":"555-0101","referral_reason":"Synthetic referral token qx7"});
+    let program_php=post(&pool,&admin,"/api/care-programs",json!({"facility_id":facility,"code":"PHP","name":"Synthetic PHP","level_of_care":"php","min_age":18,"max_age":null,"capacity":100,"active":true,"required_intake_template_ids":[],"required_discharge_template_ids":[],"change_reason":"Configure synthetic intake program"})).await;
+    let program_iop=post(&pool,&admin,"/api/care-programs",json!({"facility_id":facility,"code":"IOP","name":"Synthetic IOP","level_of_care":"iop","min_age":18,"max_age":null,"capacity":100,"active":true,"required_intake_template_ids":[],"required_discharge_template_ids":[],"change_reason":"Configure synthetic intake program"})).await;
+    let program_outpatient=post(&pool,&admin,"/api/care-programs",json!({"facility_id":facility,"code":"OP","name":"Synthetic OP","level_of_care":"outpatient","min_age":18,"max_age":null,"capacity":100,"active":true,"required_intake_template_ids":[],"required_discharge_template_ids":[],"change_reason":"Configure synthetic intake program"})).await;
+    let body = json!({"program_id":program_php["id"],"facility_id":facility,"level_of_care":"php","starts_on":today,"received_on":today,"owner_id":support["id"],"referral_type":"provider","referrer_name":"Synthetic referrer","referrer_contact":"555-0101","referral_reason":"Synthetic referral token qx7"});
     assert_eq!(
         send(
             &pool,
@@ -651,10 +654,9 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
         .await
         .unwrap();
     assert_eq!(planned, "planned");
-    let overlap = post(
+    let overlap = support::legacy_episode(
         &pool,
         &admin,
-        "/api/episodes",
         json!({"facility_id":facility,"client_id":cid,"level_of_care":"php","start_date":"2024-02-01","status":"active"}),
     )
     .await;
@@ -760,7 +762,7 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
         &pool,
         &admin,
         &format!("/api/clients/{sid}/intake"),
-        json!({"facility_id":facility,"level_of_care":"iop","starts_on":future,"received_on":today,"owner_id":admin,"referral_type":"self","referrer_name":"","referrer_contact":"","referral_reason":"Future start should not admit"}),
+        json!({"program_id":program_iop["id"],"facility_id":facility,"level_of_care":"iop","starts_on":future,"received_on":today,"owner_id":admin,"referral_type":"self","referrer_name":"","referrer_contact":"","referral_reason":"Future start should not admit"}),
     )
     .await;
     post(
@@ -865,7 +867,7 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
         &pool,
         &admin,
         &format!("/api/clients/{sid}/intake"),
-        json!({"facility_id":facility,"level_of_care":"outpatient","starts_on":today,"received_on":today,"owner_id":admin,"referral_type":"family","referrer_name":"Synthetic family","referrer_contact":"","referral_reason":"A later case remains available after decline"}),
+        json!({"program_id":program_outpatient["id"],"facility_id":facility,"level_of_care":"outpatient","starts_on":today,"received_on":today,"owner_id":admin,"referral_type":"family","referrer_name":"Synthetic family","referrer_contact":"","referral_reason":"A later case remains available after decline"}),
     )
     .await;
     assert_eq!(replacement["status"], "open");
@@ -1108,10 +1110,9 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
         .0,
         StatusCode::NOT_FOUND
     );
-    let unlinked = post(
+    let unlinked = support::legacy_episode(
         &pool,
         &admin,
-        "/api/episodes",
         json!({"facility_id":facility,"client_id":sid,"level_of_care":"outpatient","start_date":"2025-01-01","status":"planned"}),
     )
     .await;
@@ -1128,7 +1129,7 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
         json!({"status":"active","_expected_updated_at":unlinked_row["updated_at"]}),
     )
     .await;
-    assert_eq!(legacy.0, StatusCode::OK, "{}", legacy.1);
+    assert_eq!(legacy.0, StatusCode::CONFLICT, "{}", legacy.1);
     pool.close().await;
     sqlx::query(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
         .execute(&control)

@@ -1,4 +1,5 @@
 //! Derived approved-record search exercised against an isolated PostgreSQL schema.
+mod support;
 use actix_web::{
     http::{Method, StatusCode},
     test, web, App,
@@ -219,7 +220,7 @@ async fn search_preserves_scope_approval_history_and_stable_evidence_identifiers
     assert_eq!(new["results"][0]["source_id"], amendment["id"]);
     assert_ne!(new["results"][0]["id"], chunk["id"]);
     // Goal wording and review observations are indexed only after plan activation.
-    let episode=post(&pool,actor,"/api/episodes",json!({"facility_id":facility,"client_id":cid,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let episode=support::legacy_episode(&pool,actor,json!({"facility_id":facility,"client_id":cid,"level_of_care":"iop","start_date":"2026-01-01"})).await;
     let plan=post(&pool,actor,"/api/treatment_plans",json!({"client_id":cid,"episode_id":episode["id"],"title":"Synthetic recovery plan","presenting_needs":"Synthetic scheduling support","strengths":"Synthetic organization"})).await;
     let goal=post(&pool,actor,"/api/goals",json!({"plan_id":plan["id"],"description":"Synthetic attendance goal","measure":"Synthetic weekly visits","baseline":"Zero","target":"Two"})).await;
     let planpath = format!("/api/treatment_plans/{}", plan["id"].as_str().unwrap());

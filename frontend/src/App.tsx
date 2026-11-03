@@ -1,6 +1,8 @@
 import PatientKnowledge from "./PatientKnowledge";
 import { ClientRegistration } from "./ClientRegistration";
 import PatientIntake from "./PatientIntake";
+import EpisodeProgramAssignment from "./EpisodeProgramAssignment";
+import ProgramSettings from "./ProgramSettings";
 import Setup from "./Setup";
 import NoteComposer from "./NoteComposer";
 import CarePlanning from "./CarePlanning";
@@ -234,10 +236,12 @@ export default function App() {
   const [draftReviewDirty, setDraftReviewDirty] = useState(false);
   const [registrationDirty, setRegistrationDirty] = useState(false);
   const [intakeDirty, setIntakeDirty] = useState(false);
+  const [programDirty,setProgramDirty]=useState(false);
   const [formEpisodeId, setFormEpisodeId] = useState<string | undefined>();
   const [registrationNotice, setRegistrationNotice] = useState("");
   const canLeaveDraftReview = () => {
     if (registrationDirty) { setRegistrationNotice("Save your registration or discard its changes before leaving."); return false; }
+    if(programDirty){setError("Save or discard the program configuration before leaving this section.");return false;}
     if (intakeDirty) { setError("Save your intake form or discard its changes before leaving this section."); return false; }
     if (!draftReviewDirty) return true;
     setError("Your clinical draft review has unsaved choices. Record the review or use Discard review choices before leaving this chart section.");
@@ -269,8 +273,10 @@ export default function App() {
     setError("");
     try {
       const result = await request<Bootstrap>("/api/bootstrap");
+      const catalog=result.program_configuration && result.actor ? await request<{programs:Row[];services:Row[]}>("/api/program-catalog") : {programs:[],services:[]};
       if (version !== requestVersion.current) return false;
       setData({
+        care_programs:catalog.programs,program_services:catalog.services,
         ...result,
         treatment_plans: result.treatment_plans || [],
         goals: result.goals || [],
@@ -383,6 +389,7 @@ export default function App() {
   const selectedClient = data?.clients.find((c) => c.id === clientId);
   const create = (resource: Resource, initial: Record<string, unknown> = {}) => {
     if (!canLeaveDraftReview()) return;
+    if(resource==="episodes" && data?.program_configuration){if(initial.client_id){setClientId(String(initial.client_id));setChartTab("intake");}setView("clients");return;}
     setDialog({
       resource,
       title: `New ${definitions[resource].title.toLowerCase()}`,
@@ -487,6 +494,7 @@ export default function App() {
     } else if (next === "billing") {
       if (["claims", "policies", "authorizations", "payments"].includes(target)) setBillingTab(target);
       else { setBillingTab("claims"); setFilter(target); }
+    } else if (next === "settings" && target === "programs") { setSettingsTab("programs");
     } else if (next === "schedule") {
       setScheduleTab(target === "pending" ? "pending" : "agenda"); setCalendarToday(target === "today");
     } else if (target.startsWith("census:")) {
@@ -1121,6 +1129,7 @@ export default function App() {
             </Panel>
           </div>
         )}
+        {chartTab === "episodes" && data!.program_configuration && <EpisodeProgramAssignment key={`${c.id}:${data!.actor!.id}`} data={data!} clientId={c.id} onDirtyChange={setProgramDirty} onChanged={async()=>{if(!await reload())throw Error("Workspace refresh failed.");}} />}
         {chartTab === "episodes" && (
           <Panel
             title="Episodes of care"
@@ -1135,7 +1144,7 @@ export default function App() {
                     })
                   }
                 >
-                  <Icon name="plus" size={16} /> Add episode
+                  <Icon name="plus" size={16} /> Start intake
                 </Button>
               ) : undefined
             }
@@ -1146,7 +1155,7 @@ export default function App() {
                 {
                   label: "Level of care",
                   render: (e) => (
-                    <strong>{label(value(e, "level_of_care"))}</strong>
+                    <><strong>{label(value(e, "level_of_care"))}</strong><small>{value(data!.care_programs?.find(p=>p.id===e.program_id),"name") || "Older episode · program unassigned"}</small></>
                   ),
                 },
                 { label: "Admission", render: (e) => date(e.start_date) },
@@ -2159,14 +2168,16 @@ export default function App() {
       <>
         <Tabs
           value={settingsTab}
-          onChange={tab => { setSettingsTab(tab); setRecordFocus(null); }}
+          onChange={tab => { if(tab===settingsTab || canLeaveDraftReview()){setSettingsTab(tab); setRecordFocus(null);} }}
           tabs={[
             ...(canRead("templates", false) ? [{ id: "templates", label: "Forms & templates" }] : []),
             { id: "facilities", label: "Facilities" },
+            ...(data!.program_configuration ? [{id:"programs",label:"Programs"}] : []),
             { id: "integrations", label: "Connections" },
             ...(data!.permissions?.audit?.read ? [{ id: "audit", label: "Audit history" }] : []),
           ]}
         />
+        {settingsTab === "programs" && data!.program_configuration && <ProgramSettings key={data!.actor!.id} data={data!} onDirtyChange={setProgramDirty} onChanged={async()=>{if(!await reload())throw Error("Workspace refresh failed.");}} />}
         {settingsTab === "templates" && (
           <Panel
             title="Your organization’s forms"

@@ -157,7 +157,13 @@ pub async fn prepare_create(
             check_attendance_time(&group, status)?;
             let candidate = json!({"client_id":value["client_id"],"episode_id":value["episode_id"],"clinician_id":group["clinician_id"],"starts_at":group["starts_at"],"ends_at":group["ends_at"],"kind":"group","status":attendance_status(status)?,"group_id":group["id"]});
             crate::scheduling::check_session(tx, actor, &candidate).await?;
-            let session=records::insert(tx,"sessions",object(json!({"client_id":value["client_id"],"episode_id":value["episode_id"],"clinician_id":group["clinician_id"],"starts_at":group["starts_at"],"ends_at":group["ends_at"],"kind":"group","status":attendance_status(status)?,"location":group["location"],"group_id":group["id"]})),actor).await?;
+            let mut session_data = object(
+                json!({"client_id":value["client_id"],"episode_id":value["episode_id"],"clinician_id":group["clinician_id"],"starts_at":group["starts_at"],"ends_at":group["ends_at"],"kind":"group","status":attendance_status(status)?,"location":group["location"],"group_id":group["id"]}),
+            );
+            session_data.extend(
+                crate::programs::services::enrollment_context(tx, actor, &group, &episode).await?,
+            );
+            let session = records::insert(tx, "sessions", session_data, actor).await?;
             data.insert("session_id".into(), session["id"].clone());
         }
         _ => {}
@@ -213,6 +219,15 @@ pub async fn before_update(
                 ));
             }
             let group_id = records::uuid(before, "id")?;
+            if data
+                .get("program_service_id")
+                .is_some_and(|id| id != &before["program_service_id"])
+            {
+                let enrolled:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM group_attendance WHERE organization_id=$1 AND group_id=$2)").bind(actor.org).bind(group_id).fetch_one(&mut **tx).await?;
+                if enrolled {
+                    return Err(ApiError::conflict("A group with enrolled participants keeps its original service. Schedule a new configured group to change that care context."));
+                }
+            }
             sqlx::query("SELECT id FROM sessions WHERE group_id=$1 AND organization_id=$2 ORDER BY id FOR UPDATE").bind(group_id).bind(actor.org).fetch_all(&mut **tx).await?;
             let recorded:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM group_attendance WHERE group_id=$1 AND organization_id=$2 AND status IN ('attended','no_show')) OR EXISTS(SELECT 1 FROM notes n JOIN sessions s ON s.id=n.session_id AND s.organization_id=n.organization_id WHERE s.group_id=$1 AND n.organization_id=$2 AND n.status='signed')").bind(group_id).bind(actor.org).fetch_one(&mut **tx).await?;
             if recorded {

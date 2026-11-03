@@ -512,6 +512,7 @@ function ExecutiveHome(props: RoleWorkspaceProps & { now: Date; today: string | 
   const maxRole = Math.max(...staffing.activeByRole.map((item) => item.count), 1);
   return (
     <div className="ws-executive">
+      {data.program_configuration && <section className="ws-panel" aria-labelledby="ws-program-capacity"><div className="ws-split"><h2 id="ws-program-capacity">Program capacity</h2><button type="button" className="ws-link" onClick={()=>onNavigate("settings","programs")}>Review programs</button></div><p className="ws-current">Current active care episodes occupy places. Planned intakes do not reserve capacity.</p>{data.care_programs?.length ? <div className="table-wrap"><table><thead><tr><th>Program</th><th>Facility</th><th>Active care</th><th>Available places</th><th>Admissions</th></tr></thead><tbody>{data.care_programs.map(p=><tr key={p.id}><td><strong>{text(p,"name")}</strong><small>{label(text(p,"level_of_care"))}</small></td><td>{text(data.facilities.find(f=>f.id===p.facility_id),"name")}</td><td>{text(p,"active_census")} / {text(p,"capacity")}</td><td>{text(p,"available_places")}</td><td>{p.active===true && data.facilities.some(f=>f.id===p.facility_id && f.active===true)?"Accepting":"Closed to new care"}</td></tr>)}</tbody></table></div> : <p>No care programs have been configured.</p>}</section>}
       <section className="ws-panel" aria-labelledby="ws-census-heading">
         <span className="ws-kicker">Current active care episodes</span>
         <div className="ws-split">

@@ -1,5 +1,7 @@
 # Local verification record
 
+Latest: the [program configuration checkpoint](program-configuration-contract.md#integrated-checkpoint--november-2) integrates versioned programs/services, capacity and form gates, historical decision/encounter evidence, and explicit legacy assignment. It records 93 Rust unit tests, 16 PostgreSQL scenarios, 83 frontend tests, browser workflow checks, preserved review records and a verified 53-table restore. The full product remains in progress.
+
 The latest [knowledge and drafting checkpoint](knowledge-drafting-checkpoint.md) records 86 passing Rust unit checks, 11 PostgreSQL/HTTP scenarios, 61 frontend checks, build/lint/format checks, approved-record word search, actual local-model generation, explicit review, edited/signed note persistence, cancellation and matching clinical-history digests after a 42-table restore. A development hashing optimization reduced the observed synthetic generation from 56.5 to 4.5 seconds. It follows the [transcript checkpoint](transcript-checkpoint.md), [recording checkpoint](recording-checkpoint.md), [telehealth checkpoint](telehealth-checkpoint.md) and [workspace checkpoint](workspace-rebuild-checkpoint.md). Older entries retain their original counts and limits. The [50-capability acceptance ledger](../product/acceptance-ledger.md) remains the scope record; these checkpoints are not full product acceptance.
 
 Verified November 2, 2026 against the local PostgreSQL/API and custom frontend. This records observed behavior, not a production-readiness or compliance certification.

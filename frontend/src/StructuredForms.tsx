@@ -469,6 +469,7 @@ export default function StructuredForms({
   const all =
     (data as Bootstrap & { form_responses?: Row[] }).form_responses || [];
   const [contextEpisodeId, setContextEpisodeId] = useState(episodeId || "");
+  const [workflowStage,setWorkflowStage]=useState("");
   const responses = all.filter((r) => (!clientId || r.client_id === clientId) && (!contextEpisodeId || r.episode_id === contextEpisodeId));
   const [editor, setEditor] = useState<Row | null | undefined>(undefined);
   const [preset, setPreset] = useState<{
@@ -489,11 +490,13 @@ export default function StructuredForms({
     value(r.template_snapshot as Row, "name") || "Form response";
   return (
     <>
-      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><select id="forms-episode-context" value={contextEpisodeId} onChange={event=>setContextEpisodeId(event.target.value)}><option value="">Current care context · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</select></div>}
+      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><select id="forms-episode-context" value={contextEpisodeId} onChange={event=>{setContextEpisodeId(event.target.value);setWorkflowStage("");}}><option value="">Current care context · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</select></div>}
+      {clientId && contextEpisodeId && <div className="form-field form-rules-context"><label htmlFor="forms-workflow-stage">Workflow requirements</label><select id="forms-workflow-stage" value={workflowStage} onChange={event=>setWorkflowStage(event.target.value)}><option value="">Current episode stage</option><option value="intake">Intake review</option><option value="active">Active care</option><option value="discharge">Prepare for discharge</option></select></div>}
       {clientId && (
         <FormRequirements
           clientId={clientId}
           episodeId={contextEpisodeId || undefined}
+          stage={workflowStage || undefined}
           data={data}
           canStart={canWrite}
           onAuthorRules={onAuthorRules}

@@ -299,56 +299,30 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
         "rejected birth-date change must not rewrite the stored date"
     );
 
-    let (status, episode) = send(
-        &pool,
-        admin,
-        "POST",
-        "/api/episodes",
-        Some(json!({
-            "client_id": legacy,
-            "facility_id": ahead,
-            "level_of_care": "iop",
-            "start_date": ahead_today,
-            "status": "planned"
-        })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{episode}");
-    let episode_message = message(&episode);
-    assert!(
-        episode_message.contains("birth_date") || episode_message.to_lowercase().contains("18"),
-        "{episode_message}"
-    );
-
-    let (status, episode) = send(
-        &pool,
-        admin,
-        "POST",
-        "/api/episodes",
-        Some(json!({
-            "client_id": adult_id,
-            "facility_id": behind,
-            "level_of_care": "outpatient",
-            "start_date": behind_today,
-            "status": "planned"
-        })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{episode}");
-    let episode_id = episode["id"].as_str().unwrap();
-    let episode_updated = episode["updated_at"].as_str().unwrap();
-    let (status, activated) = send(
+    let (status, ahead_program)=send(&pool,admin,"POST","/api/care-programs",Some(json!({"facility_id":ahead,"code":"AHEAD","name":"Synthetic ahead program","level_of_care":"iop","min_age":18,"max_age":null,"capacity":20,"active":true,"required_intake_template_ids":[],"required_discharge_template_ids":[],"change_reason":"Test facility-local age gates"}))).await;
+    assert_eq!(status, StatusCode::CREATED, "{ahead_program}");
+    let (status, behind_program)=send(&pool,admin,"POST","/api/care-programs",Some(json!({"facility_id":behind,"code":"BEHIND","name":"Synthetic behind program","level_of_care":"outpatient","min_age":18,"max_age":null,"capacity":20,"active":true,"required_intake_template_ids":[],"required_discharge_template_ids":[],"change_reason":"Test facility-local age gates"}))).await;
+    assert_eq!(status, StatusCode::CREATED, "{behind_program}");
+    let (status, rejected)=send(&pool,admin,"POST",&format!("/api/clients/{legacy}/intake"),Some(json!({"program_id":ahead_program["id"],"starts_on":ahead_today,"received_on":ahead_today,"owner_id":admin,"referral_type":"self","referrer_name":"","referrer_contact":"","referral_reason":"Test the configured age gate"}))).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{rejected}");
+    assert!(message(&rejected).contains("age"));
+    let (status, case)=send(&pool,admin,"POST",&format!("/api/clients/{adult_id}/intake"),Some(json!({"program_id":behind_program["id"],"starts_on":behind_today,"received_on":behind_today,"owner_id":admin,"referral_type":"self","referrer_name":"","referrer_contact":"","referral_reason":"Adult eligibility at the facility date"}))).await;
+    assert_eq!(status, StatusCode::CREATED, "{case}");
+    assert_eq!(case["status"], "open");
+    let episode: Value = sqlx::query_scalar("SELECT to_jsonb(e) FROM episodes e WHERE id=$1")
+        .bind(Uuid::parse_str(case["episode_id"].as_str().unwrap()).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let (status, blocked) = send(
         &pool,
         admin,
         "PATCH",
-        &format!("/api/episodes/{episode_id}"),
-        Some(json!({
-            "status": "active",
-            "_expected_updated_at": episode_updated
-        })),
+        &format!("/api/episodes/{}", episode["id"].as_str().unwrap()),
+        Some(json!({"status":"active","_expected_updated_at":episode["updated_at"]})),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{activated}");
+    assert_eq!(status, StatusCode::CONFLICT, "{blocked}");
 
     // Legacy planned episode remains, but activation is rejected and the row is unchanged.
     let planned = Uuid::new_v4();
@@ -378,7 +352,7 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{blocked}");
+    assert_eq!(status, StatusCode::CONFLICT, "{blocked}");
     let status_now: String = sqlx::query_scalar("SELECT status FROM episodes WHERE id=$1")
         .bind(planned)
         .fetch_one(&pool)
