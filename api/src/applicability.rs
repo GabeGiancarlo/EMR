@@ -1,4 +1,4 @@
-//! Organization-authored form applicability. Rules come only from active templates.
+//! Organization-authored form applicability, including explicit program requirements.
 //! Client stage is the client's status. The relevant episode is the current active
 //! episode, otherwise the latest discharged episode. Nothing here infers a legal
 //! or clinical requirement, and template edits do not rewrite response snapshots.
@@ -245,6 +245,7 @@ fn map_episode(row: &sqlx::postgres::PgRow) -> EpisodeCandidate {
 #[serde(deny_unknown_fields)]
 pub struct RequirementsQuery {
     episode_id: Option<Uuid>,
+    stage: Option<String>,
 }
 
 pub async fn client_requirements(
@@ -278,7 +279,7 @@ pub async fn client_requirements(
     .map(map_episode)
     .collect::<Vec<_>>();
     let templates = sqlx::query(
-        "SELECT id, name, applies_to_stage, applies_to_care_level, required_for_stage, active FROM templates WHERE organization_id=$1 AND active",
+        "SELECT id, name, applies_to_stage, applies_to_care_level, required_for_stage, active FROM templates WHERE organization_id=$1",
     )
     .bind(actor.org)
     .fetch_all(&mut *tx)
@@ -331,7 +332,21 @@ pub async fn client_requirements(
             status,
         });
     }
-    let evaluation = if let Some(id) = query.episode_id {
+    if query.stage.is_some() && query.episode_id.is_none() {
+        return Err(ApiError::invalid(
+            "Choose an episode before selecting a form workflow stage.",
+        ));
+    }
+    if query
+        .stage
+        .as_deref()
+        .is_some_and(|stage| !matches!(stage, "intake" | "active" | "discharge"))
+    {
+        return Err(ApiError::invalid(
+            "Form workflow stage must be intake, active, or discharge.",
+        ));
+    }
+    let mut evaluation = if let Some(id) = query.episode_id {
         let episode = episodes
             .iter()
             .find(|episode| episode.id == id)
@@ -346,10 +361,78 @@ pub async fn client_requirements(
                 ))
             }
         };
+        let stage = match query.stage.as_deref() {
+            Some("discharge") => "discharged",
+            Some(value) => value,
+            None => stage,
+        };
         evaluate_context(stage, Some(episode), &templates, &responses)
     } else {
         evaluate(&client_status, &episodes, &templates, &responses)
     };
+    if let Some(id) = evaluation.relevant_episode_id {
+        let stage = match evaluation.relevant_stage.as_str() {
+            "intake" => Some("intake"),
+            "discharged" => Some("discharge"),
+            _ => None,
+        };
+        if let Some(stage) = stage {
+            let episode = records::get(&mut tx, "episodes", id, actor.org, false).await?;
+            for requirement in
+                crate::programs::rules::required_forms(&mut tx, &actor, &episode, stage).await?
+            {
+                if requirement["program_required"] != true {
+                    continue;
+                }
+                let template_id = records::uuid(&requirement, "id")?;
+                let rule = templates
+                    .iter()
+                    .find(|t| t.id == template_id)
+                    .ok_or_else(ApiError::missing)?;
+                let (completion, response_status) = completion_for(rule, Some(id), &responses);
+                let completion = if rule.active {
+                    completion
+                } else {
+                    "configuration_review".into()
+                };
+                let item = FormRequirementItem {
+                    template_id,
+                    template_name: rule.name.clone(),
+                    disposition: "required".into(),
+                    completion,
+                    response_status,
+                    reason: if rule.active {
+                        format!("Required by the episode's program for {stage}. Based on your organization's configuration.")
+                    } else {
+                        "This program requires an inactive template. An administrator must update the program rule before this workflow can continue.".into()
+                    },
+                    episode_id: Some(id),
+                    applies_to_stage: evaluation.relevant_stage.clone(),
+                    applies_to_care_level: evaluation
+                        .relevant_care_level
+                        .clone()
+                        .unwrap_or_default(),
+                    required_for_stage: true,
+                };
+                if let Some(existing) = evaluation
+                    .requirements
+                    .iter_mut()
+                    .find(|r| r.template_id == template_id)
+                {
+                    *existing = item;
+                } else {
+                    evaluation.requirements.push(item);
+                }
+            }
+            evaluation.requirements.sort_by_key(|r| {
+                (
+                    r.disposition != "required",
+                    r.template_name.to_lowercase(),
+                    r.template_id,
+                )
+            });
+        }
+    }
     access::audit(
         &mut tx,
         &actor,

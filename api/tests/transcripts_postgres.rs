@@ -1,4 +1,5 @@
 //! Isolated review/version/authorization integration. Recognition fixtures are synthetic, not an engine test.
+mod support;
 use actix_web::{
     http::{Method, StatusCode},
     test, web, App,
@@ -138,8 +139,8 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
     let actor_id = Uuid::parse_str(actor).unwrap();
     let facility = &setup["facility"]["id"];
     let client=create(&pool,actor,"clients",json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Transcript","birth_date":"1990-01-01","primary_clinician_id":actor})).await;
-    let episode=create(&pool,actor,"episodes",json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
-    let session=create(&pool,actor,"sessions",json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
+    let episode=support::legacy_episode(&pool,actor,json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let session=support::legacy_session(&pool,actor,json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
     let room = create(
         &pool,
         actor,
@@ -665,7 +666,7 @@ async fn transcript_review_requires_processing_consent_verified_context_and_immu
     // Reuse this isolated synthetic recording to exercise the group binding.
     // An unrelated session can mention the group; only attendance identifies
     // the patient's actual group visit. No production records are rewritten.
-    let group=create(&pool,actor,"groups",json!({"facility_id":facility,"clinician_id":actor,"title":"Synthetic transcript group","kind":"skills","starts_at":"2030-01-03T09:00:00Z","ends_at":"2030-01-03T10:00:00Z","capacity":4})).await;
+    let group=support::legacy_group(&pool,actor,json!({"facility_id":facility,"clinician_id":actor,"title":"Synthetic transcript group","kind":"skills","starts_at":"2030-01-03T09:00:00Z","ends_at":"2030-01-03T10:00:00Z","capacity":4})).await;
     let attendance = create(
         &pool,
         actor,

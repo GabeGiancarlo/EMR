@@ -27,3 +27,11 @@ test("support cannot admit, terminal cases cannot transition, and billing has no
   assert.deepEqual(allowedIntakeTransitions("screening", "billing"), []);
   assert.ok(!allowedIntakeTransitions("open", "admin").includes("admitted"));
 });
+test("saved decisions retain historical checks and reject another episode's evidence",()=>{
+  const evidence={id:"decision",event_id:"event",client_id:"patient",intake_case_id:"case",episode_id:"episode",program_version:1,program_snapshot:{name:"Prior program rules",capacity:1},created_at:"2026-11-02T12:00:00Z",checklist:[{code:"program_active",title:"Program accepting",required:true,passed:true,detail:"Accepted at decision time"}]};
+  const payload={...fixture(),cases:[{...caseRow,decision_evidence:[evidence]}]};
+  const parsed=parseIntake(payload,"patient").cases[0];
+  assert.equal(parsed.decision_evidence?.[0].checklist[0].passed,true);
+  assert.equal(parsed.checklist[0].passed,false);
+  assert.throws(()=>parseIntake({...payload,cases:[{...caseRow,decision_evidence:[{...evidence,episode_id:"other"}]}]},"patient"),/context could not be verified/);
+});

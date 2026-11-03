@@ -1,4 +1,5 @@
 //! Synthetic transport bytes in a unique disposable schema; not a media decoder test.
+mod support;
 use actix_web::{
     http::{Method, StatusCode},
     test, web, App,
@@ -135,8 +136,8 @@ async fn recording_requires_every_agreement_and_preserves_encrypted_ordered_medi
     let actor = setup["actor"]["id"].as_str().unwrap();
     let facility = &setup["facility"]["id"];
     let client=create(&pool,actor,"clients",json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Recording","birth_date":"1990-01-01","primary_clinician_id":actor})).await;
-    let episode=create(&pool,actor,"episodes",json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
-    let session=create(&pool,actor,"sessions",json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
+    let episode=support::legacy_episode(&pool,actor,json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let session=support::legacy_session(&pool,actor,json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
     let room = create(
         &pool,
         actor,

@@ -1,4 +1,5 @@
 //! Durable proposal review/clinical-note boundaries. Model output here is an explicit fixture.
+mod support;
 use actix_web::{
     http::{Method, StatusCode},
     test, web, App,
@@ -100,7 +101,7 @@ async fn proposals_require_current_scoped_evidence_and_explicit_review_before_no
     assert_eq!(s, StatusCode::OK, "{k}");
     let chunk = &k["results"][0];
     assert!(chunk["id"].is_string(), "{k}");
-    let episode = post(&pool, actor, "/api/episodes", json!({"client_id":client_id,"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let episode = support::legacy_episode(&pool, actor, json!({"client_id":client_id,"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
     let url = format!("/api/clients/{client_id}/clinical-drafts");
     let body = json!({"template_id":template["id"],"source_ids":[chunk["id"]],"episode_id":episode["id"],"session_id":null,"title":"Synthetic reviewed proposal","purpose":"Summarize the explicitly synthetic appointment evidence."});
     let job = post(&pool, actor, &url, body.clone()).await;

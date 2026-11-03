@@ -249,7 +249,8 @@ pub async fn action(
             let date = records::text(&body, "end_date")?;
             let end = NaiveDate::parse_from_str(date, "%Y-%m-%d")
                 .map_err(|_| ApiError::invalid("Enter a valid discharge date"))?;
-            if end > Utc::now().date_naive() {
+            let today: NaiveDate = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE f.timezone)::date FROM facilities f WHERE f.id=$1 AND f.organization_id=$2").bind(records::uuid(&old,"facility_id")?).bind(actor.org).fetch_one(&mut *tx).await?;
+            if end > today {
                 return Err(ApiError::invalid(
                     "Discharge cannot be recorded in the future",
                 ));

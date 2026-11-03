@@ -9,27 +9,6 @@ use uuid::Uuid;
 fn item(code: &str, title: &str, required: bool, passed: bool, detail: &str) -> Value {
     json!({"code":code,"title":title,"required":required,"passed":passed,"detail":detail})
 }
-async fn transcript_ok(
-    tx: &mut Transaction<'_, Postgres>,
-    actor: &Actor,
-    form: &Value,
-) -> Result<bool> {
-    match crate::telehealth::recording::transcripts::excerpts::validate_form(tx, actor, form).await
-    {
-        Ok(()) => Ok(true),
-        Err(error)
-            if matches!(
-                error.status,
-                actix_web::http::StatusCode::FORBIDDEN
-                    | actix_web::http::StatusCode::CONFLICT
-                    | actix_web::http::StatusCode::NOT_FOUND
-            ) =>
-        {
-            Ok(false)
-        }
-        Err(error) => Err(error),
-    }
-}
 pub(super) async fn evaluate(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
@@ -131,35 +110,8 @@ pub(super) async fn evaluate(
     ];
     let level = episode["level_of_care"].as_str().unwrap_or_default();
     let episode_id = records::uuid(episode, "id")?;
-    let templates: Vec<Value> = sqlx::query_scalar("SELECT jsonb_build_object('id',id,'name',name) FROM templates WHERE organization_id=$1 AND active AND required_for_stage AND applies_to_stage IN ('any','intake') AND applies_to_care_level IN ('any',$2) ORDER BY name, id").bind(actor.org).bind(level).fetch_all(&mut **tx).await?;
-    for template in templates {
-        let template_id = records::uuid(&template, "id")?;
-        let forms: Vec<Value> = sqlx::query_scalar("SELECT to_jsonb(f) FROM form_responses f WHERE organization_id=$1 AND client_id=$2 AND episode_id=$3 AND template_id=$4 AND status='signed'").bind(actor.org).bind(client_id).bind(episode_id).bind(template_id).fetch_all(&mut **tx).await?;
-        let mut passed = false;
-        let mut invalid = false;
-        for form in &forms {
-            if transcript_ok(tx, actor, form).await? {
-                passed = true;
-                break;
-            }
-            invalid = true;
-        }
-        let name = template["name"].as_str().unwrap_or("Intake form");
-        let detail = if passed {
-            "Signed for this planned episode."
-        } else if invalid {
-            "The signed form needs a source review. Open its history before continuing."
-        } else {
-            "Complete and sign this required organization form for this planned episode."
-        };
-        items.push(item(
-            &format!("intake_form:{template_id}"),
-            name,
-            true,
-            passed,
-            detail,
-        ));
-    }
+    items.extend(crate::programs::rules::checklist(tx, actor, client, episode).await?);
+    items.extend(crate::programs::rules::form_checks(tx, actor, episode, "intake").await?);
     let start = records::parse_record_date(episode, "start_date").ok();
     let start_ok = start.is_some_and(|date| date <= today);
     let planned = episode["status"] == "planned";

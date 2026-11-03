@@ -4,6 +4,7 @@ import { clientName, date, label, value } from "./api";
 import type { Bootstrap, FormField, Resource, Row } from "./api";
 import { Button, Icon } from "./ui";
 import { normalizeFieldValue } from "./serialize";
+import { availableServices, claimServiceDefaults, serviceDurationError, serviceSnapshot } from "./programRouting";
 import { facilityWallTime, occurrenceLabel, resolveFacilityTime, schedulingZone, wallTimeCandidates } from "./schedulingTime";
 import {
   ADULT_PROGRAM_HINT,
@@ -30,6 +31,7 @@ export type Field = {
   required?: boolean;
   options?: string[];
   ref?: Resource;
+  catalog?: "services";
   hint?: string;
   min?: number;
   max?: number;
@@ -563,13 +565,16 @@ export function RecordForm({
   fields?: Field[];
   submitLabel?: string;
 }) {
-  const fields = customFields || (resource ? definitions[resource].fields : []);
+  const baseFields = customFields || (resource ? definitions[resource].fields : []);
+  const fields = data.program_configuration && (resource === "sessions" || resource === "groups") && !customFields
+    ? [...baseFields.slice(0, resource === "sessions" ? 2 : 2), f("program_service_id", "Program service", {type:"select",catalog:"services",required:!initial.id || !!initial.program_service_id,hint:"The selected service sets the allowed duration, documentation template, and billing defaults."}), ...baseFields.slice(2)] : baseFields;
   const scheduling = resource === "sessions" || resource === "groups";
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(
       fields.map((f) => {
         let v =
           initial[f.key] ??
+          (resource === "claims" && !initial.id ? claimServiceDefaults(data.sessions.find(row=>row.id===initial.session_id))[f.key] : undefined) ??
           f.default ??
           (f.type === "fields" ? [] : f.type === "checkbox" ? false : "");
         if (f.type === "money" && v !== "") v = Number(v) / 100;
@@ -596,12 +601,19 @@ export function RecordForm({
   ));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const selectedService=scheduling ? values.program_service_id===initial.program_service_id ? serviceSnapshot(initial as Row) : data.program_services?.find(row=>row.id===values.program_service_id) : undefined;
   const set = (key: string, v: unknown) => {
     setValues((prev) => {
       const next = { ...prev, [key]: v };
       if (key === "client_id" && v !== prev.client_id) {
         for (const field of fields) if (["episode_id", "session_id", "policy_id", "authorization_id"].includes(field.key)) next[field.key] = "";
       }
+      if (scheduling && ["client_id","episode_id","facility_id"].includes(key) && v !== prev[key]) next.program_service_id="";
+      if (key === "program_service_id") {
+        const service=data.program_services?.find(row=>row.id===v);
+        if (service && resource === "sessions") next.kind=service.session_kind;
+      }
+      if (resource === "claims" && key === "session_id" && v !== prev.session_id) Object.assign(next,claimServiceDefaults(data.sessions.find(row=>row.id===v)));
       return next;
     });
     if (["facility_id", "client_id", "episode_id"].includes(key)) setOccurrences({});
@@ -649,6 +661,11 @@ export function RecordForm({
       }
       if (scheduling && body.starts_at && body.ends_at && Date.parse(String(body.ends_at)) <= Date.parse(String(body.starts_at)))
         throw new Error("End time must be after start time.");
+      if (scheduling && values.program_service_id) {
+        const snapshot=values.program_service_id===initial.program_service_id ? serviceSnapshot(initial as Row) : data.program_services?.find(row=>row.id===values.program_service_id);
+        const durationError=serviceDurationError(snapshot,String(body.starts_at),String(body.ends_at));
+        if (durationError) throw Error(durationError);
+      }
       await onSubmit(body);
     } catch (err) {
       setError(
@@ -664,9 +681,16 @@ export function RecordForm({
     <form onSubmit={submit}>
       <div className="form-body">
         {scheduling && <p className="scheduling-zone-note">Appointment times use <strong>{zone}</strong>. The selected episode or facility sets the timezone.</p>}
+        {selectedService && <div className="scheduling-zone-note"><strong>{value(selectedService,"name")}</strong> · {value(selectedService,"min_minutes")}–{value(selectedService,"max_minutes")} minutes. Default: {value(selectedService,"default_minutes")} minutes. <Button variant="text small" disabled={busy || !values.starts_at} onClick={()=>{try{const start=resolveFacilityTime(String(values.starts_at),zone,occurrences.starts_at,typeof initial.starts_at==="string"?initial.starts_at:undefined);const end=new Date(Date.parse(start)+Number(selectedService.default_minutes)*60000).toISOString();setValues(prev=>({...prev,ends_at:facilityWallTime(end,zone)}));setOccurrences(prev=>({...prev,ends_at:end}));setError("");}catch(error){setError(error instanceof Error?error.message:"Review the start time before applying the duration.");}}}>Apply default duration</Button></div>}
+        {resource === "claims" && serviceSnapshot(data.sessions.find(row=>row.id===values.session_id)) && <p className="scheduling-zone-note">Service code and suggested charge come from the encounter's saved service. Review the amount, units, diagnosis, and payer requirements before saving.</p>}
         <div className="form-grid">
           {fields.map((f) => {
             let choices = f.ref ? data[f.ref] || [] : [];
+            if (f.catalog && scheduling) {
+              choices=availableServices(data,resource,{...initial,...values});
+              const saved=serviceSnapshot(initial as Row);
+              if (saved && !choices.some(row=>row.id===saved.id) && initial.episode_id===values.episode_id && (resource!=="groups" || initial.facility_id===values.facility_id)) choices=[{...saved,_historical:true},...choices];
+            }
             if (
               f.ref &&
               ["episodes", "sessions", "policies", "authorizations"].includes(
@@ -731,6 +755,7 @@ export function RecordForm({
                         value={String(values[f.key] ?? "")}
                         onChange={(e) => set(f.key, e.target.value)}
                         required={f.required}
+                        disabled={resource === "sessions" && f.key === "kind" && !!values.program_service_id}
                       >
                         <option value="">
                           {f.required ? "Choose…" : "Not linked"}
@@ -742,7 +767,7 @@ export function RecordForm({
                         ))}
                         {choices.map((row) => (
                           <option value={row.id} key={row.id}>
-                            {optionName(f.ref!, row, data)}
+                            {f.catalog ? `${value(row,"service_code")} · ${value(row,"name")} · ${value(data.care_programs?.find(p=>p.id===row.program_id),"name")}${row._historical ? " · saved encounter service" : ""}` : optionName(f.ref!, row, data)}
                           </option>
                         ))}
                       </select>

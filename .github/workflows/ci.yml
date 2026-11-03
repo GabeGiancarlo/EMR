@@ -88,6 +88,10 @@ jobs:
         run: cargo test --locked --test speech_postgres -- --ignored
       - name: PostgreSQL adult intake integration
         run: cargo test --locked --test intake_postgres -- --ignored
+      - name: PostgreSQL patient identity and admission integration
+        run: cargo test --locked --test patient_identity_postgres --test admissions_postgres -- --ignored
+      - name: PostgreSQL program configuration and routing integration
+        run: cargo test --locked --test program_catalog_postgres --test program_admission_postgres --test program_services_postgres -- --ignored
       - name: PostgreSQL scheduling and availability integration
         run: cargo test --locked --test scheduling_postgres -- --ignored
       - name: PostgreSQL telehealth participation and signaling integration

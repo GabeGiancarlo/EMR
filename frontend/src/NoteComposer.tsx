@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { clientName, date, label, value } from "./api";
 import type { Bootstrap, FormField } from "./api";
 import { Button, Icon } from "./ui";
+import { serviceSnapshot } from "./programRouting";
 export default function NoteComposer({
   data,
   initial,
@@ -29,6 +30,8 @@ export default function NoteComposer({
   const [reviewed, setReviewed] = useState(false);
   const sourceVersion = useRef(0);
   const template = data.templates.find((t) => t.id === templateId);
+  const savedService=serviceSnapshot(data.sessions.find(s=>s.id===sessionId));
+  const suggestedTemplate=data.templates.find(t=>t.id===savedService?.note_template_id);
   const fields = (template?.fields || []) as FormField[];
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -61,6 +64,9 @@ export default function NoteComposer({
   return (
     <form onSubmit={save}>
       <div className="form-body">
+        {savedService && <div className="scheduling-zone-note"><strong>{value(savedService,"name")}</strong> · {value(savedService,"service_code")}
+          {suggestedTemplate?.active===true ? <><p>The encounter's saved service suggests {value(suggestedTemplate,"name")}. Applying it replaces the current form answers; the narrative remains.</p><Button variant="secondary small" onClick={()=>{if(Object.values(answers).some(Boolean) && !window.confirm("Replace the current form answers with this service's suggested template?"))return;setTemplate(suggestedTemplate.id);setAnswers({});}}>Use suggested template</Button></> : savedService.note_template_id ? <p>The suggested template is inactive or unavailable. Select an available template before documenting.</p> : <p>No note template was configured for this service. Choose the appropriate form for the care delivered.</p>}
+        </div>}
         <div className="form-grid">
           <div className="form-field">
             <label htmlFor="note-client">Client *</label>
