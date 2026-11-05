@@ -67,6 +67,8 @@ tmp/
 dist/
 build/
 pkg/
+__pycache__/
+*.py[cod]
 wasm-pack.log
 *.tsbuildinfo
 
