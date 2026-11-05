@@ -77,12 +77,17 @@ fn policy_problem(policy: &Value, date: &str) -> Option<String> {
     }
 }
 
-fn authorization_problem(authorization: &Value, claim: &Value, date: &str) -> Option<String> {
+fn authorization_problem(
+    authorization: &Value,
+    claim: &Value,
+    date: &str,
+    codes_match: bool,
+) -> Option<String> {
     let mut reasons = Vec::new();
     if authorization["policy_id"] != claim["policy_id"] {
         reasons.push("it is for a different policy".to_string());
     }
-    if authorization["service_code"] != claim["service_code"] {
+    if !codes_match {
         reasons.push(format!(
             "its service code is {} rather than {}",
             authorization["service_code"].as_str().unwrap_or("missing"),
@@ -232,7 +237,7 @@ pub async fn evaluate(
     );
     let diagnosis_ok = code_present(&claim["diagnosis_code"]);
     if !session["program_service_id"].is_null() {
-        let problem = crate::programs::services::claim_code_error(&session, &claim);
+        let problem = crate::programs::services::claim_code_error(tx, &session, &claim).await?;
         check(&mut checklist,"program_service_code","Encounter service code",problem.is_none(),problem.unwrap_or("The claim code matches the encounter's saved service code. Payer acceptance still requires review."),"billing");
     }
     check(
@@ -272,7 +277,13 @@ pub async fn evaluate(
         let authorization_id = records::uuid(&claim, "authorization_id")?;
         let authorization =
             records::get(tx, "authorizations", authorization_id, actor.org, true).await?;
-        let coverage_failure = authorization_problem(&authorization, &claim, &date);
+        let codes_match = crate::service_codes::same(
+            tx,
+            authorization["service_code"].as_str(),
+            claim["service_code"].as_str(),
+        )
+        .await?;
+        let coverage_failure = authorization_problem(&authorization, &claim, &date, codes_match);
         check(
             &mut checklist,
             "authorization_coverage",
@@ -380,7 +391,7 @@ mod tests {
             "ends_on": "2026-02-01",
             "authorization_number": "QA-PACIFIC"
         });
-        assert!(authorization_problem(&authorization, &claim, "2026-02-01").is_none());
+        assert!(authorization_problem(&authorization, &claim, "2026-02-01", true).is_none());
         let wrong_code = json!({
             "policy_id": "p1",
             "service_code": "OTHER",
@@ -388,9 +399,9 @@ mod tests {
             "starts_on": "2026-02-01",
             "ends_on": "2026-02-01"
         });
-        let problem = authorization_problem(&wrong_code, &claim, "2026-02-01").unwrap();
+        let problem = authorization_problem(&wrong_code, &claim, "2026-02-01", false).unwrap();
         assert!(problem.contains("service"));
-        assert!(authorization_problem(&authorization, &claim, "2026-01-31").is_some());
+        assert!(authorization_problem(&authorization, &claim, "2026-01-31", true).is_some());
     }
 
     #[test]

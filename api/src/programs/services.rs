@@ -25,7 +25,7 @@ struct Catalog {
     facility_active: bool,
 }
 
-pub(crate) fn claim_code_error(session: &Value, claim: &Value) -> Option<&'static str> {
+fn claim_snapshot_error(session: &Value) -> Option<&'static str> {
     if session.get("program_service_id").is_none_or(Value::is_null) {
         return None;
     }
@@ -53,10 +53,27 @@ pub(crate) fn claim_code_error(session: &Value, claim: &Value) -> Option<&'stati
     {
         return Some(CLAIM_SNAPSHOT);
     }
-    if normalized_code(&claim["service_code"]) != normalized_code(&snapshot["service_code"]) {
-        return Some(CLAIM_MISMATCH);
-    }
     None
+}
+
+pub(crate) async fn claim_code_error(
+    tx: &mut Transaction<'_, Postgres>,
+    session: &Value,
+    claim: &Value,
+) -> Result<Option<&'static str>> {
+    if let Some(error) = claim_snapshot_error(session) {
+        return Ok(Some(error));
+    }
+    if session.get("program_service_id").is_none_or(Value::is_null) {
+        return Ok(None);
+    }
+    let matches = crate::service_codes::same(
+        tx,
+        claim["service_code"].as_str(),
+        session["service_snapshot"]["service_code"].as_str(),
+    )
+    .await?;
+    Ok((!matches).then_some(CLAIM_MISMATCH))
 }
 
 pub(crate) async fn validate_claim(
@@ -72,7 +89,7 @@ pub(crate) async fn validate_claim(
         false,
     )
     .await?;
-    if let Some(error) = claim_code_error(&session, claim) {
+    if let Some(error) = claim_code_error(tx, &session, claim).await? {
         return Err(ApiError::invalid(error));
     }
     Ok(())
@@ -119,7 +136,9 @@ pub(crate) async fn enrollment_context(
         .cloned()
         .unwrap_or(Value::Null);
     let catalog = load_catalog(tx, actor, service_id).await?;
-    if !snapshot_matches(&snapshot, service_id, &catalog.service) || bounds(&snapshot).is_err() {
+    if !snapshot_matches(tx, &snapshot, service_id, &catalog.service).await?
+        || bounds(&snapshot).is_err()
+    {
         return Err(ApiError::conflict(SNAPSHOT_INVALID));
     }
     if snapshot["session_kind"] != "group" {
@@ -228,7 +247,7 @@ async fn apply(
             .and_then(|value| value.get("service_snapshot"))
             .cloned()
             .unwrap_or(Value::Null);
-        if !snapshot_matches(&snapshot, service_id, &catalog.service) {
+        if !snapshot_matches(tx, &snapshot, service_id, &catalog.service).await? {
             return Err(ApiError::conflict(SNAPSHOT_INVALID));
         }
         snapshot
@@ -342,14 +361,26 @@ fn require_same_facility(record: &Value, program: &Value) -> Result<()> {
     Ok(())
 }
 
-fn snapshot_matches(snapshot: &Value, service_id: Uuid, service: &Value) -> bool {
-    snapshot.is_object()
+async fn snapshot_matches(
+    tx: &mut Transaction<'_, Postgres>,
+    snapshot: &Value,
+    service_id: Uuid,
+    service: &Value,
+) -> Result<bool> {
+    if !(snapshot.is_object()
         && parse_uuid_value(&snapshot["id"]) == Some(service_id)
         && parse_uuid_value(&snapshot["program_id"]) == parse_uuid_value(&service["program_id"])
         && same_token(&snapshot["code_system"], &service["code_system"])
-        && same_token(&snapshot["session_kind"], &service["session_kind"])
-        && normalized_code(&snapshot["service_code"]).is_some()
-        && normalized_code(&snapshot["service_code"]) == normalized_code(&service["service_code"])
+        && same_token(&snapshot["session_kind"], &service["session_kind"]))
+    {
+        return Ok(false);
+    }
+    crate::service_codes::same(
+        tx,
+        snapshot["service_code"].as_str(),
+        service["service_code"].as_str(),
+    )
+    .await
 }
 
 fn bounds(source: &Value) -> Result<(i64, i64)> {
@@ -415,8 +446,25 @@ fn reopens_schedule(before: &Value, data: &Map<String, Value>) -> bool {
 }
 
 fn field_changed(before: &Value, data: &Map<String, Value>, key: &str) -> bool {
-    data.get(key)
-        .is_some_and(|value| before.get(key) != Some(value))
+    let Some(value) = data.get(key) else {
+        return false;
+    };
+    if matches!(key, "starts_at" | "ends_at") {
+        // Forms normalize PostgreSQL timestamps to JavaScript ISO strings.
+        // Compare exact instants so spelling changes do not block historical edits,
+        // while sub-millisecond changes still require scheduling validation.
+        let instant = |value: &Value| {
+            value
+                .as_str()
+                .and_then(|text| chrono::DateTime::parse_from_rfc3339(text).ok())
+        };
+        return match (before.get(key).and_then(instant), instant(value)) {
+            (Some(previous), Some(next)) => previous != next,
+            // Malformed timestamps must take the validation path, even if equal.
+            _ => true,
+        };
+    }
+    before.get(key) != Some(value)
 }
 
 fn merged(before: Option<&Value>, data: &Map<String, Value>) -> Value {
@@ -465,7 +513,7 @@ fn parse_uuid_value(value: &Value) -> Option<Uuid> {
 fn normalized_code(value: &Value) -> Option<String> {
     value
         .as_str()
-        .map(|text| text.trim().to_uppercase())
+        .map(|text| text.trim().to_owned())
         .filter(|text| !text.is_empty())
 }
 
@@ -496,7 +544,52 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn claim_codes_use_historical_snapshot_only_when_linked() {
+    fn timestamp_edits_compare_precise_instants_and_revalidate_invalid_values() {
+        let before = json!({"starts_at":"2030-04-01T09:00:00.123456+00:00"});
+        for equivalent in [
+            "2030-04-01T09:00:00.123456Z",
+            "2030-04-01T05:00:00.123456-04:00",
+            "2030-04-01T09:00:00.123456000Z",
+        ] {
+            let data = json!({"starts_at":equivalent});
+            assert!(!field_changed(
+                &before,
+                data.as_object().unwrap(),
+                "starts_at"
+            ));
+        }
+        for changed in [
+            json!("2030-04-01T09:00:00.123456001Z"),
+            json!("2030-04-01T09:00:00.123455Z"),
+            json!("2030-04-01T09:00:00.123Z"),
+            json!("invalid"),
+            json!("2030-04-01T09:00:00"),
+            Value::Null,
+        ] {
+            let data = json!({"starts_at":changed});
+            assert!(field_changed(
+                &before,
+                data.as_object().unwrap(),
+                "starts_at"
+            ));
+        }
+        let invalid = json!({"ends_at":"invalid"});
+        assert!(field_changed(
+            &invalid,
+            invalid.as_object().unwrap(),
+            "ends_at"
+        ));
+        assert!(!field_changed(&before, &Map::new(), "starts_at"));
+        let different = json!({"location":"office 2"});
+        assert!(field_changed(
+            &json!({"location":"office"}),
+            different.as_object().unwrap(),
+            "location"
+        ));
+    }
+
+    #[test]
+    fn claim_snapshot_structure_is_required_only_when_linked() {
         let linked = json!({
             "program_service_id": "11111111-1111-1111-1111-111111111111",
             "organization_id":"22222222-2222-2222-2222-222222222222","kind":"individual",
@@ -507,31 +600,14 @@ mod tests {
                 "service_code": "H2019"
             }
         });
-        assert_eq!(
-            claim_code_error(&linked, &json!({"service_code": "  h2019  "})),
-            None
-        );
-        assert_eq!(
-            claim_code_error(&linked, &json!({"service_code": "H2020"})),
-            Some(CLAIM_MISMATCH)
-        );
-        assert_eq!(
-            claim_code_error(&linked, &json!({"service_code": ""})),
-            Some(CLAIM_MISMATCH)
-        );
+        assert_eq!(claim_snapshot_error(&linked), None);
         let malformed = json!({
             "program_service_id": "11111111-1111-1111-1111-111111111111",
             "service_snapshot": {}
         });
+        assert_eq!(claim_snapshot_error(&malformed), Some(CLAIM_SNAPSHOT));
         assert_eq!(
-            claim_code_error(&malformed, &json!({"service_code": "H2019"})),
-            Some(CLAIM_SNAPSHOT)
-        );
-        assert_eq!(
-            claim_code_error(
-                &json!({"program_service_id": null, "service_snapshot": {}}),
-                &json!({"service_code": "FREE"})
-            ),
+            claim_snapshot_error(&json!({"program_service_id": null, "service_snapshot": {}})),
             None
         );
     }
