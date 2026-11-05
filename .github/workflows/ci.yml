@@ -2,14 +2,25 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, nexus/integrated-prototype, 'codex/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, nexus/integrated-prototype]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  orchestration:
+    name: Worker accounting regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tools -p 'test_grok_research.py' -v
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -92,6 +103,8 @@ jobs:
         run: cargo test --locked --test patient_identity_postgres --test admissions_postgres -- --ignored
       - name: PostgreSQL program configuration and routing integration
         run: cargo test --locked --test program_catalog_postgres --test program_admission_postgres --test program_services_postgres -- --ignored
+      - name: PostgreSQL canonical claim identity and migration integration
+        run: cargo test --locked --test service_code_upgrade_postgres --test claim_canonical_http -- --ignored --test-threads=1
       - name: PostgreSQL scheduling and availability integration
         run: cargo test --locked --test scheduling_postgres -- --ignored
       - name: PostgreSQL telehealth participation and signaling integration
@@ -100,6 +113,8 @@ jobs:
         run: cargo test --locked --test transcripts_postgres -- --ignored
       - name: PostgreSQL approved patient knowledge integration
         run: cargo test --locked --test knowledge_postgres -- --ignored
+      - name: PostgreSQL owned worker terminal recovery
+        run: cargo test --locked --lib worker::tests:: -- --ignored --test-threads=1
       - name: PostgreSQL clinical drafting and review integration
         run: cargo test --locked --test drafting_postgres -- --ignored
       - name: PostgreSQL recording consent and encrypted media integration

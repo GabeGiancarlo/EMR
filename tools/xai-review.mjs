@@ -12,15 +12,21 @@ const ledgerFile = path.join(dir, 'usage.json');
 const lockFile = path.join(dir, 'review.lock');
 const lock = fs.openSync(lockFile, 'wx');
 try {
-  const ledger = fs.existsSync(ledgerFile) ? JSON.parse(fs.readFileSync(ledgerFile, 'utf8')) : { priorReviewUsd: 0.262386, requests: [] };
+  const ledger = fs.existsSync(ledgerFile) ? JSON.parse(fs.readFileSync(ledgerFile, 'utf8')) : { priorReviewUsd: 0, requests: [] };
+  if (ledger.runScopedAuthorizationActive) throw Error('Run-scoped authorization is active. Use grok-research.py with the explicit run ID.');
+  const totalLimitUsd = Number(process.env.XAI_BUDGET_USD ?? ledger.authorizedCeilingUsd);
+  if (!Number.isFinite(totalLimitUsd) || totalLimitUsd <= 0) throw Error('A current user-approved budget is required in the ledger or XAI_BUDGET_USD.');
+  ledger.authorizedCeilingUsd = totalLimitUsd;
   // Shared ledger with implementation workers. Unknown charges retain a hold.
   const exposure = ledger.priorReviewUsd + ledger.requests.reduce((sum, r) => sum + (typeof r.costUsd === 'number' && !r.status?.includes('unknown') ? r.costUsd : r.reservedUsd), 0);
-  if (exposure + 20 > 5000) throw Error('User-approved total budget would be exceeded.');
+  if (!Number.isFinite(ledger.priorReviewUsd) || ledger.priorReviewUsd < 0 || !Number.isFinite(exposure) || exposure < 0 || ledger.requests.some(r => !Number.isFinite(r.reservedUsd) || r.reservedUsd < 0 || (r.costUsd !== undefined && (!Number.isFinite(r.costUsd) || r.costUsd < 0)))) throw Error('Invalid ledger money values.');
+  if (exposure + 20 > totalLimitUsd) throw Error('User-approved total budget would be exceeded.');
   if (ledger.requests.some(r => r.name === name)) throw Error('Use unique review names; no implicit retries.');
   const packet = files.map(file => {
-    const resolved = path.resolve(root, file);
-    if (!resolved.startsWith(root + path.sep) || /(^|[\\/])(\.env|\.local|\.git)([./\\]|$)/.test(file)) throw Error('Excluded path');
-    execFileSync('git', ['ls-files', '--error-unmatch', '--', file], { cwd: root, stdio: 'pipe' });
+    const resolved = fs.realpathSync(path.resolve(root, file));
+    const relative = path.relative(root, resolved);
+    if (!resolved.startsWith(root + path.sep) || /(^|[\\/])(\.env|\.local|\.git)([./\\]|$)/.test(file) || /(^|[\\/])(\.env|\.local|\.git)([./\\]|$)/.test(relative) || /\.(pem|key|p12|pfx|db|sqlite3?|dump|bak|csv|wav|webm|mp3|m4a|mp4|ogg|flac)$/i.test(resolved)) throw Error('Excluded path');
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', relative], { cwd: root, stdio: 'pipe' });
     return `FILE ${file}\n` + fs.readFileSync(resolved, 'utf8').split('\n').map((l,i)=>`${i+1}: ${l}`).join('\n');
   }).join('\n\n');
   if (packet.length > 130000) throw Error('Packet exceeds 130k characters; scope the review.');
@@ -39,11 +45,13 @@ try {
     const result = await response.json();
     entry.status = result.status;
     entry.usage = result.usage;
-    if (typeof result.usage?.cost_in_usd_ticks === 'number') entry.costUsd = result.usage.cost_in_usd_ticks / 1e10;
+    if (Number.isFinite(result.usage?.cost_in_usd_ticks) && result.usage.cost_in_usd_ticks >= 0) entry.costUsd = result.usage.cost_in_usd_ticks / 1e10;
     else entry.status = `${entry.status}-cost-unknown`;
     entry.model = result.model;
     const text = (result.output ?? []).filter(x=>x.type==='message').flatMap(x=>x.content ?? []).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
     fs.writeFileSync(path.join(dir, `${name}.md`), text);
+    if (!text.trim()) entry.status = `${entry.status}-empty-output`;
+    if (entry.status !== 'completed') process.exitCode = 1;
     console.log(JSON.stringify({name,status:entry.status,costUsd:entry.costUsd,report:path.join(dir,`${name}.md`)}));
   } catch (error) {entry.status='failed-cost-unknown'; throw error;}
   finally { save(); }
