@@ -1085,6 +1085,9 @@ pub(crate) async fn generate(input: DraftInput) -> Result<DraftOutput> {
 }
 
 #[cfg(test)]
+mod evaluation;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
