@@ -23,6 +23,7 @@ import {
 } from "./FinancialActions";
 import ClaimReadiness from "./ClaimReadiness";
 import ThemeControl from "./ThemeControl";
+import ProfileMenu from "./ProfileMenu";
 import WorkspaceSearch from "./WorkspaceSearch";
 import { visibleViews } from "./search";
 import type { SearchResult } from "./search";
@@ -319,8 +320,8 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-  const changeActor = (id: string) => {
-    if (!canLeaveDraftReview()) return;
+  const changeActor = (id: string): boolean => {
+    if (!canLeaveDraftReview()) return false;
     ++requestVersion.current;
     if (id) localStorage.setItem(actorStorageKey, id);
     else localStorage.removeItem(actorStorageKey);
@@ -342,6 +343,7 @@ export default function App() {
     setMobile(false);
     setToast("");
     if (id === actor) void reload();
+    return true;
   };
   const navigate = (next: View) => {
     if (!canLeaveDraftReview()) return false;
@@ -1791,36 +1793,31 @@ export default function App() {
           <Metric
             icon="billing"
             title="Recorded charges"
-            number={money(
+            number={canRead("claims", false) ? money(
               data!.claims
                 .filter((c) => c.status !== "voided")
                 .reduce((n, c) => n + numeric(c, "amount_cents"), 0),
-            )}
+            ) : "Unavailable"}
             caption="Recorded charges, excluding voided claims"
           />
           <Metric
             icon="check"
             title="Cash received"
-            number={money(
-              metric.cash_received_cents ??
-                data!.payments
-                  .filter((p) => p.source !== "adjustment")
-                  .reduce((n, p) => n + numeric(p, "amount_cents"), 0),
-            )}
+            number={metric.cash_received_cents == null ? "Unavailable" : money(metric.cash_received_cents)}
             caption="Net receipts; excludes adjustments"
             color="blue"
           />
           <Metric
             icon="clock"
             title="Outstanding"
-            number={money(metric.outstanding_cents)}
+            number={metric.outstanding_cents == null ? "Unavailable" : money(metric.outstanding_cents)}
             caption="Submitted balances less payments and adjustments"
             color="sand"
           />
           <Metric
             icon="activity"
             title="Ready for submission"
-            number={data!.claims.filter((c) => c.status === "ready").length}
+            number={canRead("claims", false) ? data!.claims.filter((c) => c.status === "ready").length : "Unavailable"}
             caption="Validated internally, not transmitted"
             color="rose"
           />
@@ -2297,7 +2294,7 @@ export default function App() {
                     icon: "notes",
                     title: "Speech-to-text",
                     status: "optional_local",
-                    desc: "Structured forms support local WAV transcription with recording consent and manual review. The optional recognizer must be installed on the API machine. Live session recording is not connected.",
+                    desc: "With consent, staff can transcribe a WAV file in a form or an eligible audio track from a recorded visit. Transcription runs locally when the recognizer is configured; staff review the text before using it in the chart.",
                   },
                   {
                     icon: "link",
@@ -2420,16 +2417,18 @@ export default function App() {
               <span>Authentication deferred</span>
             </div>
           </div>
-          <div className="operator">
-            <Person name={value(data.actor, "name")} sub={label(role)} small />
-            <button
-              className="button secondary small exit-workspace"
-              title="Return to local operator selection"
-              onClick={() => changeActor("")}
-            >
-              <Icon name="back" size={15} /> Exit workspace
-            </button>
-          </div>
+          <ProfileMenu
+            key={data.actor.id}
+            name={value(data.actor, "name")}
+            roleLabel={label(role)}
+            canOpenSettings={visibleViews(data).includes("settings")}
+            onOpenSettings={() => {
+              if (!navigate("settings")) return false;
+              requestAnimationFrame(() => document.getElementById("workspace-heading")?.focus());
+              return true;
+            }}
+            onLeaveLocalOperator={() => changeActor("")}
+          />
         </div>
       </aside>
       {mobile && (
@@ -2466,7 +2465,6 @@ export default function App() {
               })}
             </span>
             <span className="topbar-divider" />
-            <ThemeControl />
             <button
               className="button secondary small refresh-workspace"
               aria-label="Refresh workspace"
@@ -2491,7 +2489,7 @@ export default function App() {
                     : "NEXUS / " +
                       nav.find((n) => n.id === view)?.label.toUpperCase()}
               </span>
-              <h1>
+              <h1 id="workspace-heading" tabIndex={-1}>
                 {view === "clients" && selectedClient
                   ? "One person. A connected team."
                   : view === "overview" ? workspaceTitle : titles[view].title}

@@ -214,3 +214,25 @@ test("group dedup and filters use synthetic authorized rows only", () => {
   assert.equal(defaultFacilityId("", [{ id: "only", active: true }]), "only");
   assert.equal(defaultFacilityId("", []), ALL);
 });
+
+
+test("a group suppresses its child only inside the displayed calendar window", () => {
+  const all = { facilityId: ALL, clinicianId: ALL, type: ALL, status: ALL };
+  const parent: Schedulable = { id: "group", source: "group", facilityId: "f", clinicianId: "c",
+    type: "process", status: "scheduled", startsAt: "2026-06-14T23:00:00Z", endsAt: "2026-06-15T00:00:00Z", linkedSessionIds: ["child"] };
+  const child: Schedulable = { ...parent, id: "child", source: "session", type: "individual",
+    startsAt: "2026-06-15T00:00:00Z", endsAt: "2026-06-15T01:00:00Z" };
+  const unrelated = { ...child, id: "unrelated" };
+  const items = [parent, child, unrelated];
+  const select = (days: string[], filters = all) => selectCalendarItems(items, filters, {days, timeZone: "UTC"});
+  const day = select(["2026-06-15"]);
+  assert.deepEqual(day.map(x => x.id), ["child", "unrelated"]);
+  assert.equal(day.find(x => x.id === "child"), child); // Same collection supplies detail lookup.
+  assert.deepEqual(select(["2026-06-14"]).map(x => x.id), ["group"]);
+  for (const days of [weekDates("2026-06-15"), monthGrid("2026-06-15")]) {
+    assert.deepEqual(select(days).map(x => x.id), ["group", "unrelated"]);
+    assert.deepEqual(select(days, {...all, type: "individual"}).map(x => x.id), ["child", "unrelated"]);
+  }
+  assert.deepEqual(selectCalendarItems([child], all, {days:["2026-06-15"], timeZone:"UTC"}), [child]);
+  assert.deepEqual(select(["2026-06-16"]), []);
+});

@@ -4,6 +4,7 @@ type InputField = {
   type?: string;
   required?: boolean;
   ref?: string;
+  catalog?: string;
 };
 
 /** Keep empty textual columns distinct from nullable relationships and dates. */
@@ -22,7 +23,7 @@ export function normalizeFieldValue(
     }
   } else if (field.type === "datetime-local") {
     value = value ? new Date(String(value)).toISOString() : null;
-  } else if (field.type === "date" || field.ref) {
+  } else if (field.type === "date" || field.ref || field.catalog) {
     if (value === "" || value == null) value = null;
   } else if (
     ["text", "textarea", "email", "tel"].includes(field.type || "text")

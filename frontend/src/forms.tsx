@@ -4,7 +4,8 @@ import { clientName, date, label, value } from "./api";
 import type { Bootstrap, FormField, Resource, Row } from "./api";
 import { Button, Icon } from "./ui";
 import { normalizeFieldValue } from "./serialize";
-import { availableServices, claimServiceDefaults, serviceDurationError, serviceSnapshot } from "./programRouting";
+import { claimFormDefaults, initialFormValues } from "./formValues";
+import { availableServices, serviceDurationError, serviceSnapshot } from "./programRouting";
 import { facilityWallTime, occurrenceLabel, resolveFacilityTime, schedulingZone, wallTimeCandidates } from "./schedulingTime";
 import {
   ADULT_PROGRAM_HINT,
@@ -570,27 +571,7 @@ export function RecordForm({
     ? [...baseFields.slice(0, resource === "sessions" ? 2 : 2), f("program_service_id", "Program service", {type:"select",catalog:"services",required:!initial.id || !!initial.program_service_id,hint:"The selected service sets the allowed duration, documentation template, and billing defaults."}), ...baseFields.slice(2)] : baseFields;
   const scheduling = resource === "sessions" || resource === "groups";
   const [values, setValues] = useState<Record<string, unknown>>(() =>
-    Object.fromEntries(
-      fields.map((f) => {
-        let v =
-          initial[f.key] ??
-          (resource === "claims" && !initial.id ? claimServiceDefaults(data.sessions.find(row=>row.id===initial.session_id))[f.key] : undefined) ??
-          f.default ??
-          (f.type === "fields" ? [] : f.type === "checkbox" ? false : "");
-        if (f.type === "money" && v !== "") v = Number(v) / 100;
-        if (f.type === "datetime-local" && v) {
-          const d = new Date(String(v));
-          if (!Number.isNaN(d.getTime())) {
-            const offset = d.getTimezoneOffset() * 60000;
-            v = scheduling ? facilityWallTime(d.toISOString(), schedulingZone(data, initial, resource))
-              : new Date(d.getTime() - offset).toISOString().slice(0, 16);
-          }
-        }
-        if (f.type === "select" && f.required && v === "")
-          v = f.options?.[0] ?? "";
-        return [f.key, v];
-      }),
-    ),
+    initialFormValues(fields, data, initial, resource),
   );
   const zone = schedulingZone(data, { ...initial, ...values }, resource);
   const [occurrences, setOccurrences] = useState<Record<string, string>>(() => Object.fromEntries(
@@ -613,7 +594,7 @@ export function RecordForm({
         const service=data.program_services?.find(row=>row.id===v);
         if (service && resource === "sessions") next.kind=service.session_kind;
       }
-      if (resource === "claims" && key === "session_id" && v !== prev.session_id) Object.assign(next,claimServiceDefaults(data.sessions.find(row=>row.id===v)));
+      if (resource === "claims" && key === "session_id" && v !== prev.session_id) Object.assign(next,claimFormDefaults(data.sessions.find(row=>row.id===v)));
       return next;
     });
     if (["facility_id", "client_id", "episode_id"].includes(key)) setOccurrences({});
