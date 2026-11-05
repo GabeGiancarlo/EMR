@@ -151,6 +151,49 @@ fn session_body(
     })
 }
 
+// RecordForm submits all editable fields, formatting unchanged timestamps as
+// JavaScript ISO strings rather than PostgreSQL's JSON timestamp spelling.
+fn booking_form_body(resource: &str, row: &Value) -> Value {
+    let fields: &[&str] = if resource == "sessions" {
+        &[
+            "client_id",
+            "episode_id",
+            "clinician_id",
+            "program_service_id",
+            "kind",
+            "starts_at",
+            "ends_at",
+            "location",
+            "status",
+        ]
+    } else {
+        &[
+            "facility_id",
+            "clinician_id",
+            "program_service_id",
+            "title",
+            "kind",
+            "starts_at",
+            "ends_at",
+            "capacity",
+            "location",
+        ]
+    };
+    let mut body = serde_json::Map::new();
+    for field in fields {
+        let value = if matches!(*field, "starts_at" | "ends_at") {
+            let instant = chrono::DateTime::parse_from_rfc3339(row[field].as_str().unwrap())
+                .unwrap()
+                .with_timezone(&chrono::Utc);
+            json!(instant.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+        } else {
+            row[field].clone()
+        };
+        body.insert((*field).into(), value);
+    }
+    Value::Object(body)
+}
+
 #[actix_web::test]
 #[ignore = "Requires disposable nexus_test; creates only a unique test schema"]
 async fn service_routing_preserves_snapshots_and_rejects_invalid_links() {
@@ -730,14 +773,11 @@ async fn service_routing_preserves_snapshots_and_rejects_invalid_links() {
         reserved_before,
         count(&pool, "SELECT count(*) FROM sessions").await
     );
-    let (status, retired_complete) = patch(
-        &pool,
-        &actor,
-        "sessions",
-        &future_retired,
-        json!({"status": "cancelled"}),
-    )
-    .await;
+    let mut retired_form = booking_form_body("sessions", &future_retired);
+    assert_ne!(retired_form["starts_at"], future_retired["starts_at"]);
+    retired_form["status"] = json!("cancelled");
+    let (status, retired_complete) =
+        patch(&pool, &actor, "sessions", &future_retired, retired_form).await;
     assert_eq!(status, StatusCode::OK, "{retired_complete}");
     let (status, reopened) = patch(
         &pool,
@@ -795,14 +835,11 @@ async fn service_routing_preserves_snapshots_and_rejects_invalid_links() {
         message(&legacy_move).contains("program service"),
         "{legacy_move}"
     );
-    let (status, legacy_status) = patch(
-        &pool,
-        &actor,
-        "sessions",
-        &legacy,
-        json!({"status": "cancelled"}),
-    )
-    .await;
+    let mut legacy_form = booking_form_body("sessions", &legacy);
+    assert_eq!(legacy_form["program_service_id"], Value::Null);
+    assert_ne!(legacy_form["starts_at"], legacy["starts_at"]);
+    legacy_form["status"] = json!("cancelled");
+    let (status, legacy_status) = patch(&pool, &actor, "sessions", &legacy, legacy_form).await;
     assert_eq!(status, StatusCode::OK, "{legacy_status}");
     let (status, legacy_reopen) = patch(
         &pool,
@@ -889,6 +926,20 @@ async fn service_routing_preserves_snapshots_and_rejects_invalid_links() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{claim_edit}");
+    // The catalog accepts case variants, so economic uniqueness must do so too.
+    let (status, duplicate_code) = send(
+        &pool,
+        &actor,
+        "POST",
+        "/api/claims",
+        json!({
+            "client_id": two["id"], "policy_id": policy["id"],
+            "session_id": past["id"], "service_code": "H2019",
+            "diagnosis_code": "F99", "amount_cents": 1500, "units": 1
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{duplicate_code}");
     let legacy_policy = create(
         &pool,
         &actor,
@@ -1161,6 +1212,35 @@ async fn service_routing_preserves_snapshots_and_rejects_invalid_links() {
     let (legacy_child_service, legacy_child_snapshot) = session_snapshot(&pool, legacy_child).await;
     assert_eq!(legacy_child_service, None);
     assert_eq!(legacy_child_snapshot, json!({}));
+    let legacy_group_row: Value =
+        sqlx::query_scalar("SELECT to_jsonb(g) FROM groups g WHERE id=$1")
+            .bind(legacy_group)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let mut legacy_group_form = booking_form_body("groups", &legacy_group_row);
+    legacy_group_form["title"] = json!("Reviewed legacy group");
+    let (status, legacy_group_saved) = patch(
+        &pool,
+        &actor,
+        "groups",
+        &legacy_group_row,
+        legacy_group_form,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{legacy_group_saved}");
+    assert_eq!(legacy_group_saved["program_service_id"], Value::Null);
+    let mut legacy_group_move = booking_form_body("groups", &legacy_group_saved);
+    legacy_group_move["ends_at"] = json!("2030-06-01T10:00:00.001Z");
+    let (status, legacy_group_move) = patch(
+        &pool,
+        &actor,
+        "groups",
+        &legacy_group_saved,
+        legacy_group_move,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{legacy_group_move}");
     let (status, program_into_legacy) = send(
         &pool,
         &actor,
@@ -1201,6 +1281,23 @@ async fn service_routing_preserves_snapshots_and_rejects_invalid_links() {
         "groups",
         &future_group,
         json!({"starts_at": "2030-05-01T12:00:00Z", "ends_at": "2030-05-01T12:50:00Z"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{retired_group_move}");
+    let mut retired_group_form = booking_form_body("groups", &future_group);
+    retired_group_form["title"] = json!("Reviewed retired-service group");
+    let (status, retired_group_saved) =
+        patch(&pool, &actor, "groups", &future_group, retired_group_form).await;
+    assert_eq!(status, StatusCode::OK, "{retired_group_saved}");
+    assert_eq!(retired_group_saved["service_snapshot"], group_snapshot);
+    let mut retired_group_move = booking_form_body("groups", &retired_group_saved);
+    retired_group_move["ends_at"] = json!("2030-05-01T13:50:00.001Z");
+    let (status, retired_group_move) = patch(
+        &pool,
+        &actor,
+        "groups",
+        &retired_group_saved,
+        retired_group_move,
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{retired_group_move}");

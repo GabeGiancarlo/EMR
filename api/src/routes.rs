@@ -202,7 +202,20 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
                 .sum()
         })
         .unwrap_or_default();
-    data["metrics"] = json!({"active_clients":count("clients","status","active"),"open_tasks":count("tasks","status","open")+count("tasks","status","in_progress"),"scheduled_sessions":count("sessions","status","scheduled"),"draft_notes":count("notes","status","draft"),"outstanding_cents":claim_total-paid+reversed,"unbilled_cents":unbilled,"cash_received_cents":cash-reversed_cash,"adjustments_cents":paid-cash-reversed+reversed_cash});
+    // A denied collection also looks empty; its absence cannot establish a zero balance.
+    let readable = |resource: &str| data["permissions"][resource]["read"].as_bool() == Some(true);
+    let claims_readable = readable("claims");
+    let receipts_readable = readable("payments") && readable("payment_reversals");
+    data["metrics"] = json!({
+        "active_clients": count("clients", "status", "active"),
+        "open_tasks": count("tasks", "status", "open") + count("tasks", "status", "in_progress"),
+        "scheduled_sessions": count("sessions", "status", "scheduled"),
+        "draft_notes": count("notes", "status", "draft"),
+        "outstanding_cents": (claims_readable && receipts_readable).then_some(claim_total - paid + reversed),
+        "unbilled_cents": claims_readable.then_some(unbilled),
+        "cash_received_cents": receipts_readable.then_some(cash - reversed_cash),
+        "adjustments_cents": receipts_readable.then_some(paid - cash - reversed + reversed_cash)
+    });
     if matches!(actor.role.as_str(), "executive" | "billing") {
         let draft_count: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM notes WHERE organization_id=$1 AND status='draft'",

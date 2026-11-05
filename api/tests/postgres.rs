@@ -411,6 +411,56 @@ async fn persistent_workflows_and_boundaries() {
     assert_eq!(reversed_workspace["metrics"]["outstanding_cents"], 10000);
     assert_eq!(reversed_workspace["metrics"]["cash_received_cents"], 0);
     let replacement_payment=create(&pool,actor,"payments",json!({"claim_id":claim["id"],"amount_cents":10000,"received_on":"2026-02-04","reference":"FULL-CORRECTED-TEST","source":"payer"})).await;
+    let (status, full) =
+        request(&pool, Method::GET, "/api/bootstrap", Some(actor), json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(full["metrics"]["outstanding_cents"], 0);
+    assert_eq!(full["metrics"]["cash_received_cents"], 10000);
+    let claims_grant = create(&pool, actor, "exceptions", json!({"staff_id":support_id,"resource":"claims","access_mode":"read","reason":"Review claim records only","expires_at":"2099-01-01T00:00:00Z"})).await;
+    let (status, limited) = request(
+        &pool,
+        Method::GET,
+        "/api/bootstrap",
+        Some(support_id),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(limited["claims"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["id"] == claim["id"] && row["status"] == "paid"));
+    assert_eq!(limited["payments"], json!([]));
+    assert_eq!(limited["payment_reversals"], json!([]));
+    assert_eq!(limited["metrics"]["outstanding_cents"], Value::Null);
+    assert_eq!(limited["metrics"]["cash_received_cents"], Value::Null);
+    assert_eq!(limited["metrics"]["adjustments_cents"], Value::Null);
+    assert_eq!(limited["metrics"]["unbilled_cents"], 500);
+    let (status, _) = request(
+        &pool,
+        Method::PATCH,
+        &format!("/api/exceptions/{}", claims_grant["id"].as_str().unwrap()),
+        Some(actor),
+        json!({"revoked":true}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    create(&pool, actor, "exceptions", json!({"staff_id":support_id,"resource":"payments","access_mode":"read","reason":"Review receipts only","expires_at":"2099-01-01T00:00:00Z"})).await;
+    let (status, receipts) = request(
+        &pool,
+        Method::GET,
+        "/api/bootstrap",
+        Some(support_id),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(receipts["claims"], json!([]));
+    assert_eq!(receipts["metrics"]["outstanding_cents"], Value::Null);
+    assert_eq!(receipts["metrics"]["unbilled_cents"], Value::Null);
+    assert_eq!(receipts["metrics"]["cash_received_cents"], 10000);
+    assert_eq!(receipts["metrics"]["adjustments_cents"], 0);
     let reverse_path = format!(
         "/api/payments/{}/reverse",
         replacement_payment["id"].as_str().unwrap()
