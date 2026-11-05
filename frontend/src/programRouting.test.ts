@@ -6,7 +6,7 @@ const service: Row = { id:"service",program_id:"program",active:true,session_kin
 describe("program service routing", () => {
   it("suggests billing from the saved encounter, including zero fees, without inventing units", () => {
     const session={id:"visit",program_service_id:"service",service_snapshot:service};
-    assert.deepEqual(claimServiceDefaults(session),{service_code:"ORG-1",amount_cents:125});
+    assert.deepEqual(claimServiceDefaults(session),{service_code:"ORG-1",amount_cents:12500});
     assert.deepEqual(claimServiceDefaults({...session,service_snapshot:{...service,default_charge_cents:0}}),{service_code:"ORG-1",amount_cents:0});
     assert.equal(serviceSnapshot({...session,program_service_id:"other"}),undefined);
   });

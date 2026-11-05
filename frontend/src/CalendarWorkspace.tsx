@@ -230,6 +230,7 @@ export default function CalendarWorkspace({
     setAnchor(day); setSelectedDay(day); setOpenKey(event.key);
   }, [focusSessionId]);
 
+  const range = useMemo(() => mode === "month" ? monthGrid(anchor) : mode === "day" ? [anchor] : weekDates(mode === "week" || mode === "agenda" ? anchor : selectedDay), [mode, anchor, selectedDay]);
   const visible = useMemo(
     () =>
       selectCalendarItems(events, {
@@ -237,13 +238,10 @@ export default function CalendarWorkspace({
         clinicianId,
         type,
         status,
-      }),
-    [events, facilityId, clinicianId, type, status],
+      }, { days: range, timeZone }),
+    [events, facilityId, clinicianId, type, status, range, timeZone],
   );
-  const range = mode === "month" ? monthGrid(anchor) : mode === "day" ? [anchor] : weekDates(mode === "week" || mode === "agenda" ? anchor : selectedDay);
-  const ranged = visible.filter((event) =>
-    range.some((day) => intervalOverlapsDay(event.startsAt, event.endsAt, day, timeZone)),
-  );
+  const ranged = visible;
   const openEvent = visible.find((event) => event.key === openKey) ?? null;
 
   useEffect(() => {
@@ -603,7 +601,7 @@ export default function CalendarWorkspace({
               )}
               {openEvent.source === "group" && (
                 <>
-                  <dt>Participants</dt>
+                  <dt>Participants in your access</dt>
                   <dd>
                     {openEvent.participantNames.length ? openEvent.participantNames.join(", ") : "No participant names are available in your access."}
                     {openEvent.hiddenParticipants > 0 ? " Some participants are outside your chart access." : ""}

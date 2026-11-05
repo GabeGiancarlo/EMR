@@ -216,7 +216,8 @@ export function defaultFacilityId(
   return facilities.find((facility) => facility.active !== false)?.id ?? facilities[0]?.id ?? ALL;
 }
 
-export function selectCalendarItems<T extends Schedulable>(items: T[], filters: CalendarFilter): T[] {
+export function selectCalendarItems<T extends Schedulable>(items: T[], filters: CalendarFilter,
+  window?: { days: string[]; timeZone: string }): T[] {
   const facility = blankFilter(filters.facilityId) ? "" : filters.facilityId;
   const clinician = blankFilter(filters.clinicianId) ? "" : filters.clinicianId;
   const type = blankFilter(filters.type) ? "" : filters.type;
@@ -226,7 +227,8 @@ export function selectCalendarItems<T extends Schedulable>(items: T[], filters: 
       (!facility || item.facilityId === facility) &&
       (!clinician || item.clinicianId === clinician) &&
       (!type || item.type === type) &&
-      (!status || item.status === status),
+      (!status || item.status === status) &&
+      (!window || window.days.some(day => intervalOverlapsDay(item.startsAt, item.endsAt, day, window.timeZone))),
   );
   const hiddenSessions = new Set<string>();
   for (const item of matched) {
