@@ -1,5 +1,9 @@
 # Nexus integrated prototype delivery plan
 
+## Confirmed November 13 target
+
+On November 4, 2026, the owner set **Friday, November 13, 2026** as the target for a fully working prototype covering **all planned product features**, with external integrations lower priority. The [November 13 execution plan](prototype-target-2026-11-13.md) maps all 50 capabilities to workstreams, sequencing and acceptance evidence. This is broader than demonstrating only the existing staff workflows. The older Vegas note below records prior context and does not replace this confirmed target.
+
 ## Product intent
 
 Build a recovery-treatment operating system connecting clinical care, billing readiness and executive oversight. Start with empty real storage, custom components and human-reviewed records. The owner confirmed U.S. adult outpatient, IOP and PHP as the first scope. State-specific rules and payer mix still require operating-center input. The Vegas conversation is an informal progress walkthrough, not a public launch deadline.
@@ -41,6 +45,8 @@ Transcript import, human-reviewed field mapping and an optional local whisper.cp
 Claims preparation and reconciliation can be owned by Nexus. Actual payer transmission, eligibility and remittance require trading-partner enrollment, format/licensing decisions and adapter validation; a local status change must never imply successful external transmission. Keep accounting exports free of patient identifiers unless the receiving system and agreement explicitly support that use.
 
 ## Working conventions
+
+Historical November 2 checkpoint below: its Windows path, feature gaps and $5,000 authorization describe that earlier session. Current November 4 direction, Mac runtime and the $1,500 research/readiness ceiling are in [central context](../PROJECT_CONTEXT.md) and [current orchestration](orchestration.md). Do not inherit the old budget or treat the old gap list as current source evidence.
 
 Current local checkpoint includes intake, episodes, care plans, individual/group encounters, reviewed/signed documentation, stage/care-level form routing, local WAV transcription, billing readiness, manual external references, payments/reversals, exports and staff handoffs. Browser and database evidence is recorded in [verification](verification.md). Five scoped Grok implementation proposals were integrated and checked locally; a failed staff-role worker was completed by the root agent. This is an expanded working prototype, not completion of the entire EMR scope.
 
