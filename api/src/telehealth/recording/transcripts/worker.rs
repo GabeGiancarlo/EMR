@@ -1,8 +1,12 @@
 use super::*;
 use crate::media_transcription::Recognition;
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
+use sqlx::{Connection, PgConnection, PgPool};
+use std::collections::VecDeque;
 use std::time::Duration;
+
+const ADVISORY_LOCK_KEY: i64 = 734903221;
+const TERMINAL_SAVE_BACKOFF: Duration = Duration::from_secs(2);
 
 async fn authorized(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<(Actor, Value, Value)> {
     let (org, rid): (Uuid, Uuid) =
@@ -43,9 +47,22 @@ async fn authorized(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<(Act
     .await?;
     Ok((actor, room, job))
 }
-async fn failed(pool: &PgPool, id: Uuid, code: &str) -> Result<()> {
-    let mut tx = pool.begin().await?;
-    let row:Option<Value>=sqlx::query_scalar("UPDATE transcription_jobs SET state='failed',error_code=$2,completed_at=clock_timestamp() WHERE id=$1 AND state IN ('queued','running') RETURNING to_jsonb(transcription_jobs)").bind(id).bind(code).fetch_optional(&mut *tx).await?;
+async fn write_terminal(tx: &mut Transaction<'_, Postgres>, id: Uuid, code: &str) -> Result<()> {
+    // The id lookup does not lock the job row. Organization lock comes first.
+    let org =
+        sqlx::query_scalar::<_, Uuid>("SELECT organization_id FROM transcription_jobs WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&mut **tx)
+            .await?;
+    let Some(org) = org else {
+        return Ok(());
+    };
+    crate::scheduling::lock_org(tx, org).await?;
+    let row: Option<Value> = sqlx::query_scalar("UPDATE transcription_jobs SET state='failed',error_code=$2,completed_at=clock_timestamp() WHERE id=$1 AND state IN ('queued','running') RETURNING to_jsonb(transcription_jobs)")
+        .bind(id)
+        .bind(code)
+        .fetch_optional(&mut **tx)
+        .await?;
     if let Some(row) = row {
         let actor = Actor {
             id: uid(&row, "requested_by")?,
@@ -54,7 +71,7 @@ async fn failed(pool: &PgPool, id: Uuid, code: &str) -> Result<()> {
             value: Value::Null,
         };
         access::audit(
-            &mut tx,
+            tx,
             &actor,
             "processing_failed",
             "transcription_jobs",
@@ -62,8 +79,59 @@ async fn failed(pool: &PgPool, id: Uuid, code: &str) -> Result<()> {
         )
         .await?;
     }
-    tx.commit().await?;
     Ok(())
+}
+async fn failed(owner: &mut PgConnection, id: Uuid, code: &str) -> Result<()> {
+    let mut tx = owner.begin().await?;
+    match write_terminal(&mut tx, id, code).await {
+        Ok(()) => {
+            tx.commit().await?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = tx.rollback().await;
+            Err(error)
+        }
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+#[must_use]
+enum TerminalPersist {
+    Saved,
+    Retry,
+    OwnershipLost,
+}
+/// Terminal write on the advisory-lock session. Retry keeps the same id/code.
+/// OwnershipLost means this session is unusable; callers must not write via the pool.
+async fn persist_terminal(owner: &mut PgConnection, id: Uuid, code: &str) -> TerminalPersist {
+    if failed(owner, id, code).await.is_ok() {
+        return TerminalPersist::Saved;
+    }
+    // This probe does not fence another connection. It only reports whether the
+    // session that holds the advisory lock can still run a query.
+    if same_session_unusable(owner).await {
+        TerminalPersist::OwnershipLost
+    } else {
+        TerminalPersist::Retry
+    }
+}
+async fn same_session_unusable(owner: &mut PgConnection) -> bool {
+    sqlx::query("SELECT 1").execute(&mut *owner).await.is_err()
+}
+async fn owned_interrupted(owner: &mut PgConnection) -> Result<VecDeque<Uuid>> {
+    let ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM transcription_jobs WHERE state='running' ORDER BY created_at, id",
+    )
+    .fetch_all(&mut *owner)
+    .await?;
+    Ok(VecDeque::from(ids))
+}
+async fn next_queued(owner: &mut PgConnection) -> Result<Option<Uuid>> {
+    Ok(sqlx::query_scalar(
+        "SELECT id FROM transcription_jobs WHERE state='queued' ORDER BY created_at, id LIMIT 1",
+    )
+    .fetch_optional(&mut *owner)
+    .await?)
 }
 async fn guarded(
     pool: &PgPool,
@@ -152,54 +220,100 @@ async fn process(pool: &PgPool, owner: &mut sqlx::PgConnection, id: Uuid) -> Res
 }
 pub(crate) async fn start(pool: PgPool) {
     // A dedicated session owns this database's worker; its drop releases the lock.
+    // Recovery reads and terminal writes use that session only. A pooled running
+    // scan is not a fence after this connection dies.
     let Ok(connection) = pool.acquire().await else {
         log::error!("Transcription worker connection unavailable");
         return;
     };
     let mut owner = connection.detach();
-    let locked = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock(734903221)")
+    let locked = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
+        .bind(ADVISORY_LOCK_KEY)
         .fetch_one(&mut owner)
         .await
         .unwrap_or(false);
     if !locked {
         return;
     }
-    let interrupted: Vec<Uuid> =
-        match sqlx::query_scalar("SELECT id FROM transcription_jobs WHERE state='running'")
-            .fetch_all(&pool)
-            .await
-        {
-            Ok(ids) => ids,
-            Err(_) => {
-                log::error!("Transcription recovery query failed");
-                return;
-            }
-        };
-    for id in interrupted {
-        if failed(&pool, id, "worker_interrupted").await.is_err() {
-            log::error!("Transcription recovery audit failed");
-            return;
-        }
-    }
+    let mut interrupted: Option<VecDeque<Uuid>> = None;
+    let mut unsaved: Option<(Uuid, &'static str)> = None;
     loop {
-        if sqlx::query("SELECT 1").execute(&mut owner).await.is_err() {
+        if interrupted.is_none() {
+            match owned_interrupted(&mut owner).await {
+                Ok(ids) => interrupted = Some(ids),
+                Err(_) => {
+                    if same_session_unusable(&mut owner).await {
+                        log::error!("Transcription worker ownership connection lost");
+                        return;
+                    }
+                    log::error!("Transcription recovery query failed");
+                    tokio::time::sleep(TERMINAL_SAVE_BACKOFF).await;
+                    continue;
+                }
+            }
+        }
+        if let Some(ids) = interrupted.as_mut() {
+            if let Some(id) = ids.front().copied() {
+                match persist_terminal(&mut owner, id, "worker_interrupted").await {
+                    TerminalPersist::Saved => {
+                        ids.pop_front();
+                    }
+                    TerminalPersist::Retry => {
+                        log::error!("Transcription recovery audit failed for {id}");
+                        tokio::time::sleep(TERMINAL_SAVE_BACKOFF).await;
+                    }
+                    TerminalPersist::OwnershipLost => {
+                        log::error!("Transcription worker ownership connection lost");
+                        return;
+                    }
+                }
+                continue;
+            }
+        }
+        if let Some((id, code)) = unsaved {
+            match persist_terminal(&mut owner, id, code).await {
+                TerminalPersist::Saved => unsaved = None,
+                TerminalPersist::Retry => {
+                    log::error!(
+                        "Transcription failure state could not be stored for {id} ({code})"
+                    );
+                    tokio::time::sleep(TERMINAL_SAVE_BACKOFF).await;
+                    continue;
+                }
+                TerminalPersist::OwnershipLost => {
+                    log::error!("Transcription worker ownership connection lost");
+                    return;
+                }
+            }
+        }
+        // Do not acquire another job until this session has stored a pending terminal write.
+        if same_session_unusable(&mut owner).await {
             log::error!("Transcription worker ownership connection lost");
             return;
         }
         if let Ok(_permit) = crate::speech::recognition_permit() {
-            let next=sqlx::query_scalar::<_,Uuid>("SELECT id FROM transcription_jobs WHERE state='queued' ORDER BY created_at,id LIMIT 1").fetch_optional(&pool).await;
-            match next {
+            match next_queued(&mut owner).await {
                 Ok(Some(id)) => {
-                    if let Err(e) = process(&pool, &mut owner, id).await {
-                        if failed(&pool, id, e.code).await.is_err() {
-                            log::error!("Transcription failure state could not be stored");
-                        }
+                    if let Err(error) = process(&pool, &mut owner, id).await {
+                        unsaved = Some((id, error.code));
+                        continue;
                     }
                 }
                 Ok(None) => {}
-                Err(_) => log::error!("Transcription queue unavailable"),
+                Err(_) => {
+                    if same_session_unusable(&mut owner).await {
+                        log::error!("Transcription worker ownership connection lost");
+                        return;
+                    }
+                    log::error!("Transcription queue unavailable");
+                }
             }
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
+}
+
+#[cfg(test)]
+mod tests {
+    include!("worker_terminal_tests.rs");
 }
