@@ -18,6 +18,7 @@ mod readiness;
 mod records;
 mod routes;
 mod scheduling;
+mod service_codes;
 mod speech;
 mod telehealth;
 mod workflow;
@@ -126,7 +127,38 @@ impl From<sqlx::Error> for ApiError {
     }
 }
 pub async fn migrate(pool: &PgPool) -> std::result::Result<(), sqlx::migrate::MigrateError> {
-    sqlx::migrate!("../migrations").run(pool).await
+    use sqlx::{migrate::Migrate, Connection};
+    // A dedicated connection cannot return a session advisory lock to the pool
+    // on an error. Coordinate the compatibility check with SQLx's migration lock.
+    let mut conn = pool.acquire().await?.detach();
+    conn.lock().await?;
+    let result = async {
+        conn.ensure_migrations_table().await?;
+        let applied = conn.list_applied_migrations().await?;
+        let pending_identity = !applied
+            .iter()
+            .any(|m| m.version == service_codes::IDENTITY_MIGRATION);
+        let mut migrator = sqlx::migrate!("../migrations");
+        migrator.set_locking(false); // The same SQLx lock is already held above.
+        if pending_identity {
+            let mut tx = conn.begin().await?;
+            service_codes::preflight(&mut tx).await.map_err(|error| {
+                sqlx::migrate::MigrateError::Execute(sqlx::Error::Protocol(error.message))
+            })?;
+            migrator.run_direct(&mut *tx).await?;
+            tx.commit().await?;
+        } else {
+            migrator.run_direct(&mut conn).await?;
+        }
+        Ok::<_, sqlx::migrate::MigrateError>(())
+    }
+    .await;
+    let unlocked = conn.unlock().await;
+    let closed = conn.close().await;
+    result?;
+    unlocked?;
+    closed?;
+    Ok(())
 }
 pub use speech::MAX_WAV_BYTES;
 

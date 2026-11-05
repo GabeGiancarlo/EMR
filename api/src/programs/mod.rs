@@ -992,7 +992,13 @@ async fn create_service(
     let program_id = json_uuid(require(input, "program_id")?, "program_id")?;
     let code_system =
         enum_field(require(input, "code_system")?, SYSTEMS, "code_system")?.to_string();
-    let service_code = normalize_code(require(input, "service_code")?, "service_code")?;
+    let raw_code = text_field(require(input, "service_code")?, "service_code", 1, 40)?;
+    let service_code = crate::service_codes::canonical(&mut tx, &raw_code)
+        .await?
+        .filter(|code| (1..=40).contains(&code.chars().count()))
+        .ok_or_else(|| {
+            ApiError::invalid("service_code must contain 1-40 characters after canonicalization")
+        })?;
     let name = text_field(require(input, "name")?, "name", 1, 160)?;
     let session_kind =
         enum_field(require(input, "session_kind")?, KINDS, "session_kind")?.to_string();
@@ -1028,7 +1034,7 @@ async fn create_service(
         require_active_note_template(&mut tx, actor.org, template).await?;
     }
     let taken: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM program_services WHERE program_id=$1 AND organization_id=$2 AND code_system=$3 AND upper(trim(service_code))=$4)",
+        "SELECT EXISTS(SELECT 1 FROM program_services WHERE program_id=$1 AND organization_id=$2 AND code_system=$3 AND (nexus_service_code_v1(service_code) COLLATE \"C\")=($4 COLLATE \"C\"))",
     )
     .bind(program_id)
     .bind(actor.org)
