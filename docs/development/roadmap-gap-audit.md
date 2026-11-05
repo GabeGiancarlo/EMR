@@ -1,5 +1,7 @@
 # Nexus scope and delivery audit — November 2, 2026
 
+Historical checkpoint: later November 2 implementations and the November 4 review supersede several facts below, including migration counts, role workspaces, calendar and telehealth. Read [central context](../PROJECT_CONTEXT.md), the [current research review](../research/research-planning-review-2026-11-04.md) and current source before using this as a task list. Preserve this document as evidence of the earlier review.
+
 **Stage: early functional engineering prototype (pre-alpha). The requested initial product is incomplete.** There is a real API and database, but several core journeys and the intended role-specific experience have not been delivered. No defensible completion percentage follows from counting pages, tables, tests, or agent spend.
 
 Baseline examined: local commit `981afd0`, branch `nexus/integrated-prototype`. Corrections made after this baseline are listed separately below. This audit combines a Grok source review with root review of the repository, database connectivity/counts, running interface, and selected Figma frames. The raw worker proposal is retained locally; unsupported worker conclusions were not accepted as facts.

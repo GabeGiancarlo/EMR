@@ -16,6 +16,13 @@ The active `emr-api` Rust crate uses Actix for HTTP and SQLx for parameterized P
 | `readiness.rs` | Shared billing checklist and transition validation |
 | `applicability.rs` | Organization form rules and episode-specific completion |
 | `speech.rs` | Optional bounded local recognizer, consent and reviewed transcript output |
+| `patient_identity.rs`, `adult.rs`, `admissions/` | Registration/identity checks, adult intake policy and admission lifecycle |
+| `programs/` | Versioned program catalog, facility adoption and service routing |
+| `scheduling.rs`, `availability.rs` | Transactional scheduling and staff availability |
+| `telehealth/` | Local room participation, signaling, moderation and recording/transcript workflows |
+| `knowledge/` | Approved patient-source search and provenance |
+| `drafting/`, `clinical_model.rs` | Reviewed local-model proposals and model transport |
+| `media_transcription.rs`, `note_lineage.rs` | Saved-media recognition and amendment/source lineage |
 
 Mutations and audit records share a transaction. Critical transitions lock relevant rows; database checks, foreign keys and immutability triggers reinforce application validation. Errors do not return SQL or clinical narrative.
 
