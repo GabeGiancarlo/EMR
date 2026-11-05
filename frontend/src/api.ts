@@ -43,10 +43,10 @@ export type Bootstrap = Record<Resource, Row[]> & {
     open_tasks: number;
     scheduled_sessions: number;
     draft_notes: number;
-    outstanding_cents: number;
-    unbilled_cents: number;
-    cash_received_cents: number;
-    adjustments_cents: number;
+    outstanding_cents: number | null;
+    unbilled_cents: number | null;
+    cash_received_cents: number | null;
+    adjustments_cents: number | null;
   };
 };
 const base =

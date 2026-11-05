@@ -27,8 +27,9 @@ export function serviceDurationError(snapshot: Row | undefined, start: string, e
   if (minutes < min || minutes > max) return `This service allows ${min}–${max} minutes. Review the appointment times.`;
 }
 
+/** Values use the persisted record units, including integer cents. */
 export function claimServiceDefaults(session: Row | undefined): Record<string, unknown> {
   const snapshot = serviceSnapshot(session);
   if (!snapshot || typeof snapshot.service_code !== "string") return { service_code: "", amount_cents: "" };
-  return { service_code: snapshot.service_code, amount_cents: typeof snapshot.default_charge_cents === "number" ? snapshot.default_charge_cents / 100 : "" };
+  return { service_code: snapshot.service_code, amount_cents: typeof snapshot.default_charge_cents === "number" ? snapshot.default_charge_cents : "" };
 }

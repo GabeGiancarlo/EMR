@@ -75,3 +75,21 @@ test("financial entry converts decimal dollars into exact integer cents and reje
   assert.throws(() => normalizeFieldValue(field, "not money"), /valid number/);
   assert.throws(() => normalizeFieldValue(field, ""), /Amount is required/);
 });
+test("legacy booking service selections stay nullable while new bookings require a service", () => {
+  const field = {
+    key: "program_service_id",
+    label: "Program service",
+    type: "select",
+    catalog: "services" as const,
+    required: false,
+  };
+  for (const empty of ["", "   ", null, undefined]) {
+    assert.equal(normalizeFieldValue(field, empty), null);
+    assert.throws(
+      () => normalizeFieldValue({ ...field, required: true }, empty),
+      /Program service is required/,
+    );
+  }
+  const service = "11111111-1111-1111-1111-111111111111";
+  assert.equal(normalizeFieldValue(field, ` ${service} `), service);
+});
