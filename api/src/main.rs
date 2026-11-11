@@ -1,60 +1,59 @@
-//! Nexus local application. Identity-provider authentication is deliberately deferred.
+//! Nexus API server. `NEXUS_AUTH_MODE=local` is loopback development with selected
+//! operators; `NEXUS_AUTH_MODE=oidc` is the hosted mode with identity-provider sign-in.
 use actix_web::{web, App, HttpServer};
-use emr_api::{configure, AppState};
+use emr_api::{
+    auth::{Auth, Oidc},
+    configure,
+    hosting::{self, Mode, ServerConfig},
+    AppState,
+};
 use sqlx::postgres::PgPoolOptions;
-use std::{env, io};
+use std::{io, sync::Arc};
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
     dotenvy::dotenv().ok();
     env_logger::init();
-    if env::var("NEXUS_LOCAL_DEV").as_deref() != Ok("1") {
-        return Err(io::Error::other(
-            "Authentication is deferred. Set NEXUS_LOCAL_DEV=1 for loopback development only.",
-        ));
-    }
-    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
-    if !matches!(host.as_str(), "127.0.0.1" | "::1" | "localhost") {
-        return Err(io::Error::other(
-            "Local actor mode requires a loopback HOST.",
-        ));
-    }
-    let port: u16 = env::var("PORT")
-        .unwrap_or_else(|_| "8090".into())
-        .parse()
-        .map_err(io::Error::other)?;
-    let url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://nexus:nexus_local@127.0.0.1:55432/nexus".into());
+    let config = ServerConfig::from_env().map_err(io::Error::other)?;
     let pool = PgPoolOptions::new()
         .max_connections(10)
-        .connect(&url)
+        .connect(&config.database_url)
         .await
-        .map_err(io::Error::other)?;
+        .map_err(|error| io::Error::other(hosting::database_failure(&error)))?;
     emr_api::migrate(&pool).await.map_err(io::Error::other)?;
+    let auth = match &config.mode {
+        Mode::Local => Auth::Local,
+        Mode::Oidc(settings) => Auth::Oidc(Arc::new(
+            Oidc::connect(settings.clone())
+                .await
+                .map_err(io::Error::other)?,
+        )),
+    };
     emr_api::start_background_workers(pool.clone());
-    println!(
-        "Nexus local API: http://{host}:{port} (authentication deferred; development actors only)"
-    );
+    let (host, port) = (config.host.clone(), config.port);
+    if config.hosted() {
+        println!(
+            "Nexus hosted API: listening on {host}:{port} (identity-provider sign-in required; synthetic demonstration data only)"
+        );
+    } else {
+        println!(
+            "Nexus local API: http://{host}:{port} (authentication deferred; development actors only)"
+        );
+    }
     println!(
         "Optional local whisper.cpp: {} (not a production speech service; see docs/setup/local-speech.md)",
         emr_api::speech_configuration_label()
     );
+    let hosted = config.hosted();
+    let origins = config.allowed_origins.clone();
     HttpServer::new(move || {
-        let cors = actix_cors::Cors::default()
-            .allowed_origin("http://localhost:5173")
-            .allowed_origin("http://127.0.0.1:5173")
-            .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "OPTIONS"])
-            .allowed_headers(vec![
-                "content-type",
-                "authorization",
-                "x-nexus-actor",
-                "x-nexus-client",
-                "x-nexus-consent",
-            ])
-            .max_age(600);
         App::new()
-            .wrap(cors)
-            .app_data(web::Data::new(AppState::local(pool.clone())))
+            .wrap(hosting::security_headers(hosted))
+            .wrap(hosting::cors(&origins))
+            .app_data(web::Data::new(AppState {
+                pool: pool.clone(),
+                auth: auth.clone(),
+            }))
             .app_data(web::JsonConfig::default().limit(1_048_576))
             .app_data(web::PayloadConfig::new(emr_api::MAX_WAV_BYTES))
             .configure(configure)

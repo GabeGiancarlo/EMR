@@ -11,6 +11,7 @@ mod clinical_model;
 mod drafting;
 mod exports;
 mod forms;
+pub mod hosting;
 mod knowledge;
 mod media_transcription;
 mod note_lineage;
