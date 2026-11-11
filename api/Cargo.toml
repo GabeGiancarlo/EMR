@@ -2,7 +2,7 @@
 name = "emr-api"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.95"
 
 [dependencies]
 # Web framework
@@ -12,6 +12,9 @@ actix-cors = "0.7"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
+ring = "0.17"
+reqwest = { workspace = true }
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }
@@ -27,11 +30,8 @@ tokio = { version = "1.0", features = ["full"] }
 dotenvy = "0.15"
 
 # Error handling
-anyhow = "1.0"
 thiserror = "1.0"
 
-# HTTP client (for future FHIR integration)
-reqwest = { version = "0.12", features = ["json"] }
-
 # UUID generation
-uuid = { version = "1.0", features = ["v4"] } 
+uuid = { version = "1.0", features = ["v4", "serde"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }

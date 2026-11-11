@@ -1,0 +1,32 @@
+[
+  {
+    "file": "alleva-billing.png",
+    "sha256": "3076C9B3733E88E72ADEFBFE5AAB01622EDCEC88E11684C8C4EB6A0BF9E2488E",
+    "bytes": 24782,
+    "retrieved": "2026-11-02"
+  },
+  {
+    "file": "kipu-admissions.png",
+    "sha256": "E447A88FC7C6E82CDF2842D910C37DBD862308DF63926B68C8983CC86204C17A",
+    "bytes": 26313,
+    "retrieved": "2026-11-02"
+  },
+  {
+    "file": "kipu-business-development.png",
+    "sha256": "31D85EC2F8B5E07A471DA50B4CBD5D458796E6441FA70ED0DABFAE9C971FF45B",
+    "bytes": 20405,
+    "retrieved": "2026-11-02"
+  },
+  {
+    "file": "myavatar-clinical.png",
+    "sha256": "F2F91837438711DF16B2E3F4F7C11A4470BA4DFF42E0F93368A4A07D63345B34",
+    "bytes": 213663,
+    "retrieved": "2026-11-02"
+  },
+  {
+    "file": "myavatar-financial.png",
+    "sha256": "F984412A739433223DAC2AAA5687E079650FA7D67F49D84C59F74B5693ECC48B",
+    "bytes": 235968,
+    "retrieved": "2026-11-02"
+  }
+]

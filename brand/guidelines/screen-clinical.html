@@ -1,0 +1,67 @@
+<div class="app">
+  <aside class="app-nav">
+    <div class="app-logo">{{svg logo/masters/nexus-symbol-convergence-small.svg class="sym"}}{{svg logo/masters/nexus-wordmark.svg class="wm"}}</div>
+    <div class="app-ws">Clinical workspace</div>
+    <a class="on">{{ic overview}}Overview</a>
+    <a>{{ic clients}}Clients</a>
+    <a>{{ic schedule}}Schedule</a>
+    <a>{{ic documentation}}Documentation<b>3</b></a>
+    <a>{{ic care-plan}}Care plans</a>
+    <a>{{ic group}}Groups</a>
+    <a>{{ic telehealth}}Telehealth</a>
+    <a>{{ic tasks}}Tasks<b>5</b></a>
+    <div class="app-nav-art">{{pat contour currentColor 420}}</div>
+    <div class="app-profile"><span class="av">DR</span><span><strong>Dana Reyes, LCSW</strong><small>Cedar Ridge Outpatient</small></span>{{ic chevron-up}}</div>
+  </aside>
+  <main class="app-main">
+    <header class="app-top">
+      <div class="app-search">{{ic search}}<span>Search clients, notes, claims</span><kbd>/</kbd></div>
+      <span class="app-date">Wednesday, November 11</span>
+      <button class="btn quiet">{{ic notification}}</button>
+      <button class="btn primary">{{ic add}}New note</button>
+    </header>
+    <div class="app-body">
+      <div class="app-hello">
+        <h1>Good morning, Dana.</h1>
+        <p>Seven sessions today. Three notes are waiting for your signature.</p>
+      </div>
+      <div class="app-metrics">
+        <div class="metric"><span>Sessions today</span><strong>7</strong><small>2 telehealth · 1 group</small></div>
+        <div class="metric"><span>Notes to sign</span><strong>3</strong><small class="warn">{{ic warning}}1 older than 48 hours</small></div>
+        <div class="metric"><span>Plan reviews due</span><strong>2</strong><small>Both due this week</small></div>
+        <div class="metric"><span>Open tasks</span><strong>5</strong><small>2 assigned by billing</small></div>
+      </div>
+      <div class="app-cols">
+        <section class="panel">
+          <div class="panel-h"><h2>Today</h2><div class="tabs"><span class="on">Day</span><span>Week</span><span>Agenda</span></div></div>
+          <table class="tbl">
+            <thead><tr><th>Time</th><th>Client</th><th>Service</th><th>Program</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="num">8:30</td><td><strong>Marcus Hale</strong><small>MRN 004182</small></td><td>Individual therapy, 53 min</td><td>Intensive outpatient</td><td><span class="badge ok">{{ic success}}Note signed</span></td><td>{{ic chevron-right}}</td></tr>
+              <tr><td class="num">9:30</td><td><strong>Priya Raman</strong><small>MRN 004397</small></td><td>Individual therapy, 45 min</td><td>Outpatient</td><td><span class="badge warn">{{ic edit}}Draft note</span></td><td>{{ic chevron-right}}</td></tr>
+              <tr class="sel"><td class="num">10:30</td><td><strong>Tomás Ortega</strong><small>MRN 004410</small></td><td>Telehealth, 45 min</td><td>Outpatient</td><td><span class="badge live">{{ic telehealth}}In session</span></td><td>{{ic chevron-right}}</td></tr>
+              <tr><td class="num">11:30</td><td><strong>Process group B</strong><small>8 enrolled</small></td><td>Group therapy, 90 min</td><td>Intensive outpatient</td><td><span class="badge">{{ic clock}}Scheduled</span></td><td>{{ic chevron-right}}</td></tr>
+              <tr><td class="num">1:30</td><td><strong>Elena Brooks</strong><small>MRN 004266</small></td><td>Plan review, 30 min</td><td>Outpatient</td><td><span class="badge">{{ic clock}}Scheduled</span></td><td>{{ic chevron-right}}</td></tr>
+              <tr><td class="num">2:30</td><td><strong>Jordan Whitfield</strong><small>MRN 004431</small></td><td>Intake assessment, 60 min</td><td>Not yet assigned</td><td><span class="badge info">{{ic consent}}Consent needed</span></td><td>{{ic chevron-right}}</td></tr>
+              <tr><td class="num">4:00</td><td><strong>Amara Okafor</strong><small>MRN 004120</small></td><td>Telehealth, 45 min</td><td>Outpatient</td><td><span class="badge bad">{{ic error}}Cancelled</span></td><td>{{ic chevron-right}}</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <div class="side">
+          <section class="panel">
+            <div class="panel-h"><h2>Notes to sign</h2><a class="lk">View all</a></div>
+            <ul class="list">
+              <li><span><strong>Priya Raman</strong><small>Individual therapy · today 9:30</small></span><button class="btn secondary sm">Review</button></li>
+              <li><span><strong>Sam Delgado</strong><small>Group note · yesterday</small></span><button class="btn secondary sm">Review</button></li>
+              <li><span><strong>Elena Brooks</strong><small class="warn">Individual therapy · 3 days ago</small></span><button class="btn secondary sm">Review</button></li>
+            </ul>
+          </section>
+          <section class="panel empty">
+            {{svg illustrations/nexus-scene-first-shoot.svg class="scene"}}
+            <div><h2>No plan reviews overdue</h2><p>Two are due this week. They will appear here three days before.</p></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

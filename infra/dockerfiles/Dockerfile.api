@@ -1,82 +1,18 @@
-# Nexus API backend - multi-stage Docker build
-# This image targets the current Rust API scaffold only.
-
-# Stage 1: Build dependencies (cached layer)
-FROM rust:1.78-slim-bullseye AS deps
-
-# Install system dependencies for building
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create app directory
+# Build artifact only. Public serving requires the deferred identity boundary.
+FROM rust:1.95-bookworm AS builder
 WORKDIR /app
-
-# Copy workspace and API manifests
 COPY Cargo.toml Cargo.lock ./
-COPY api/Cargo.toml ./api/
+COPY api ./api
+COPY migrations ./migrations
+RUN cargo build --locked --release -p emr-api
 
-# Create dummy source files to build dependencies
-RUN mkdir -p api/src && \
-    echo "fn main() {}" > api/src/main.rs
-
-# Build dependencies (will be cached)
-RUN cargo build --release -p emr-api
-
-# Stage 2: Build application
-FROM deps AS builder
-
-# Remove dummy source files
-RUN rm -rf api/src
-
-# Copy actual source code
-COPY api/src ./api/src
-
-# Build the application
-RUN cargo build --release -p emr-api
-
-# Stage 3: Runtime image
-FROM debian:bullseye-slim AS runtime
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libpq5 \
-    libssl1.1 \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 nexus \
-    && mkdir -p /app/certs \
-    && chown -R nexus:nexus /app
-
-# Copy the binary from builder stage
-COPY --from=builder /app/target/release/emr-api /app/emr-api
-
-# Copy any required configuration files
-COPY api/config /app/config
-
-# Set proper permissions
-RUN chmod +x /app/emr-api
-
-# Switch to non-root user
-USER nexus
-
-# Set working directory
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/* && useradd --create-home nexus
 WORKDIR /app
-
-# Expose ports
-EXPOSE 8080 8443
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/healthz || exit 1
-
-# Set environment variables
-ENV RUST_LOG=info,emr_api=debug
-ENV HOST=0.0.0.0
-ENV PORT=8080
-
-# Run the application
-CMD ["./emr-api"] 
+COPY --from=builder /app/target/release/emr-api /app/emr-api
+USER nexus
+ENV HOST=127.0.0.1 PORT=8090
+EXPOSE 8090
+HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://127.0.0.1:8090/healthz || exit 1
+# NEXUS_LOCAL_DEV must be explicitly supplied. Never enable this on a public host.
+CMD ["/app/emr-api"]
