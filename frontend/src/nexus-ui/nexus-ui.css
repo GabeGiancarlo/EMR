@@ -304,11 +304,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--nx-action); }
 
 /* ------------------------------------------------------------ empty state */
 .nx-empty { display: flex; align-items: center; gap: 16px; padding: 18px 20px; text-align: left; }
-.nx-empty-scene { width: 132px; flex: none; border-radius: 3px 16px 3px 3px; background: var(--nx-surface-subtle); }
+.nx-empty .nx-empty-scene { width: 132px; height: auto; flex: none; border-radius: 3px 16px 3px 3px; background: var(--nx-surface-subtle); }
 .nx-empty h3 { margin: 0; font: 600 17px/1.25 var(--nx-font-display); letter-spacing: -0.01em; color: var(--nx-text); }
 .nx-empty p { margin: 3px 0 0; max-width: 46ch; font-size: 14px; line-height: 1.45; color: var(--nx-text-secondary); }
 .nx-empty .button, .nx-empty .nx-button { margin-top: 10px; }
-.nx-empty--compact .nx-empty-scene { width: 96px; }
+.nx-empty.nx-empty--compact .nx-empty-scene { width: 96px; }
 .nx-scene { display: block; width: 100%; height: auto; }
 .nx-pattern { position: absolute; inset: 0; pointer-events: none; }
 

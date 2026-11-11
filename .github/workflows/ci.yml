@@ -2,9 +2,9 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [main, develop, nexus/integrated-prototype, 'codex/**']
+    branches: [main, dev, develop, nexus/integrated-prototype, 'codex/**', 'feature/**']
   pull_request:
-    branches: [main, develop, nexus/integrated-prototype]
+    branches: [main, dev, develop, nexus/integrated-prototype]
   workflow_dispatch:
 
 env:

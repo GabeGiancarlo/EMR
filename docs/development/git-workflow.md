@@ -1,5 +1,25 @@
 # Branches and review
 
+## Branch model (owner direction, November 11, 2026)
+
+This replaces the earlier "target `nexus/integrated-prototype`" rule below, which is kept for history.
+
+| Branch | Role | How changes arrive |
+| --- | --- | --- |
+| `main` | Production. What is, or is about to be, hosted. | Only by pull request from `dev`. |
+| `dev` | Integration. Always buildable; everything meets here first. | By pull request from a feature branch. |
+| `feature/<short-name>` | One reviewable change. | Cut from `dev`, merged back into `dev`, then deleted. |
+
+1. Start: `git switch dev && git pull && git switch -c feature/<short-name>`.
+2. Work in small commits. Run the checks for what changed (frontend: `npx tsc --noEmit`, `npm test`, `npx vite build`; API: `cargo fmt --check`, `cargo clippy`, the relevant `cargo test` targets).
+3. Open a pull request into `dev`. Describe the behaviour change, what was checked and what was not.
+4. Release: open a pull request from `dev` into `main`. Merge it only when CI on `dev` is green.
+5. A fix needed in production right away is still a `feature/` branch from `dev`; if `dev` holds work that is not ready, cut `hotfix/<name>` from `main`, merge it into `main`, then merge `main` back into `dev`.
+
+Use merge commits, not squash or rebase, for `dev` into `main`, so production history matches what was tested. Never force-push `main` or `dev`. CI runs on pushes to `main`, `dev` and `feature/**`, and on pull requests into `main` and `dev`. Branch protection on GitHub is not configured yet; until it is, the rules above are a convention.
+
+Older branches (`codex/prototype-readiness`, `nexus/integrated-prototype`, `brand/*`) were merged into `main` on November 11, 2026 and are no longer targets.
+
 Updated November 4, 2026. The active source baseline is `453c280` on `nexus/integrated-prototype`; current local review work is `codex/prototype-readiness`. `origin` is `https://github.com/GabeGiancarlo/EMR.git`.
 
 ## Start a change
