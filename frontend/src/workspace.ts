@@ -33,20 +33,22 @@ export const LEDGER_DEFINITIONS = {
 export const UNAVAILABLE_EXECUTIVE_METRICS =
   "Outcomes, compliance scores, and profit are not available. This workspace has no outcome measures, compliance rules, or expenses, so those figures are not estimated.";
 
+// Categorical colours come from the brand's chart roles, so they follow the theme and keep
+// their contrast with --nx-on-action labels in both light and dark.
 export const SERVICE_COLORS: Record<string, string> = {
-  individual: "#2f6f62",
-  group: "#3c7ea6",
-  assessment: "#c4843c",
-  family: "#8a6794",
-  case_management: "#b45c4e",
+  individual: "var(--nx-chart-1)",
+  group: "var(--nx-chart-4)",
+  assessment: "var(--nx-chart-2)",
+  family: "var(--nx-chart-5)",
+  case_management: "var(--nx-illo-moss)",
 };
 
 export const LEVEL_COLORS: Record<string, string> = {
-  outpatient: "#2f6f62",
-  iop: "#3c7ea6",
-  php: "#c4843c",
-  residential: "#8a6794",
-  detox: "#b45c4e",
+  outpatient: "var(--nx-chart-1)",
+  iop: "var(--nx-chart-4)",
+  php: "var(--nx-chart-2)",
+  residential: "var(--nx-chart-5)",
+  detox: "var(--nx-illo-moss)",
 };
 
 export const AUTH_WINDOW_DAYS = 30;
