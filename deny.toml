@@ -36,7 +36,12 @@ yanked = "warn"
 # Advisory IDs to ignore. Each entry needs a reason; an ignored advisory is
 # still printed as a note.
 ignore = [
-    #{ id = "RUSTSEC-0000-0000", reason = "why this does not apply" },
+    # h2 0.3.27 is compiled through actix-web's default `http2` feature, but
+    # the server is started with `HttpServer::bind` (api/src/main.rs), which
+    # serves HTTP/1.x only. Revisit when the server terminates TLS itself,
+    # calls `bind_auto_h2c`, or actix-http moves to h2 0.4. The same entry,
+    # with the full reasoning, is in .cargo/audit.toml.
+    { id = "RUSTSEC-2026-0258", reason = "HTTP/2 is never served: HttpServer::bind is HTTP/1.x only, and h2 0.3 has no fixed release" },
 ]
 
 [licenses]

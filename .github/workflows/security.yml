@@ -208,7 +208,7 @@ jobs:
     - name: Run cargo-geiger
       run: |
         status=0
-        cargo geiger --manifest-path api/Cargo.toml --all-features --locked \
+        cargo geiger --manifest-path "$GITHUB_WORKSPACE/api/Cargo.toml" --all-features --locked \
           --output-format Json > geiger-results.json 2> geiger-stderr.log || status=$?
         tail -n 60 geiger-stderr.log
         if ! jq -e '.packages | length > 0' geiger-results.json > /dev/null; then
@@ -227,6 +227,8 @@ jobs:
           echo '### cargo-geiger: unsafe code actually compiled into the API'
           echo
           echo "First-party crate \`emr-api\`: $first_party unsafe items"
+          echo
+          echo "Packages without metrics: $(jq '.packages_without_metrics | length' geiger-results.json); files used but not scanned: $(jq '.used_but_not_scanned_files | length' geiger-results.json)"
           echo
           echo '| Dependency | Version | Unsafe items used | Forbids unsafe |'
           echo '| --- | --- | ---: | --- |'
@@ -272,8 +274,12 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITLEAKS_ENABLE_COMMENTS: false
 
-  # Fails when a dependency in Cargo.lock declares a GPL-family licence.
-  # `cargo deny check licenses` above is the stricter allow-list check.
+  # Licence inventory of every crate in Cargo.lock, uploaded as a report.
+  # Fails when a crate can only be used under a GPL-family licence, that is,
+  # when every alternative in its licence expression names one. A crate that
+  # also offers a permissive option (for example "MIT OR LGPL-2.1-or-later")
+  # passes. `cargo deny check licenses` in the dependency scan is the precise
+  # allow-list check for the crates that are actually compiled.
   license-check:
     name: License Compliance
     runs-on: ubuntu-latest
@@ -295,9 +301,26 @@ jobs:
     - name: Check licenses
       run: |
         cargo license --json > licenses.json
-        # Check for GPL licenses (not allowed in commercial software)
-        if cargo license --json | jq -r '.[] | select(.license | contains("GPL"))' | grep -q GPL; then
-          echo "GPL licenses found! This may not be compatible with commercial use."
+        # GPL-family licences are not allowed in commercial software. The old
+        # check stopped at the first crate without a licence field and never
+        # looked at the rest; this one reads every crate.
+        jq -r '.[] | (.license // "") as $l
+               | select(($l | test("GPL")) and ([$l | splits(" OR |/") | select(test("GPL") | not)] | length == 0))
+               | "\(.name) \(.version): \($l)"' licenses.json > gpl-only.txt
+        jq -r '.[] | select((.license // "") | test("GPL")) | "\(.name) \(.version): \(.license)"' licenses.json > gpl-optional.txt
+        {
+          echo '### Licence inventory'
+          echo
+          echo "Crates in Cargo.lock: $(jq length licenses.json)"
+          echo
+          echo 'Crates that offer a GPL-family licence among other options (allowed):'
+          echo '```'
+          cat gpl-optional.txt
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
+        if [ -s gpl-only.txt ]; then
+          echo "GPL-only licenses found! This may not be compatible with commercial use."
+          cat gpl-only.txt
           exit 1
         fi
 
