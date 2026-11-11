@@ -1,21 +1,9 @@
+/* nexus-migrated */
+@layer legacy {
 /* Theme overrides. No invert, hue-rotate, or blanket filter. */
 
 html[data-resolved-theme="light"] {
   color-scheme: light;
-}
-
-html[data-resolved-theme="dark"] {
-  color-scheme: dark;
-  --ink: #e7f1eb;
-  --muted: #b7c9c0;
-  --green: #1f7a64;
-  --green-dark: #186656;
-  --line: #3a524b;
-  --cream: #121a18;
-  --orange: #e0b184;
-  --soft: #243430;
-  background: #121a18;
-  color: #e7f1eb;
 }
 
 .theme-control {
@@ -26,18 +14,18 @@ html[data-resolved-theme="dark"] {
   width: max-content;
   max-width: min(280px, calc(100vw - 24px));
   padding: 3px 5px;
-  border: 1px solid #c9d7cc;
-  border-radius: 12px;
-  background: #fcfdf9;
-  color: #213d39;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-panel);
+  background: var(--nx-surface);
+  color: var(--nx-text);
 }
 
 .theme-control legend {
   padding: 0 4px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #2c4a40;
+  color: var(--nx-brand);
 }
 
 .theme-control-options {
@@ -55,9 +43,9 @@ html[data-resolved-theme="dark"] {
   min-height: 40px;
   padding: 6px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
-  color: #2c4a40;
-  font-size: 13px;
+  border-radius: var(--nx-radius-panel);
+  color: var(--nx-brand);
+  font-size: 15px;
   font-weight: 650;
   line-height: 1.2;
   cursor: pointer;
@@ -72,14 +60,14 @@ html[data-resolved-theme="dark"] {
 }
 
 .theme-control label.active {
-  border-color: #1e493e;
-  background: #285d51;
-  color: #f4fffb;
+  border-color: var(--nx-action);
+  background: var(--nx-action);
+  color: var(--nx-on-action);
   font-weight: 750;
 }
 
 .theme-control label:focus-within {
-  outline: 3px solid #8a5a12;
+  outline: 3px solid var(--nx-focus);
   outline-offset: 2px;
 }
 
@@ -112,613 +100,10 @@ html[data-resolved-theme="dark"] {
   .refresh-workspace { min-width: 0; padding: 8px; }
 }
 
-html[data-resolved-theme="dark"] body,
-html[data-resolved-theme="dark"] .app-shell,
-html[data-resolved-theme="dark"] .loading-page,
-html[data-resolved-theme="dark"] .setup-page {
-  background: #121a18;
-  color: #e7f1eb;
-}
-
-html[data-resolved-theme="dark"] :is(
-  h1,
-  h2,
-  h3,
-  p,
-  small,
-  strong,
-  label,
-  td,
-  th,
-  dt,
-  dd,
-  .eyebrow,
-  .muted,
-  .nav-item,
-  .nav-section,
-  .breadcrumb,
-  .breadcrumb strong,
-  .today-label,
-  .page-heading h1,
-  .page-heading p,
-  .page-heading .eyebrow,
-  .metric-top > span:first-child,
-  .metric-caption,
-  .metric-number,
-  .panel-head h2,
-  .panel-head p,
-  .pathway-step,
-  .pathway-step strong,
-  .care-note h2,
-  .care-note p,
-  .care-note .button,
-  .empty h3,
-  .empty p,
-  .start-strip h3,
-  .start-strip p,
-  .session-row strong,
-  .attention-row strong,
-  .session-row small,
-  .attention-row small,
-  .person strong,
-  .person small,
-  td strong,
-  td small,
-  .search-field,
-  .search-field input,
-  .compact-select,
-  .tabs button,
-  .section-summary span,
-  .section-summary strong,
-  .info-strip,
-  .info-strip p,
-  .info-strip strong,
-  .calendar-head h2,
-  .week-strip span,
-  .week-strip small,
-  .week-strip strong,
-  .back-link,
-  .chart-key > span,
-  .chart-key > strong,
-  .detail-list dt,
-  .detail-list dd,
-  .checklist button,
-  .checklist strong,
-  .checklist small,
-  .chart-counts span,
-  .chart-counts strong,
-  .quiet-note,
-  .role-cards h3,
-  .role-cards p,
-  .template-card h3,
-  .template-card p,
-  .template-card .eyebrow,
-  .integration-grid h3,
-  .integration-grid p,
-  .modal-head h2,
-  .modal-head p,
-  .form-field label,
-  .form-field small,
-  .form-assurance,
-  .note-body,
-  .note-meta,
-  .signature,
-  .connection-card h1,
-  .connection-card p,
-  .setup-form-wrap h2,
-  .setup-form-wrap > p,
-  .setup-local,
-  .setup-local strong,
-  .setup-local p,
-  .organization strong,
-  .organization div > span,
-  .local-notice strong,
-  .local-notice div > span,
-  .operator .person strong,
-  .operator .person small,
-  .workspace-footer,
-  .response-context,
-  .response-context strong,
-  .response-context p,
-  .field-provenance,
-  .response-readonly h3,
-  .response-readonly p,
-  .response-readonly blockquote,
-  .export-description p,
-  .export-description strong,
-  .plan-list-head h3,
-  .plan-list-item strong,
-  .plan-list-item small,
-  .plan-summary p,
-  .plan-actions > .muted,
-  .goal-card-title h3,
-  .goal-grid span,
-  .goal-grid p,
-  .goal-observation strong,
-  .goal-observation p,
-  .review-date,
-  .review-date strong,
-  .plan-reviews > article > p,
-  .plan-reviews small,
-  .review-progress > div,
-  .review-goal h3,
-  .review-goal > p,
-  .group-overview span,
-  .group-overview strong,
-  .participant-list strong,
-  .participant-list small,
-  .readiness-content > p,
-  .speech-import p,
-  .speech-import small,
-  .speech-heading,
-  .speech-success,
-  .transcript-tool summary,
-  .transcript-tool summary > span,
-  .transcript-tool-body > p,
-  .file-import,
-  .review-check,
-  .field-options > label,
-  .form-rules-context
-) {
-  color: #d7e6de;
-}
-
-html[data-resolved-theme="dark"] :is(
-  h1,
-  h2,
-  h3,
-  .page-heading h1,
-  .metric-number,
-  .panel-head h2,
-  .person strong,
-  td strong,
-  .modal-head h2,
-  .connection-card h1,
-  .setup-form-wrap h2,
-  .chart-key > strong,
-  .detail-list dd,
-  .role-cards h3,
-  .template-card h3,
-  .integration-grid h3,
-  .plan-list-item strong,
-  .goal-card-title h3,
-  .note-body
-) {
-  color: #f3faf6;
-}
-
-html[data-resolved-theme="dark"] :is(
-  .sidebar,
-  .topbar,
-  .panel,
-  .metric,
-  .chart-banner,
-  .connection-card,
-  .plan-list,
-  .modal,
-  dialog.modal
-) {
-  background: #1b2824;
-  color: #e7f1eb;
-  border-color: #3a524b;
-}
-
-html[data-resolved-theme="dark"] .sidebar {
-  background: #101816;
-  border-right-color: #2c403a;
-}
-
-html[data-resolved-theme="dark"] .organization,
-html[data-resolved-theme="dark"] .org-symbol,
-html[data-resolved-theme="dark"] .avatar,
-html[data-resolved-theme="dark"] .session-date,
-html[data-resolved-theme="dark"] .count-pill,
-html[data-resolved-theme="dark"] .role-cards > div,
-html[data-resolved-theme="dark"] .template-card,
-html[data-resolved-theme="dark"] .quiet-note,
-html[data-resolved-theme="dark"] .start-strip,
-html[data-resolved-theme="dark"] .info-strip,
-html[data-resolved-theme="dark"] .section-summary,
-html[data-resolved-theme="dark"] .field-builder,
-html[data-resolved-theme="dark"] .template-context,
-html[data-resolved-theme="dark"] .transcript-tool,
-html[data-resolved-theme="dark"] .speech-import,
-html[data-resolved-theme="dark"] .response-context,
-html[data-resolved-theme="dark"] .field-provenance,
-html[data-resolved-theme="dark"] .review-goal,
-html[data-resolved-theme="dark"] .goal-observation,
-html[data-resolved-theme="dark"] .file-import,
-html[data-resolved-theme="dark"] .modal-foot,
-html[data-resolved-theme="dark"] .plan-actions,
-html[data-resolved-theme="dark"] .operator-list > button {
-  background: #243330;
-  border-color: #3a524b;
-  color: #d7e6de;
-}
-
-html[data-resolved-theme="dark"] .top-avatar {
-  background: #2a3d34 !important;
-  color: #d5eadc !important;
-}
-
-html[data-resolved-theme="dark"] .nav-item {
-  color: #c9ddd4;
-}
-
-html[data-resolved-theme="dark"] .nav-item svg,
-html[data-resolved-theme="dark"] .breadcrumb svg,
-html[data-resolved-theme="dark"] .today-label svg,
-html[data-resolved-theme="dark"] .attention-row > svg,
-html[data-resolved-theme="dark"] .icon-button {
-  color: #c5ddd2;
-}
-
-html[data-resolved-theme="dark"] .nav-item:hover,
-html[data-resolved-theme="dark"] .icon-button:hover,
-html[data-resolved-theme="dark"] .pathway-step:hover,
-html[data-resolved-theme="dark"] .clickable:hover {
-  background: #2a3c37;
-}
-
-html[data-resolved-theme="dark"] .nav-item.active {
-  background: #243830;
-  color: #f3faf6;
-}
-
-html[data-resolved-theme="dark"] .nav-item.active svg,
-html[data-resolved-theme="dark"] .nav-count,
-html[data-resolved-theme="dark"] .nav-active-dot {
-  color: #d7f3e4;
-  background: #1f6f5c;
-}
-
-html[data-resolved-theme="dark"] .nav-active-dot,
-html[data-resolved-theme="dark"] .status-dot,
-html[data-resolved-theme="dark"] .footer-dot {
-  background: #8fbfa4;
-}
-
-html[data-resolved-theme="dark"] .status-dot {
-  box-shadow: 0 0 0 4px #1e3330;
-}
-
-html[data-resolved-theme="dark"] .operator,
-html[data-resolved-theme="dark"] .topbar,
-html[data-resolved-theme="dark"] .toolbar,
-html[data-resolved-theme="dark"] .tabs,
-html[data-resolved-theme="dark"] th,
-html[data-resolved-theme="dark"] td,
-html[data-resolved-theme="dark"] .session-row,
-html[data-resolved-theme="dark"] .attention-row,
-html[data-resolved-theme="dark"] .detail-list > div,
-html[data-resolved-theme="dark"] .checklist button,
-html[data-resolved-theme="dark"] .week-strip,
-html[data-resolved-theme="dark"] .template-card-foot,
-html[data-resolved-theme="dark"] .modal-head,
-html[data-resolved-theme="dark"] .signature,
-html[data-resolved-theme="dark"] .plan-list-head,
-html[data-resolved-theme="dark"] .plan-list-item,
-html[data-resolved-theme="dark"] .goal-card,
-html[data-resolved-theme="dark"] .plan-reviews > article,
-html[data-resolved-theme="dark"] .participant-list > article,
-html[data-resolved-theme="dark"] .response-readonly > section {
-  border-color: #314840;
-}
-
-html[data-resolved-theme="dark"] .topbar-divider {
-  background: #3a524b;
-}
-
-html[data-resolved-theme="dark"] .care-note {
-  background: #1a2e28;
-  border-color: #3a524b;
-}
-
-html[data-resolved-theme="dark"] .empty-icon,
-html[data-resolved-theme="dark"] .metric-icon,
-html[data-resolved-theme="dark"] .pathway-icon,
-html[data-resolved-theme="dark"] .start-icon,
-html[data-resolved-theme="dark"] .role-icon,
-html[data-resolved-theme="dark"] .template-icon,
-html[data-resolved-theme="dark"] .integration-icon,
-html[data-resolved-theme="dark"] .goal-index,
-html[data-resolved-theme="dark"] .check-circle {
-  background: #243830;
-  border-color: #4d6a62;
-  color: #d7f3e4;
-}
-
-html[data-resolved-theme="dark"] .pathway-icon {
-  box-shadow: 0 0 0 6px #15211e;
-}
-
-html[data-resolved-theme="dark"] .empty-icon:after {
-  background: #e0b184;
-  border-color: #1b2824;
-}
-
-html[data-resolved-theme="dark"] .metric-icon.blue {
-  background: #1c2c32;
-  color: #c5e4ee;
-}
-
-html[data-resolved-theme="dark"] .metric-icon.sand {
-  background: #332a18;
-  color: #f3ddb0;
-}
-
-html[data-resolved-theme="dark"] .metric-icon.rose {
-  background: #3a2422;
-  color: #ffcfc6;
-}
-
-html[data-resolved-theme="dark"] th {
-  background: #15211e;
-  color: #c5ddd2;
-}
-
-html[data-resolved-theme="dark"] td {
-  color: #d7e6de;
-}
-
-html[data-resolved-theme="dark"] .search-field input,
-html[data-resolved-theme="dark"] .compact-select,
-html[data-resolved-theme="dark"] .form-field input:not([type="checkbox"]),
-html[data-resolved-theme="dark"] .form-field select,
-html[data-resolved-theme="dark"] .form-field textarea,
-html[data-resolved-theme="dark"] .file-import,
-html[data-resolved-theme="dark"] .field-options > textarea {
-  background: #15211e;
-  color: #f2faf6;
-  border-color: #4d6a62;
-}
-
-html[data-resolved-theme="dark"] .search-field input::placeholder,
-html[data-resolved-theme="dark"] .form-field input::placeholder,
-html[data-resolved-theme="dark"] .form-field textarea::placeholder {
-  color: #b7c9c0;
-}
-
-html[data-resolved-theme="dark"] .tabs button.active {
-  color: #e7f6ee;
-  border-bottom-color: #8fbfa4;
-}
-
-html[data-resolved-theme="dark"] .tabs button > span {
-  background: #243830;
-  color: #d7f3e4;
-}
-
-html[data-resolved-theme="dark"] .week-strip > div.today {
-  background: #243830;
-}
-
-html[data-resolved-theme="dark"] .badge {
-  background: #243330;
-  border-color: #4d6a62;
-  color: #d7e6de;
-}
-
-html[data-resolved-theme="dark"] :is(
-  .badge-active,
-  .badge-completed,
-  .badge-done,
-  .badge-signed,
-  .badge-paid,
-  .badge-posted,
-  .badge-on_track,
-  .badge-achieved,
-  .badge-attended
-) {
-  background: #1e3328;
-  border-color: #3e6b52;
-  color: #c8f0d4;
-}
-
-html[data-resolved-theme="dark"] :is(
-  .badge-intake,
-  .badge-draft,
-  .badge-planned,
-  .badge-ready,
-  .badge-scheduled,
-  .badge-normal,
-  .badge-clinician
-) {
-  background: #1c2c32;
-  border-color: #3d6670;
-  color: #d3eef6;
-}
-
-html[data-resolved-theme="dark"] :is(
-  .badge-inquiry,
-  .badge-open,
-  .badge-high,
-  .badge-in_progress,
-  .badge-submitted,
-  .badge-partially_paid,
-  .badge-at_risk,
-  .badge-reversed,
-  .badge-voided
-) {
-  background: #332a18;
-  border-color: #8a7040;
-  color: #f6e4bc;
-}
-
-html[data-resolved-theme="dark"] :is(
-  .badge-denied,
-  .badge-revoked,
-  .badge-urgent,
-  .badge-no_show,
-  .badge-inactive,
-  .badge-not_connected
-) {
-  background: #3a2422;
-  border-color: #8a4a42;
-  color: #ffd0c8;
-}
-
-html[data-resolved-theme="dark"] :is(
-  .badge-discharged,
-  .badge-cancelled,
-  .badge-expired,
-  .badge-discontinued,
-  .badge-excused,
-  .badge-superseded
-) {
-  background: #2a3330;
-  border-color: #4d5c56;
-  color: #d5e0da;
-}
-
-html[data-resolved-theme="dark"] .button {
-  background: #1f7a64;
-  border-color: #3d9a82;
-  color: #f4fffb;
-}
-
-html[data-resolved-theme="dark"] .button:hover:not(:disabled) {
-  background: #186656;
-  border-color: #8fbfa4;
-}
-
-html[data-resolved-theme="dark"] .button.secondary,
-html[data-resolved-theme="dark"] .empty .button,
-html[data-resolved-theme="dark"] .start-strip .button {
-  background: #243530;
-  border-color: #6d9084;
-  color: #f3faf6;
-}
-
-html[data-resolved-theme="dark"] .button.secondary:hover:not(:disabled) {
-  background: #2d433c;
-  border-color: #b7e0cc;
-}
-
-html[data-resolved-theme="dark"] .button.text,
-html[data-resolved-theme="dark"] .button.text.small,
-html[data-resolved-theme="dark"] .template-card-foot .button,
-html[data-resolved-theme="dark"] .care-note .button {
-  background: transparent;
-  border-color: transparent;
-  color: #c8f0d4;
-}
-
-html[data-resolved-theme="dark"] .button.danger,
-html[data-resolved-theme="dark"] .button.text.danger {
-  color: #ffb4a8;
-}
-
-html[data-resolved-theme="dark"] .error-banner {
-  background: #3d2422;
-  border-color: #c47b70;
-  color: #ffd8d2;
-}
-
-html[data-resolved-theme="dark"] .speech-success,
-html[data-resolved-theme="dark"] .readiness-result.passed {
-  background: #143024;
-  color: #b6f0c4;
-}
-
-html[data-resolved-theme="dark"] .readiness-result.blocked {
-  background: #332a18;
-  color: #f6e4bc;
-}
-
-html[data-resolved-theme="dark"] .toast {
-  background: #1e3f36;
-  color: #f3faf6;
-  border-color: #8fbfa8;
-}
-
-html[data-resolved-theme="dark"] .modal::backdrop {
-  background: #050807cc;
-}
-
-html[data-resolved-theme="dark"] .sidebar-scrim {
-  background: #05080799;
-}
-
-html[data-resolved-theme="dark"] .modal-head,
-html[data-resolved-theme="dark"] .modal-foot {
-  background: #182420;
-}
-
-html[data-resolved-theme="dark"] .plan-list,
-html[data-resolved-theme="dark"] .plan-list-item {
-  background: #1b2824;
-}
-
-html[data-resolved-theme="dark"] .plan-list-item.selected {
-  background: #243830;
-  box-shadow: inset 3px 0 #8fbfa4;
-}
-
-html[data-resolved-theme="dark"] .response-readonly blockquote {
-  background: #15211e;
-  border-left-color: #8fbfa4;
-}
-
-html[data-resolved-theme="dark"] .readiness-content .table-wrap,
-html[data-resolved-theme="dark"] .integration-grid > article {
-  border-color: #3a524b;
-}
-
-html[data-resolved-theme="dark"] .check-circle.complete {
-  background: #1e3328;
-  border-color: #3e6b52;
-  color: #c8f0d4;
-}
-
-html[data-resolved-theme="dark"] .spinner {
-  border-color: #314840;
-  border-top-color: #8fbfa4;
-}
-
-html[data-resolved-theme="dark"] .theme-control {
-  background: #1b2824;
-  border-color: #6d9084;
-  color: #e8f3ee;
-}
-
-html[data-resolved-theme="dark"] .theme-control legend,
-html[data-resolved-theme="dark"] .theme-control label {
-  color: #e8f3ee;
-}
-
-html[data-resolved-theme="dark"] .theme-control label.active {
-  background: #1f7a64;
-  border-color: #b7e0cc;
-  color: #f4fffb;
-}
-
-html[data-resolved-theme="dark"] .theme-control label:focus-within,
-html[data-resolved-theme="dark"] :is(button, input, textarea, select, [tabindex]):focus-visible {
-  outline: 3px solid #f6d7a2;
-  outline-offset: 3px;
-}
-
-html[data-resolved-theme="dark"] ::selection {
-  background: #1f6f5c;
-  color: #f4fffb;
-}
-
-html[data-resolved-theme="dark"] .form-field input[type="checkbox"],
-html[data-resolved-theme="dark"] .review-check input {
-  accent-color: #3dbe9a;
-}
-
 @media (max-width: 950px) {
-  html[data-resolved-theme="dark"] .plan-list-item.selected {
-    box-shadow: inset 0 -3px #8fbfa4;
-  }
 }
 
 @media (max-width: 490px) {
-  html[data-resolved-theme="dark"] .pathway-icon {
-    box-shadow: 0 0 0 4px #15211e !important;
-  }
 }
 
 @media (forced-colors: active) {
@@ -733,4 +118,5 @@ html[data-resolved-theme="dark"] .review-check input {
     background: Highlight;
     color: HighlightText;
   }
+}
 }
