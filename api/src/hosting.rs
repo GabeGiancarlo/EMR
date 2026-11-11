@@ -188,8 +188,10 @@ impl ServerConfig {
     }
 }
 
-/// Cross-origin access for the listed browser origins only.
-pub fn cors(origins: &[String]) -> Cors {
+/// Cross-origin access for the listed browser origins only. When hosted, a request
+/// that names any other origin is refused outright instead of merely being left
+/// without the headers a browser needs to read the answer.
+pub fn cors(origins: &[String], hosted: bool) -> Cors {
     origins
         .iter()
         .fold(Cors::default(), |cors, origin| cors.allowed_origin(origin))
@@ -201,6 +203,7 @@ pub fn cors(origins: &[String]) -> Cors {
             "x-nexus-client",
             "x-nexus-consent",
         ])
+        .block_on_origin_mismatch(hosted)
         .max_age(600)
 }
 

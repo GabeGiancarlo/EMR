@@ -61,7 +61,7 @@ async fn run() -> io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(hosting::security_headers(hosted))
-            .wrap(hosting::cors(&origins))
+            .wrap(hosting::cors(&origins, hosted))
             .app_data(web::Data::new(AppState {
                 pool: pool.clone(),
                 auth: auth.clone(),
