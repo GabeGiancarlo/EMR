@@ -8,7 +8,9 @@
 targets = [
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
-    "wasm32-unknown-unknown",
+    # Local development machines. wasm32 was listed here before, but the API
+    # is never built for it.
+    "aarch64-apple-darwin",
 ]
 
 [output]
@@ -17,22 +19,24 @@ targets = [
 feature-depth = 1
 
 [advisories]
+# Written for cargo-deny 0.20. A vulnerability advisory on a crate in the
+# compiled graph always fails; the old `vulnerability` and `notice` keys no
+# longer exist.
 # The path where the advisory database is cloned/fetched into
 db-path = "~/.cargo/advisory-db"
 # The url(s) of the advisory databases to use
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# The lint level for security vulnerabilities
-vulnerability = "deny"
-# The lint level for unmaintained crates
-unmaintained = "warn"
+# Unmaintained crates fail only when the API depends on them directly.
+# Unmaintained transitive crates still appear in the `cargo audit` report.
+unmaintained = "workspace"
+# Unsound crates fail only when the API depends on them directly.
+unsound = "workspace"
 # The lint level for crates that have been yanked from their source registry
 yanked = "warn"
-# The lint level for crates with security notices
-notice = "warn"
-# A list of advisory IDs to ignore. Note that ignored advisories will still
-# output a note when they are encountered.
+# Advisory IDs to ignore. Each entry needs a reason; an ignored advisory is
+# still printed as a note.
 ignore = [
-    #"RUSTSEC-0000-0000",
+    #{ id = "RUSTSEC-0000-0000", reason = "why this does not apply" },
 ]
 
 [licenses]
@@ -49,29 +53,13 @@ allow = [
     "ISC",
     "Unicode-DFS-2016",
     "CC0-1.0",
+    # Permissive licences used by crates in the compiled graph.
+    "Unicode-3.0",          # ICU and unicode-* data tables
+    "Zlib",                 # foldhash, zlib-rs
+    "CDLA-Permissive-2.0",  # webpki-roots (Mozilla CA bundle)
 ]
-# List of explicitly disallowed licenses
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-1.0",
-    "AGPL-3.0",
-    "LGPL-2.0",
-    "LGPL-2.1",
-    "LGPL-3.0",
-    "MPL-2.0",
-]
-# Lint level for when multiple versions of the same license are detected
-copyleft = "warn"
-# Some crates don't have (easily) machine readable licensing information,
-# adding a clarification or license allows these crates to be accepted
-[[licenses.clarify]]
-name = "ring"
-version = "*"
-expression = "MIT AND ISC AND OpenSSL"
-license-files = [
-    { path = "LICENSE", hash = 0xbd0eed23 }
-]
+# Any licence that is not in `allow` fails, so copyleft licences (GPL, AGPL,
+# LGPL, MPL) are rejected without a separate deny list.
 
 [bans]
 # Lint level for when multiple versions of the same crate are detected
