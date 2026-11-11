@@ -1,0 +1,73 @@
+theme,foreground,hex,background,hex,ratio,required,result,use
+light,text,#232B1E,page,#F4EFE3,12.75,7,pass,body text on the page
+light,text,#232B1E,surface,#FCF9F0,13.89,7,pass,body text on a card
+light,text,#232B1E,surface-subtle,#EAE3D2,11.43,7,pass,body text on a subtle panel
+light,text,#232B1E,navigation,#EDE7D7,11.85,7,pass,navigation labels
+light,text-secondary,#565E4C,page,#F4EFE3,5.90,4.5,pass,secondary text on the page
+light,text-secondary,#565E4C,surface,#FCF9F0,6.43,4.5,pass,secondary text on a card
+light,text-secondary,#565E4C,surface-subtle,#EAE3D2,5.29,4.5,pass,secondary text on a subtle panel
+light,on-action,#F4EFE3,action,#2F4631,8.97,4.5,pass,primary button label
+light,on-action,#F4EFE3,action-hover,#263A29,10.64,4.5,pass,"primary button, hover"
+light,on-action,#F4EFE3,action-pressed,#1D2D20,12.64,4.5,pass,"primary button, pressed"
+light,on-danger,#F4EFE3,danger-fill,#9E3926,5.97,4.5,pass,destructive button label
+light,on-selected,#263A29,selected,#DCE5C3,9.33,4.5,pass,selected row or nav item
+light,link,#3D5A2C,page,#F4EFE3,6.79,4.5,pass,link on the page
+light,link,#3D5A2C,surface,#FCF9F0,7.40,4.5,pass,link on a card
+light,link-visited,#6A5038,page,#F4EFE3,6.50,4.5,pass,visited link on the page
+light,link-visited,#6A5038,surface,#FCF9F0,7.08,4.5,pass,visited link on a card
+light,brand,#2F4631,page,#F4EFE3,8.97,4.5,pass,logo and brand headings
+light,brand,#2F4631,surface,#FCF9F0,9.77,4.5,pass,logo on a card
+light,border-control,#7A8066,surface,#FCF9F0,3.91,3,pass,field outline on a card
+light,border-control,#7A8066,page,#F4EFE3,3.58,3,pass,field outline on the page
+light,focus,#A9502C,page,#F4EFE3,4.73,3,pass,focus ring on the page
+light,focus,#A9502C,surface,#FCF9F0,5.15,3,pass,focus ring on a card
+light,accent,#A9502C,page,#F4EFE3,4.73,3,pass,accent mark or icon
+light,accent,#A9502C,accent-soft,#F3DDCF,4.15,3,pass,accent on its tint
+light,success,#2C6947,success-bg,#DCEBDA,5.26,4.5,pass,success message
+light,warning,#77520F,warning-bg,#F5E4B5,5.55,4.5,pass,warning message
+light,danger,#9E3926,danger-bg,#F7DFD6,5.37,4.5,pass,error message
+light,info,#3F6468,info-bg,#DDE9E6,5.22,4.5,pass,information message
+light,success,#2C6947,surface,#FCF9F0,6.20,4.5,pass,success text on a card
+light,warning,#77520F,surface,#FCF9F0,6.65,4.5,pass,warning text on a card
+light,danger,#9E3926,surface,#FCF9F0,6.50,4.5,pass,error text on a card
+light,info,#3F6468,surface,#FCF9F0,6.17,4.5,pass,information text on a card
+light,text,#232B1E,vein@surface,#EAEAE0,12.08,7,pass,body text over a leaf vein
+light,text-secondary,#565E4C,vein@surface,#EAEAE0,5.59,4.5,pass,secondary text over a leaf vein
+light,text,#232B1E,vein@selected,#CDD7B6,9.74,7,pass,body text over a vein on a selected card
+light,text,#232B1E,vein-strong@surface,#DDDED4,10.78,7,pass,"body text over a vein, card hovered"
+dark,text,#EEEDE0,page,#161A13,14.96,7,pass,body text on the page
+dark,text,#EEEDE0,surface,#1F251B,13.32,7,pass,body text on a card
+dark,text,#EEEDE0,surface-subtle,#283024,11.59,7,pass,body text on a subtle panel
+dark,text,#EEEDE0,navigation,#1A1F16,14.24,7,pass,navigation labels
+dark,text-secondary,#BFC8AC,page,#161A13,10.13,4.5,pass,secondary text on the page
+dark,text-secondary,#BFC8AC,surface,#1F251B,9.02,4.5,pass,secondary text on a card
+dark,text-secondary,#BFC8AC,surface-subtle,#283024,7.85,4.5,pass,secondary text on a subtle panel
+dark,on-action,#161A13,action,#BECB9B,10.25,4.5,pass,primary button label
+dark,on-action,#161A13,action-hover,#CDD9AC,11.85,4.5,pass,"primary button, hover"
+dark,on-action,#161A13,action-pressed,#AEBC8A,8.70,4.5,pass,"primary button, pressed"
+dark,on-danger,#FBF3EA,danger-fill,#A8432F,5.45,4.5,pass,destructive button label
+dark,on-selected,#E4ECCF,selected,#313D29,9.40,4.5,pass,selected row or nav item
+dark,link,#C6D4A2,page,#161A13,11.20,4.5,pass,link on the page
+dark,link,#C6D4A2,surface,#1F251B,9.96,4.5,pass,link on a card
+dark,link-visited,#C9AE92,page,#161A13,8.35,4.5,pass,visited link on the page
+dark,link-visited,#C9AE92,surface,#1F251B,7.43,4.5,pass,visited link on a card
+dark,brand,#DCE5C3,page,#161A13,13.46,4.5,pass,logo and brand headings
+dark,brand,#DCE5C3,surface,#1F251B,11.98,4.5,pass,logo on a card
+dark,border-control,#828D6D,surface,#1F251B,4.47,3,pass,field outline on a card
+dark,border-control,#828D6D,page,#161A13,5.02,3,pass,field outline on the page
+dark,focus,#EDB07E,page,#161A13,9.33,3,pass,focus ring on the page
+dark,focus,#EDB07E,surface,#1F251B,8.30,3,pass,focus ring on a card
+dark,accent,#E59A72,page,#161A13,7.72,3,pass,accent mark or icon
+dark,accent,#E59A72,accent-soft,#43291D,5.84,3,pass,accent on its tint
+dark,success,#A6D2A6,success-bg,#22362A,7.61,4.5,pass,success message
+dark,warning,#E6C27A,warning-bg,#3B3119,7.54,4.5,pass,warning message
+dark,danger,#EEA08F,danger-bg,#43261F,6.55,4.5,pass,error message
+dark,info,#A5CDCF,info-bg,#203335,7.71,4.5,pass,information message
+dark,success,#A6D2A6,surface,#1F251B,9.26,4.5,pass,success text on a card
+dark,warning,#E6C27A,surface,#1F251B,9.23,4.5,pass,warning text on a card
+dark,danger,#EEA08F,surface,#1F251B,7.51,4.5,pass,error text on a card
+dark,info,#A5CDCF,surface,#1F251B,9.14,4.5,pass,information text on a card
+dark,text,#EEEDE0,vein@surface,#2C3327,11.07,7,pass,body text over a leaf vein
+dark,text-secondary,#BFC8AC,vein@surface,#2C3327,7.50,4.5,pass,secondary text over a leaf vein
+dark,text,#EEEDE0,vein@selected,#3D4934,8.10,7,pass,body text over a vein on a selected card
+dark,text,#EEEDE0,vein-strong@surface,#373D30,9.52,7,pass,"body text over a vein, card hovered"
