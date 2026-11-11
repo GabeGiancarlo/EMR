@@ -209,7 +209,7 @@ Not verified: the rest of the executive workspace, calendar day and agenda, the 
 
 ### November 11: hosted sign-in and demo hosting preparation (Mac)
 
-On branch `feature/auth-and-hosting`, above `3f2ff67` (`dev` after the history rewrite). Rust 1.95.0, Node 26.8.2, PostgreSQL 17 on loopback 55432. Nothing was deployed and no provider or hosting account was created.
+On branch `feature/auth-and-hosting`, above `dev` at `efc13d8`. History was rewritten twice on November 11 to normalise commit identity; the checks below ran on identical file contents when that `dev` commit was `3f2ff67`. Rust 1.95.0, Node 26.8.2, PostgreSQL 17 on loopback 55432. Nothing was deployed and no provider or hosting account was created.
 
 Automated, all passing on the final tree: `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo test --locked --workspace` (111 library tests, 5 opt-in ignored; 7 new `oidc_tokens` tests); every ignored PostgreSQL target that CI runs, on disposable `nexus_test`, including the new `oidc_postgres` (2 tests); frontend `npx tsc --noEmit`, `npm test` (99 tests, 10 new) and `npx vite build`.
 
