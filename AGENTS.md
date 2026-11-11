@@ -17,7 +17,7 @@ The latest November 4 expanded pass has a separate **$500 spending target and ce
 
 ## Engineering boundaries
 
-- Inspect `git status` before editing; preserve existing uncommitted work. Use `codex/` branches, small coherent changes and integrated validation. Do not rewrite shared history or publish/deploy merely because a plan mentions it.
+- Inspect `git status` before editing; preserve existing uncommitted work. Branch model (owner direction, November 11, 2026): `main` is production, `dev` is integration, and each change is a `feature/<name>` branch cut from `dev` and merged back by pull request; `dev` reaches `main` by pull request. See `docs/development/git-workflow.md`. Keep changes small and coherent, with integrated validation. Do not rewrite shared history or publish/deploy merely because a plan mentions it.
 - Active application: Rust `api/` (Actix/SQLx/PostgreSQL) and React/TypeScript `frontend/`. `core/`, `fhir/`, `jobs/` are parked. There is no premade UI component library.
 - Local operator headers exercise permissions but are not authentication. Keep local mode loopback-only with synthetic data. Do not expose it as a production service.
 - Preserve tenant/patient scope, immutable signatures and source versions, integer-cent money, audit transactions and explicit corrections. Serialize migration numbering and changes to shared routing/entry files.

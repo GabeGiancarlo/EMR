@@ -45,6 +45,7 @@ import type { Bootstrap, Resource, Row } from "./api";
 import { definitions, RecordForm } from "./forms";
 import type { Field } from "./forms";
 import { Badge, Brand, Button, Empty, Icon, Modal, Panel, Tabs } from "./ui";
+import { ContourPattern } from "./nexus-ui";
 import type { IconName } from "./ui";
 
 type View =
@@ -2380,6 +2381,7 @@ export default function App() {
       if (event.key === "Escape" && mobile) setMobile(false);
     }}>
       <aside id="workspace-navigation" className={`sidebar ${mobile ? "mobile-open" : ""}`}>
+        <div className="sidebar-art" aria-hidden="true"><ContourPattern tile={420} /></div>
         <Brand />
         <div className="organization">
           <span className="org-symbol">{initials(orgName)}</span>
