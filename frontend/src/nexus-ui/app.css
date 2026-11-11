@@ -211,3 +211,4 @@ td small, .muted, .ws-muted { color: var(--nx-text-secondary); }
 
 /* ----------------------------------------------------------- entry screen */
 .loading-page .brand, .setup-page .brand { margin-left: 0; }
+.setup-story .brand, .setup-story .nx-logo { color: var(--nx-on-action); }
