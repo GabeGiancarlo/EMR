@@ -1,0 +1,1313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus Brand Guidelines v0.3</title>
+<style>
+@font-face { font-family: "Source Sans 3"; font-weight: 400; src: url("../fonts/SourceSans3-Regular.ttf"); }
+@font-face { font-family: "Source Sans 3"; font-weight: 600; src: url("../fonts/SourceSans3-Semibold.ttf"); }
+@font-face { font-family: "Fraunces"; font-weight: 600; src: url("../fonts/Fraunces-SemiBold.ttf"); }
+@font-face { font-family: "Fraunces"; font-weight: 400; src: url("../fonts/Fraunces-Regular.ttf"); }
+@font-face { font-family: "Manrope"; font-weight: 800; src: url("../fonts/Manrope-ExtraBold.ttf"); }
+@font-face { font-family: "Manrope"; font-weight: 700; src: url("../fonts/Manrope-Bold.ttf"); }
+@font-face { font-family: "Fraunces VF"; font-weight: 100 900; src: url("../fonts/variable/Fraunces-Variable.ttf"); }  /* only for the Soft 0 comparison */
+{{tokens}}
+@page { size: 8.5in 11in; margin: 0; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font: 400 12.5px/1.5 var(--nx-font-ui); color: var(--nx-text); background: #77786f; counter-reset: pg; }
+a { color: inherit; }
+svg { display: block; }
+.page { width: 816px; height: 1056px; padding: 52px 60px 60px; position: relative; overflow: hidden; background: var(--nx-page);
+  color: var(--nx-text); break-after: page; margin: 0 auto; counter-increment: pg; }
+@media screen { .page { margin: 18px auto; box-shadow: 0 3px 18px #0004; } }
+.eyebrow { font: 600 10px/1 var(--nx-font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--nx-accent); display: flex; gap: 10px; align-items: center; }
+.eyebrow::before { content: ""; width: 26px; height: 1.5px; background: currentColor; }
+h1 { font: 600 35px/1.08 var(--nx-font-display); color: var(--nx-brand); margin: 14px 0 10px; letter-spacing: -.015em; }
+h2 { font: 600 16.5px/1.25 var(--nx-font-display); color: var(--nx-brand); margin: 0 0 6px; }
+h3 { font: 600 12.5px/1.3 var(--nx-font-ui); margin: 0 0 3px; color: var(--nx-text); }
+p { margin: 0 0 8px; }
+.lead { font-size: 14.5px; line-height: 1.5; color: var(--nx-text-secondary); max-width: 580px; margin: 0 0 20px; }
+.small { font-size: 11px; color: var(--nx-text-secondary); line-height: 1.45; }
+.foot { position: absolute; left: 60px; right: 60px; bottom: 24px; display: flex; justify-content: space-between; font-size: 9.5px;
+  color: var(--nx-text-secondary); border-top: 1px solid var(--nx-border); padding-top: 8px; }
+.foot .n::after { content: counter(pg); }
+.card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-corner-tile); padding: 16px 18px; }
+.card.flat { border-radius: var(--nx-radius-panel); }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.mt { margin-top: 18px; } .mt2 { margin-top: 26px; }
+.g2 > *, .g3 > *, .g4 > * { min-width: 0; }
+ul.tight { margin: 0; padding-left: 16px; } ul.tight li { margin-bottom: 3px; }
+ul.tight li::marker { color: var(--nx-brand-mid); }
+code { font: 11px var(--nx-font-mono); color: var(--nx-text); }
+table.kv { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.kv td, table.kv th { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--nx-border); vertical-align: top; text-align: left; }
+table.kv th { font: 600 9.5px var(--nx-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--nx-text-secondary); }
+table.kv td:first-child { font-weight: 600; white-space: nowrap; padding-right: 16px; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rule { height: 1px; background: var(--nx-border); margin: 20px 0; }
+.stage { border-radius: var(--nx-corner-tile); display: flex; align-items: center; justify-content: center; padding: 22px; }
+.stage.linen { background: var(--nx-oat); } .stage.birch { background: var(--nx-birch); border: 1px solid var(--nx-reed); }
+.stage.pine { background: var(--nx-pine); color: var(--nx-linen); } .stage.night { background: var(--nx-night); color: var(--nx-lichen); }
+.cap { font-size: 10.5px; color: var(--nx-text-secondary); margin-top: 6px; }
+.cap b { color: var(--nx-text); }
+.tag { display: inline-block; font: 600 9px var(--nx-font-ui); letter-spacing: .1em; text-transform: uppercase; padding: 3px 7px; border-radius: 3px 8px 3px 3px;
+  background: var(--nx-selected); color: var(--nx-on-selected); }
+.tag.open { background: var(--nx-accent-soft); color: var(--nx-accent); }
+.do h3::before, .dont h3::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--nx-success); }
+.dont h3::before { background: var(--nx-danger); border-radius: 1px; height: 2.5px; vertical-align: middle; }
+
+/* cover */
+.cover { background: var(--nx-pine); color: var(--nx-linen); padding: 60px; }
+.cover .art { position: absolute; inset: 0; background: var(--img-ringfield) -340px -60px / 1500px auto no-repeat; }
+.cover .logo { position: relative; width: 250px; }
+.cover .title { position: absolute; left: 60px; bottom: 172px; font: 600 76px/0.98 var(--nx-font-display); letter-spacing: -.02em; }
+.cover .sub { position: absolute; left: 60px; bottom: 98px; font-size: 16px; max-width: 420px; color: var(--nx-lichen); line-height: 1.45; }
+.cover .meta { position: absolute; left: 60px; right: 60px; bottom: 40px; display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--nx-sage); border-top: 1px solid #55705a; padding-top: 12px; }
+
+/* idea diagram */
+.anat { position: relative; height: 350px; }
+.anat .sym { position: absolute; left: 196px; top: 26px; width: 304px; color: var(--nx-brand); }
+.anat .note { position: absolute; width: 168px; font-size: 11.5px; line-height: 1.4; }
+.anat .note b { display: block; font: 600 13.5px var(--nx-font-display); color: var(--nx-brand); margin-bottom: 2px; }
+.anat .ln { position: absolute; height: 1.5px; background: var(--nx-accent); transform-origin: 0 50%; }
+.anat .ln::after { content: ""; position: absolute; right: -3px; top: -2.5px; width: 6.5px; height: 6.5px; border-radius: 50%; background: var(--nx-accent); }
+
+/* swatches + roles */
+.sw { display: flex; flex-direction: column; }
+.sw .chip { height: 62px; border-radius: 4px 18px 4px 4px; padding: 8px 10px; font: 600 13px var(--nx-font-display); display: flex; align-items: flex-end; border: 1px solid #0000001a; }
+.sw .meta { font-size: 9.6px; line-height: 1.4; padding: 5px 2px 0; color: var(--nx-text-secondary); }
+.sw .meta b { color: var(--nx-text); font: 600 10.5px var(--nx-font-mono); } .sw .meta i { font-style: normal; }
+.balance { display: flex; height: 34px; border-radius: 4px 18px 4px 4px; overflow: hidden; font: 600 10px var(--nx-font-ui); }
+.balance span { display: flex; align-items: center; padding-left: 9px; white-space: nowrap; overflow: hidden; }
+.themebox { background: var(--nx-page); color: var(--nx-text); border: 1px solid var(--nx-border); border-radius: var(--nx-corner-tile); padding: 14px 16px; }
+.rg { margin-bottom: 10px; } .rg h3 { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--nx-text-secondary); margin-bottom: 4px; }
+.role { display: flex; align-items: center; gap: 6px; font-size: 10.5px; padding: 1.5px 0; }
+.role .dot { width: 13px; height: 13px; border-radius: 3px; border: 1px solid #8884; flex: none; }
+.role em { margin-left: auto; font: normal 10px var(--nx-font-mono); color: var(--nx-text-secondary); }
+
+/* type */
+.spec { display: grid; grid-template-columns: 96px 1fr; gap: 6px 18px; align-items: baseline; }
+.spec .l { font: 600 9.5px var(--nx-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--nx-text-secondary); }
+.spec > div:nth-child(even) { border-bottom: 1px solid var(--nx-border); padding-bottom: 8px; }
+.big-a { font: 600 84px/0.9 var(--nx-font-display); color: var(--nx-brand); letter-spacing: -.02em; }
+
+/* icons */
+.icell { text-align: center; font-size: 9.5px; color: var(--nx-text-secondary); }
+.icell .ic, .icell > svg { width: 40px; height: 40px; margin: 0 auto 6px; color: var(--nx-brand); fill: currentColor; }
+.icell.big > svg { width: 58px; height: 58px; }
+.igrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 20px 4px; padding: 8px 0; }
+.ic { width: 1em; height: 1em; fill: currentColor; flex: none; }
+.irow { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.irow .ic { width: var(--s, 20px); height: var(--s, 20px); }
+
+/* pattern stages */
+.card.scn { padding: 0; overflow: hidden; } .card.scn svg { width: 100%; height: 186px; }
+.pat { border-radius: var(--nx-corner-tile); height: 150px; border: 1px solid var(--nx-reed); position: relative; overflow: hidden; }
+
+/* ---------- product UI (also the reference styling for the app) ---------- */
+.shot { border: 1px solid var(--nx-border); border-radius: 6px; overflow: hidden; width: 696px; height: 449px; }
+.app { width: 1240px; height: 800px; zoom: .5613; display: flex; font: 400 14px/1.4 var(--nx-font-ui); color: var(--nx-text); background: var(--nx-page); }
+.app .ic { width: 18px; height: 18px; }
+.app-nav { width: 236px; flex: none; background: var(--nx-navigation); border-right: 1px solid var(--nx-border); display: flex; flex-direction: column; padding: 18px 12px 12px; position: relative; }
+.app-logo { display: flex; align-items: center; gap: 9px; color: var(--nx-brand); padding: 0 8px 4px; }
+.app-logo .sym { width: 30px; } .app-logo .wm { height: 17px; width: auto; }
+.app-ws { font: 600 11px var(--nx-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--nx-text-secondary); padding: 16px 8px 8px; }
+.app-nav a { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: var(--nx-corner-control); color: var(--nx-text); font-weight: 400; position: relative; z-index: 1; }
+.app-nav a .ic { color: var(--nx-text-secondary); }
+.app-nav a.on { background: var(--nx-selected); color: var(--nx-on-selected); font-weight: 600; }
+.app-nav a.on .ic { color: var(--nx-on-selected); }
+.app-nav a b { margin-left: auto; font: 600 11px var(--nx-font-ui); background: var(--nx-accent); color: var(--nx-page); min-width: 20px; height: 18px; border-radius: 3px 8px 3px 3px; display: grid; place-items: center; padding: 0 5px; }
+.app-nav-art { position: absolute; left: 0; right: 0; bottom: 64px; height: 250px; overflow: hidden; color: var(--nx-pattern-ink); }
+.app-profile { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px; border-top: 1px solid var(--nx-border); position: relative; z-index: 1; background: var(--nx-navigation); }
+.app-profile .av { width: 32px; height: 32px; border-radius: 4px 12px 4px 4px; background: var(--nx-brand); color: var(--nx-page); font: 600 12px var(--nx-font-ui); display: grid; place-items: center; }
+.app-profile strong { display: block; font-size: 13px; } .app-profile small { color: var(--nx-text-secondary); font-size: 12px; }
+.app-profile .ic { margin-left: auto; color: var(--nx-text-secondary); width: 14px; height: 14px; }
+.app-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.app-top { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--nx-border); }
+.app-search { flex: 1; max-width: 420px; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--nx-border-control); border-radius: var(--nx-radius-control); background: var(--nx-surface); color: var(--nx-text-secondary); }
+.app-search kbd { margin-left: auto; font: 11px var(--nx-font-mono); border: 1px solid var(--nx-border); border-radius: 3px; padding: 0 5px; }
+.app-date { margin-left: auto; color: var(--nx-text-secondary); font-size: 13px; }
+.app-body { padding: 22px 24px; flex: 1; overflow: hidden; }
+.app-hello h1 { font: 600 28px/1.15 var(--nx-font-display); color: var(--nx-brand); margin: 0 0 2px; letter-spacing: -.01em; }
+.app-hello p { color: var(--nx-text-secondary); margin: 0 0 16px; font-size: 15px; }
+.app-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.metric { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-corner-tile); padding: 11px 14px; }
+.metric span { font: 600 11px var(--nx-font-ui); letter-spacing: .07em; text-transform: uppercase; color: var(--nx-text-secondary); display: block; }
+.metric strong { font: 800 29px/1.2 var(--nx-font-figure); letter-spacing: -.03em; font-variant-numeric: lining-nums tabular-nums; color: var(--nx-text); display: block; }
+.metric small { font-size: 12.5px; color: var(--nx-text-secondary); display: flex; align-items: center; gap: 5px; }
+.metric small.warn, small.warn { color: var(--nx-warning); } .metric small .ic { width: 13px; height: 13px; }
+.app-cols { display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: start; }
+.panel { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-panel); }
+.panel-h { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--nx-border); }
+.panel-h h2, .panel.empty h2 { font: 600 15.5px var(--nx-font-display); color: var(--nx-text); margin: 0; }
+.tabs { display: flex; gap: 2px; font-size: 13px; } .tabs span { padding: 4px 10px; border-radius: var(--nx-radius-control); color: var(--nx-text-secondary); }
+.tabs .on { background: var(--nx-selected); color: var(--nx-on-selected); font-weight: 600; border-radius: var(--nx-corner-control); }
+.filters { display: flex; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--nx-border); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; height: 26px; padding: 0 9px; border: 1px solid var(--nx-border-control); border-radius: var(--nx-radius-control); color: var(--nx-text); }
+.chip .ic { width: 13px; height: 13px; }
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { font: 600 11px var(--nx-font-ui); letter-spacing: .07em; text-transform: uppercase; color: var(--nx-text-secondary); text-align: left; padding: 7px 14px; border-bottom: 1px solid var(--nx-border); background: var(--nx-surface-subtle); }
+.tbl td { padding: 0 14px; height: 44px; border-bottom: 1px solid var(--nx-border); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: 0; } .tbl tfoot td { font-weight: 600; border-top: 1px solid var(--nx-border-control); height: 36px; color: var(--nx-text-secondary); }
+.tbl td small { display: block; font-size: 11.5px; color: var(--nx-text-secondary); line-height: 1.2; }
+.tbl td strong { font-weight: 600; } .tbl .r { text-align: right; } .tbl td .ic { color: var(--nx-text-secondary); width: 14px; height: 14px; }
+.tbl tr.sel td { background: var(--nx-selected); } .tbl tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--nx-brand); }
+.badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 6px; font: 600 12px var(--nx-font-ui); border-radius: 3px 9px 3px 3px;
+  background: var(--nx-surface-subtle); color: var(--nx-text); white-space: nowrap; }
+.badge .ic, .tbl td .badge .ic { width: 13px; height: 13px; color: currentColor; }
+.badge.ok { background: var(--nx-success-bg); color: var(--nx-success); } .badge.warn { background: var(--nx-warning-bg); color: var(--nx-warning); }
+.badge.bad { background: var(--nx-danger-bg); color: var(--nx-danger); } .badge.info { background: var(--nx-info-bg); color: var(--nx-info); }
+.badge.live { background: var(--nx-brand); color: var(--nx-page); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; font: 600 13.5px var(--nx-font-ui); border: 1px solid transparent;
+  border-radius: var(--nx-radius-control); background: none; color: var(--nx-text); white-space: nowrap; }
+.btn .ic { width: 15px; height: 15px; }
+.btn.primary { background: var(--nx-action); color: var(--nx-on-action); border-radius: var(--nx-corner-control); }
+.btn.primary.hover { background: var(--nx-action-hover); } .btn.primary.pressed { background: var(--nx-action-pressed); transform: translateY(1px); }
+.btn.secondary { border-color: var(--nx-border-control); background: var(--nx-surface); }
+.btn.secondary.hover { background: var(--nx-surface-subtle); }
+.btn.quiet { padding: 0 8px; color: var(--nx-text-secondary); } .btn.quiet.text { color: var(--nx-link); }
+.btn.danger { background: var(--nx-danger-fill); color: var(--nx-on-danger); border-radius: var(--nx-corner-control); }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.btn.focus { outline: 2px solid var(--nx-focus); outline-offset: 2px; }
+.btn.off { background: var(--nx-surface-subtle); color: var(--nx-text-secondary); border-color: var(--nx-border); opacity: .75; }
+.side { display: flex; flex-direction: column; gap: 14px; }
+.list { list-style: none; margin: 0; padding: 0; } .list li { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--nx-border); }
+.list li:last-child { border: 0; } .list strong { display: block; font-weight: 600; } .list small { font-size: 12px; color: var(--nx-text-secondary); }
+.lk { color: var(--nx-link); font-size: 13px; font-weight: 600; }
+.panel.empty { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: var(--nx-corner-tile); }
+.panel.empty .scene { width: 104px; flex: none; border-radius: 3px 14px 3px 3px; background: var(--nx-surface-subtle); }
+.panel.empty p { margin: 2px 0 0; font-size: 12.5px; color: var(--nx-text-secondary); }
+.checks { list-style: none; margin: 0; padding: 10px 14px; } .checks li { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 13.5px; flex-wrap: wrap; }
+.checks .ic { width: 16px; height: 16px; margin-top: 2px; } .checks .y .ic { color: var(--nx-success); } .checks .n { color: var(--nx-danger); font-weight: 600; }
+.checks small { flex-basis: 100%; padding-left: 24px; font-weight: 400; color: var(--nx-text-secondary); }
+.row { display: flex; gap: 8px; padding: 4px 14px 14px; }
+/* form bits for the component page */
+.fld { display: flex; flex-direction: column; gap: 4px; font: 14px var(--nx-font-ui); }
+.fld label { font: 600 12.5px var(--nx-font-ui); } .fld .hint { font-size: 12px; color: var(--nx-text-secondary); }
+.fld .in { height: 34px; border: 1px solid var(--nx-border-control); border-radius: var(--nx-radius-control); background: var(--nx-surface); display: flex; align-items: center; padding: 0 10px; gap: 8px; }
+.fld .in.focus { outline: 2px solid var(--nx-focus); outline-offset: 1px; } .fld .in.err { border-color: var(--nx-danger); box-shadow: inset 0 0 0 1px var(--nx-danger); }
+.fld .err-t { color: var(--nx-danger); font-size: 12px; display: flex; gap: 5px; align-items: center; } .fld .ic { width: 14px; height: 14px; }
+.chk { display: inline-flex; align-items: center; gap: 7px; font: 14px var(--nx-font-ui); }
+.chk i { width: 17px; height: 17px; border: 1.5px solid var(--nx-border-control); border-radius: 2px 6px 2px 2px; display: grid; place-items: center; background: var(--nx-surface); }
+.chk.on i { background: var(--nx-action); border-color: var(--nx-action); color: var(--nx-on-action); } .chk .ic { width: 12px; height: 12px; }
+.sw-t { width: 34px; height: 19px; border-radius: 10px; background: var(--nx-border-control); position: relative; display: inline-block; }
+.sw-t::after { content: ""; position: absolute; top: 2.5px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--nx-surface); }
+.sw-t.on { background: var(--nx-action); } .sw-t.on::after { left: 17px; }
+.toast { display: inline-flex; align-items: center; gap: 9px; background: var(--nx-text); color: var(--nx-page); padding: 9px 14px; border-radius: var(--nx-corner-control); font: 13.5px var(--nx-font-ui); }
+.toast .ic { width: 16px; height: 16px; } .toast a { color: var(--nx-brand-mid); font-weight: 600; margin-left: 8px; }
+.comp { zoom: .78; } .comp .cluster { gap: 7px; } .comp .btn { padding: 0 11px; }
+.comp-h { font: 600 9.5px var(--nx-font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--nx-text-secondary); margin: 0 0 7px; }
+.comp-h.mt { margin-top: 16px; }
+.cluster { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+/* ---------- figures ---------- */
+.fig { font-family: var(--nx-font-figure); font-weight: 800; letter-spacing: -.03em; font-variant-numeric: lining-nums tabular-nums; }
+
+/* ---------- the leaf card: tip top left, stem bottom right, a vein under the text ---------- */
+:root { --nx-vein-image: {{vein light}}; --nx-vein-image-strong: {{vein light strong}}; --img-ringfield: {{tint patterns/nexus-pattern-ring-field-pressed-mask.png #3F5A41}};
+  --img-ringpress: {{tint patterns/nexus-pattern-ring-press-pressed-mask.png #2F4631}}; }
+[data-nexus-theme="dark"] { --nx-vein-image: {{vein dark}}; --nx-vein-image-strong: {{vein dark strong}}; }
+.leaf, .card, .metric, .panel.empty { position: relative; border-radius: var(--nx-corner-leaf); }
+.leaf::before, .card::before, .metric::before, .panel.empty::before { content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: var(--nx-vein-image) center / 100% 100% no-repeat; pointer-events: none; }
+.leaf::after, .card::after, .metric::after, .panel.empty::after { content: ""; position: absolute; left: 100%; top: 100%; width: 12px; height: 2.5px; margin: -3.5px 0 0 -3.5px;
+  border-radius: 2px; background: var(--nx-brand-mid); transform-origin: 0 50%; transform: rotate(38deg); }
+.leaf > *, .card > *, .metric > *, .panel.empty > * { position: relative; }
+.leaf { background: var(--nx-surface); border: 1px solid var(--nx-border); padding: 14px 18px; }
+.leaf.sm { border-radius: var(--nx-corner-leaf-small); padding: 8px 12px; } .leaf.sm::after { width: 9px; height: 2px; }
+.leaf.lg { border-radius: var(--nx-corner-leaf-large); padding: 22px 28px; } .leaf.lg::after { width: 18px; height: 3px; }
+.leaf.hover { border-color: var(--nx-border-control); } .leaf.hover::before { background-image: var(--nx-vein-image-strong); } .leaf.hover::after { width: 19px; }
+.leaf.sel { background: var(--nx-selected); border-color: transparent; }
+.card.flat { border-radius: var(--nx-radius-panel); } .card.scn { border-radius: var(--nx-corner-tile); }
+.card.flat::before, .card.flat::after, .card.scn::before, .card.scn::after { display: none; }
+.live .leaf { transition: border-color var(--nx-motion-feedback) var(--nx-ease); }
+.live .leaf::after { transition: width var(--nx-motion-feedback) var(--nx-ease); }
+.live .leaf:hover { border-color: var(--nx-border-control); } .live .leaf:hover::before { background-image: var(--nx-vein-image-strong); } .live .leaf:hover::after { width: 19px; }
+
+/* ---------- contents and index ---------- */
+.toc-h { font: 600 9.5px var(--nx-font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--nx-accent); margin: 9px 0 1px; }
+.toc-h:first-child { margin-top: 0; }
+.toc-r { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; line-height: 18px; color: var(--nx-text); text-decoration: none; }
+.toc-r i { flex: 1; border-bottom: 1px dotted var(--nx-border-control); transform: translateY(-3px); }
+.toc-r b { font: 700 11.5px var(--nx-font-figure); font-variant-numeric: tabular-nums; color: var(--nx-brand); min-width: 18px; text-align: right; }
+.ix { columns: 3; column-gap: 30px; font-size: 11.5px; }
+.ix-l { font: 600 16px var(--nx-font-display); color: var(--nx-brand); margin: 12px 0 3px; break-after: avoid; }
+.ix-l:first-child { margin-top: 0; }
+.ix-r { display: flex; justify-content: space-between; gap: 8px; line-height: 18px; break-inside: avoid; border-bottom: 1px solid var(--nx-border); }
+.ix-r b { font: 700 10.5px var(--nx-font-figure); white-space: nowrap; color: var(--nx-brand); } .ix-r a { text-decoration: none; }
+
+/* ---------- type scale rows ---------- */
+.trow { display: grid; grid-template-columns: 108px 1fr; gap: 18px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--nx-border); }
+.trow:first-child { border-top: 1px solid var(--nx-border); }
+.trow .l { font: 600 9.5px/1.4 var(--nx-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--nx-text-secondary); }
+.trow .l small { display: block; font: 400 9.5px var(--nx-font-mono); letter-spacing: 0; text-transform: none; }
+
+/* ---------- interaction states ---------- */
+.states { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.states.s4 { grid-template-columns: repeat(4, 1fr); } .states.s3 { grid-template-columns: repeat(3, 1fr); }
+.st { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: 4px; padding: 10px 7px 9px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.st .sp { height: 46px; display: flex; align-items: center; justify-content: center; zoom: .86; font: 14px var(--nx-font-ui); }
+.st b { font: 600 11px var(--nx-font-ui); margin-top: 4px; } .st i { font-style: normal; font-size: 9.6px; line-height: 1.3; color: var(--nx-text-secondary); margin-top: 2px; }
+.btn.primary { transition: border-radius var(--nx-motion-press) var(--nx-ease), background var(--nx-motion-press) var(--nx-ease), transform var(--nx-motion-press) var(--nx-ease); }
+.btn.primary.hover, .live .btn.primary:hover { background: var(--nx-action-hover); border-radius: var(--nx-corner-control-hover); }
+.btn.primary.pressed, .live .btn.primary:active { background: var(--nx-action-pressed); border-radius: 3px; transform: translateY(1px); }
+.btn.primary.done { background: var(--nx-success); color: var(--nx-page); }
+.lk.hover, .live .lk:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.lk.visited { color: var(--nx-link-visited); } .st .lk { white-space: nowrap; font-size: 12.5px; }
+.lk.focus { outline: 2px solid var(--nx-focus); outline-offset: 3px; border-radius: 2px; }
+.navi { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 9px; width: 112px; border-radius: var(--nx-corner-control); font: 13.5px var(--nx-font-ui); color: var(--nx-text); }
+.navi .ic { width: 18px; height: 18px; color: var(--nx-text-secondary); }
+.navi.hover { background: var(--nx-surface-subtle); } .navi.on { background: var(--nx-selected); color: var(--nx-on-selected); font-weight: 600; } .navi.on .ic { color: var(--nx-on-selected); }
+
+/* ---------- teaching slides ---------- */
+.slide { aspect-ratio: 16 / 9; border-radius: 3px; position: relative; overflow: hidden; background: var(--nx-linen); border: 1px solid var(--nx-reed); padding: 13px 16px 10px;
+  color: var(--nx-heartwood); font-size: 7.6px; line-height: 1.4; display: flex; flex-direction: column; }
+.slide .k { font: 600 6px var(--nx-font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--nx-clay); margin-bottom: 5px; }
+.slide .t { font: 600 15.5px/1.12 var(--nx-font-display); color: var(--nx-pine); letter-spacing: -.01em; }
+.slide .ft { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 5.6px; color: var(--nx-understory); }
+.slide .ft svg { width: 9px; } .slide.pine { background: var(--nx-pine); color: var(--nx-linen); border-color: transparent; } .slide.pine .t { color: var(--nx-linen); }
+.slide.pine .k { color: var(--nx-sage); } .slide.pine .ft { color: var(--nx-sage); }
+.slide.lichen { background: var(--nx-lichen); border-color: transparent; }
+pre.code { margin: 0; font: 10px/1.5 var(--nx-font-mono); background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: 4px; padding: 10px 12px; white-space: pre-wrap; color: var(--nx-text); }
+</style>
+</head>
+<body>
+
+<!-- 1 cover -->
+<section class="page cover" id="cover">
+  <div class="art"></div>
+  <div class="logo">{{svg logo/nexus-logo-horizontal-linen.svg}}</div>
+  <div class="title">Brand<br>guidelines</div>
+  <div class="sub">The mark, colour, type, patterns, icons and voice of Nexus, and how the product puts them to work.</div>
+  <div class="meta"><span>Version 0.3 · working edition</span><span>November 2026</span></div>
+</section><!--/page-->
+
+<!-- 2 contents -->
+<section class="page" id="contents">
+  <div class="eyebrow">Contents</div>
+  <h1>What is in this guide</h1>
+  <p class="lead">What Nexus looks and sounds like, the files that make it, and how the product uses them. Read it once from the front, then keep it beside the asset library.</p>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:36px">
+    <div>{{toc}}</div>
+    <div>
+      <div class="card flat" style="background:var(--nx-oat);border-color:transparent">
+        <h2>Where to start</h2>
+        <table class="kv">
+          <tr><td>Deciding</td><td>At a glance (page {{pg glance}}), the symbol ({{pg symbol}}), open decisions ({{pg open}}).</td></tr>
+          <tr><td>Designing</td><td>Colour, type, shape and pattern (pages {{pg colour}} to {{pg patterns}}).</td></tr>
+          <tr><td>Building</td><td>Colour roles ({{pg colour-roles}}), components ({{pg components}}), interaction ({{pg interaction}}), the asset library ({{pg assets}}).</td></tr>
+          <tr><td>Writing</td><td>Voice ({{pg voice}}) and teaching materials ({{pg teaching}}).</td></tr>
+        </table>
+      </div>
+      <div class="card flat mt">
+        <h2>New in version 0.3</h2>
+        <ul class="tight">
+          <li>The symbol has a bark line: the one line that is not a ring.</li>
+          <li>A new wordmark, heavier and softer. Georgia is gone.</li>
+          <li>Headings in Fraunces; figures in Manrope.</li>
+          <li>The leaf card is the default card, with a vein under its text.</li>
+          <li>Icons simplified to one carved detail at most.</li>
+          <li>Illustrations have a night form, and a page on where they appear.</li>
+          <li>New pages: interaction and motion, teaching materials, this contents page and an index.</li>
+          <li>The two symbol studies that were not chosen have been removed.</li>
+        </ul>
+      </div>
+      <p class="small mt">A working edition. Everything shown is a real file in <code>brand/</code>, and all names, records and amounts are synthetic. The app uses these tokens and the component library in <code>frontend/src/nexus-ui</code>.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 3 at a glance -->
+<section class="page" id="glance" data-sec="Start here" data-toc="Nexus at a glance">
+  <div class="eyebrow">Start here</div>
+  <h1>Nexus at a glance</h1>
+  <p class="lead">Nexus is the record system for recovery centers. Care, billing and leadership work from one record of each person, instead of three tools that drift apart. The brand has one job: make that record feel alive, careful and easy to read.</p>
+  <div class="g2">
+    <div class="card" style="background:var(--nx-oat);border-color:transparent">
+      <h2>How it should feel</h2>
+      <ul class="tight">
+        <li><b>Grown, not manufactured.</b> Carved shapes, pressed ink, warm linen. Nothing glossy.</li>
+        <li><b>A friend who is good at their job.</b> Warm in tone, exact in detail.</li>
+        <li><b>Brief.</b> A screen says what matters in one look. So does a sentence.</li>
+        <li><b>Calm under load.</b> Dense tables stay quiet; colour is saved for what needs attention.</li>
+        <li><b>A little odd, on purpose.</b> Cards shaped like leaves. A sun where a spinner would be.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>What it is not</h2>
+      <ul class="tight">
+        <li>Hospital blue, clinical white, stock stethoscopes.</li>
+        <li>A wellness brand: no lotus, no gradients, no "healing journey".</li>
+        <li>A generic dashboard kit with a green coat of paint.</li>
+        <li>Rustic or twee. The woodcut is the accent, not the wallpaper.</li>
+        <li>Decorated data. Nothing louder than a faint leaf vein sits behind a number someone has to read.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="g2 mt2">
+    <div>
+      <h2>The idea in one line</h2>
+      <p style="font:600 27px/1.15 var(--nx-font-display);color:var(--nx-brand);margin:6px 0 10px">Growth, on the record.</p>
+      <p>A tree keeps its own chart. Every year it lays down a ring: wide in a good season, narrow in a hard one, and none of it is erased. Recovery is recorded the same way, one session, one note, one signed plan at a time. Nexus is where those rings are kept.</p>
+      <p class="small">This line is a proposal for internal use and the cover of sales material. It is not yet used in the product.</p>
+    </div>
+    <div>
+      <h2>The essentials</h2>
+      <table class="kv">
+        <tr><td>Name</td><td>Nexus. Capital N, never all caps in a sentence.</td></tr>
+        <tr><td>Who it is for</td><td>Clinicians, billers and leadership at recovery centers. Outpatient first.</td></tr>
+        <tr><td>Symbol</td><td>Convergence: a tree cross-section with rings, three checks and a bark line.</td></tr>
+        <tr><td>Colours</td><td>Linen page, Pine ink, one Clay accent.</td></tr>
+        <tr><td>Type</td><td>Fraunces for headings, Source Sans 3 for reading, Manrope for figures.</td></tr>
+        <tr><td>Shape</td><td>The leaf card, and one soft corner on controls and tiles.</td></tr>
+        <tr><td>Texture</td><td>Pressed tree rings, bark, map contours, cut-paper forest motifs.</td></tr>
+      </table>
+    </div>
+  </div>
+  <h2 class="mt">The kit in one view</h2>
+  <div class="g4" style="margin-top:8px">
+    <div class="stage linen" style="height:86px"><div style="width:50px">{{svg logo/nexus-logo-stacked-pine.svg}}</div></div>
+    <div style="height:86px;border-radius:var(--nx-corner-card);overflow:hidden;display:grid;grid-template-columns:2fr 1fr;grid-template-rows:2fr 1fr 1fr">
+      <span style="background:var(--nx-pine);grid-row:span 3"></span><span style="background:var(--nx-linen);border:1px solid var(--nx-reed)"></span><span style="background:var(--nx-sage)"></span><span style="background:var(--nx-clay)"></span></div>
+    <div class="stage birch" style="height:86px;padding:12px"><div class="irow" style="--s:22px;color:var(--nx-pine);gap:12px;justify-content:center">{{iconrow overview clients schedule care-plan documentation reporting settings search}}</div></div>
+    <div style="height:86px;border-radius:var(--nx-corner-card);background: var(--img-ringpress) -30px -160px/420px auto"></div>
+  </div>
+  <div class="g4" style="margin-top:5px"><div class="cap">One symbol</div><div class="cap">Three colours doing most of the work</div><div class="cap">Icons cut from the same block</div><div class="cap">One signature texture</div></div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 4 symbol -->
+<section class="page" id="symbol" data-sec="Identity" data-toc="The symbol">
+  <div class="eyebrow">Identity</div>
+  <h1>The symbol is a cross-section</h1>
+  <p class="lead">Cut through a trunk and you see everything that happened to it, in order, around one centre. That is also a fair description of a good clinical record. The symbol is called Convergence, and each part of it stands for something in the product.</p>
+  <div class="anat">
+    {{svg logo/masters/nexus-symbol-convergence.svg class="sym"}}
+    <div class="note" style="left:0;top:22px"><b>The rings</b>Each one is time on the record: a session, a signed note, a posted payment. They are uneven because real progress is.</div>
+    <div class="ln" style="left:172px;top:60px;width:106px;transform:rotate(23deg)"></div>
+    <div class="note" style="left:536px;top:8px"><b>The bark</b>The one line that is not a ring. It wanders, the way bark keys into wood, and it holds every ring inside it. It stands for the organisation: permissions, audit, tenancy.</div>
+    <div class="ln" style="left:532px;top:44px;width:74px;transform:rotate(148deg)"></div>
+    <div class="note" style="left:0;top:232px"><b>The pith</b>The person in care. Everything else in Nexus grows outward from one client record.</div>
+    <div class="ln" style="left:172px;top:264px;width:190px;transform:rotate(-26deg)"></div>
+    <div class="note" style="left:536px;top:212px"><b>The three checks</b>Care, billing and oversight. Three lines of work that meet at the centre. Where they meet is the nexus.</div>
+    <div class="ln" style="left:532px;top:228px;width:98px;transform:rotate(197deg)"></div>
+  </div>
+  <div class="rule"></div>
+  <div class="g3">
+    <div><h2>Carved, then pressed</h2><p>The symbol is drawn the way a linocut is made: a solid block of ink with the lines cut out of it. Edges wobble slightly and every corner is rounded by the gouge. Keep that quality. Do not redraw it with perfect circles.</p></div>
+    <div><h2>One colour, always</h2><p>It works in a single flat ink with no gradient, outline or shadow. If a placement seems to need an effect, the placement is wrong.</p></div>
+    <div><h2>Never a wheel</h2><p>The three checks are unequal in length and spacing so they read as natural splits in wood, and the bark line is uneven on purpose. Made regular, it would become a car badge.</p></div>
+  </div>
+  <h2 class="mt2">Built in four cuts</h2>
+  <div class="g4" style="margin-top:8px;color:var(--nx-pine)">
+    <div><div class="stage linen" style="height:112px"><div style="width:78px">{{svg logo/masters/nexus-symbol-build-1-pith.svg}}</div></div><div class="cap"><b>1. The pith.</b> One person at the centre.</div></div>
+    <div><div class="stage linen" style="height:112px"><div style="width:78px">{{svg logo/masters/nexus-symbol-build-2-rings.svg}}</div></div><div class="cap"><b>2. The rings.</b> Time on the record, around them.</div></div>
+    <div><div class="stage linen" style="height:112px"><div style="width:78px">{{svg logo/masters/nexus-symbol-build-3-checks.svg}}</div></div><div class="cap"><b>3. The checks.</b> Three lines of work meet.</div></div>
+    <div><div class="stage linen" style="height:112px"><div style="width:78px">{{svg logo/masters/nexus-symbol-build-4-bark.svg}}</div></div><div class="cap"><b>4. The bark.</b> The organisation holds it all.</div></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 5 logo family -->
+<section class="page" id="logo-family" data-sec="Identity" data-toc="The logo family">
+  <div class="eyebrow">Identity</div>
+  <h1>The logo family</h1>
+  <p class="lead">Five versions of one identity. Pick the one that fits the space instead of squeezing one that does not. The wordmark is drawn from Fraunces at its heaviest and softest, pressed with the same gouge as the symbol, and supplied as outlines so the logo never depends on a font.</p>
+  <div class="g2">
+    <div><div class="stage linen" style="height:150px;color:var(--nx-pine)"><div style="width:270px">{{svg logo/nexus-logo-horizontal-pine.svg}}</div></div>
+      <div class="cap"><b>Horizontal lockup.</b> The default. Navigation, document headers, email. Smallest: 96 px wide on screen, 1 in. in print.</div></div>
+    <div><div class="stage pine" style="height:150px"><div style="width:270px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div></div>
+      <div class="cap"><b>Reversed.</b> Linen on Pine. Use on Pine or Heartwood only.</div></div>
+    <div><div class="stage birch" style="height:190px"><div style="width:112px">{{svg logo/nexus-logo-stacked-pine.svg}}</div></div>
+      <div class="cap"><b>Stacked lockup.</b> Square and tall spaces: covers, sign-in, social posts. Smallest: 72 px wide.</div></div>
+    <div class="g2" style="gap:12px">
+      <div><div class="stage linen" style="height:190px"><div style="width:112px">{{svg logo/nexus-symbol-pine.svg}}</div></div><div class="cap"><b>Symbol.</b> When the name is already nearby. 32 px and up.</div></div>
+      <div><div class="stage linen" style="height:190px"><div style="width:112px">{{svg logo/nexus-app-icon.svg}}</div></div><div class="cap"><b>App tile.</b> Home screens, avatars. Uses the small-size symbol.</div></div>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div class="g2">
+    <div>
+      <h2>Two drawings of the symbol</h2>
+      <p>Fine rings and the bark line fill in when they are small, so there is a second drawing with two rings, wider cuts and a plain edge. The rule is simple: <b>below 32 px, use the small-size symbol.</b> The favicon and the app tile already do.</p>
+      <div style="display:flex;gap:18px;align-items:flex-end;color:var(--nx-pine);margin-top:10px">
+        <div style="width:64px">{{svg logo/nexus-symbol-pine.svg}}<div class="cap">64</div></div>
+        <div style="width:40px">{{svg logo/nexus-symbol-pine.svg}}<div class="cap">40</div></div>
+        <div style="width:32px">{{svg logo/nexus-symbol-pine.svg}}<div class="cap">32</div></div>
+        <div style="width:1px;height:70px;background:var(--nx-reed)"></div>
+        <div style="width:28px">{{svg logo/nexus-symbol-small-pine.svg}}<div class="cap">28</div></div>
+        <div style="width:24px">{{svg logo/nexus-symbol-small-pine.svg}}<div class="cap">24</div></div>
+        <div style="width:20px">{{svg logo/nexus-symbol-small-pine.svg}}<div class="cap">20</div></div>
+        <div style="width:16px">{{svg logo/nexus-symbol-small-pine.svg}}<div class="cap">16</div></div>
+      </div>
+    </div>
+    <div>
+      <h2>Three colourways, no others</h2>
+      <table class="kv">
+        <tr><td>Pine</td><td>On Linen, Birch and Oat. The everyday version.</td></tr>
+        <tr><td>Linen</td><td>On Pine, Heartwood and the dark theme.</td></tr>
+        <tr><td>Ink</td><td>Heartwood, for one-colour print, fax and stamped documents.</td></tr>
+      </table>
+      <p class="small" style="margin-top:8px">Every file is in <code>brand/logo/</code> as SVG. Names follow <code>nexus-logo-horizontal-pine.svg</code>.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 6 using the logo -->
+<section class="page" id="logo-use" data-sec="Identity" data-toc="Using the logo">
+  <div class="eyebrow">Identity</div>
+  <h1>Using the logo</h1>
+  <p class="lead">A few habits keep the logo looking the way it does here.</p>
+  <div class="g2">
+    <div class="stage birch" style="height:200px;position:relative">
+      <div style="border:1px dashed var(--nx-clay);padding:38px;position:relative">
+        <div style="width:230px;color:var(--nx-pine)">{{svg logo/nexus-logo-horizontal-pine.svg}}</div>
+        <span style="position:absolute;left:5px;top:5px;width:30px;color:var(--nx-clay);opacity:.85">{{svg logo/masters/nexus-wordmark.svg style="width:102px;clip-path:inset(0 72.5% 0 0)"}}</span>
+        <span style="position:absolute;right:8px;bottom:4px;font:600 9px var(--nx-font-ui);letter-spacing:.1em;color:var(--nx-clay)">CLEAR SPACE = HEIGHT OF THE N</span>
+      </div>
+    </div>
+    <div>
+      <h2>Give it room</h2>
+      <p>Keep an empty margin around the logo at least as tall as the capital N. No text, edge, photo or pattern comes inside it.</p>
+      <h2 style="margin-top:12px">Scale it, never stretch it</h2>
+      <p>Resize from a corner. Do not go below the smallest sizes on the previous page; switch to the symbol or the small-size symbol instead.</p>
+      <h2 style="margin-top:12px">It is a link home</h2>
+      <p>In the product the logo in the sidebar goes to the workspace overview and is named "Nexus home" for screen readers.</p>
+    </div>
+  </div>
+  <h2 class="mt2">Backgrounds</h2>
+  <div class="g4" style="margin-top:8px">
+    <div><div class="stage" style="height:74px;background:var(--nx-linen);border:1px solid var(--nx-reed)"><div style="width:120px">{{svg logo/nexus-logo-horizontal-pine.svg}}</div></div><div class="cap">Linen</div></div>
+    <div><div class="stage" style="height:74px;background:var(--nx-lichen)"><div style="width:120px">{{svg logo/nexus-logo-horizontal-pine.svg}}</div></div><div class="cap">Lichen</div></div>
+    <div><div class="stage pine" style="height:74px"><div style="width:120px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div></div><div class="cap">Pine</div></div>
+    <div><div class="stage night" style="height:74px"><div style="width:120px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div></div><div class="cap">Night (dark theme)</div></div>
+  </div>
+  <div class="rule"></div>
+  <div class="g4">
+    <div><div class="stage birch" style="height:86px"><div style="width:104px;transform:scaleX(1.35)">{{svg logo/nexus-logo-horizontal-pine.svg}}</div></div><div class="cap dont"><h3>Do not stretch</h3></div></div>
+    <div><div class="stage birch" style="height:86px"><div style="width:104px;color:var(--nx-clay)">{{svg logo/nexus-logo-horizontal-pine.svg style="filter:hue-rotate(250deg) saturate(3)"}}</div></div><div class="cap dont"><h3>Do not recolour</h3></div></div>
+    <div><div class="stage" style="height:86px;background:var(--nx-linen);position:relative;overflow:hidden">{{pat understory #2F4631 150}}<div style="width:104px;position:relative">{{svg logo/nexus-logo-horizontal-pine.svg}}</div></div><div class="cap dont"><h3>Not on a pattern</h3></div></div>
+    <div><div class="stage birch" style="height:86px"><div style="width:104px;filter:drop-shadow(3px 4px 3px #0007)">{{svg logo/nexus-logo-horizontal-pine.svg}}</div></div><div class="cap dont"><h3>No shadows or outlines</h3></div></div>
+  </div>
+  <div class="g2 mt">
+    <div class="do"><h3>Do</h3><ul class="tight"><li>Use the files exactly as supplied.</li><li>Let it be the only logo-like thing in view.</li><li>Put it top left in the product, top left or centred in print.</li></ul></div>
+    <div class="dont"><h3>Avoid</h3><ul class="tight"><li>Rotating it, cropping it or redrawing the rings.</li><li>Setting the name in a live font next to the symbol.</li><li>Using the symbol as a bullet, a loader or a watermark behind text.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 7 colour -->
+<section class="page" id="colour" data-sec="Colour" data-toc="The palette">
+  <div class="eyebrow">Colour</div>
+  <h1>Colour from the forest floor</h1>
+  <p class="lead">Linen and olive, as chosen, pushed further from generic off-white and deepened into a proper printing ink. Every colour is named for something you could pick up on a walk, which makes them easy to talk about.</p>
+  <h3 class="comp-h">Ground</h3>
+  <div class="g4">{{swatches linen birch oat reed}}</div>
+  <h3 class="comp-h mt">Ink and greens</h3>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px">{{swatches heartwood understory pine moss sage lichen}}</div>
+  <h3 class="comp-h mt">Accents</h3>
+  <div class="g4">{{swatches clay pollen bark creek}}</div>
+  <div class="rule"></div>
+  <div class="g2">
+    <div>
+      <h2>The balance</h2>
+      <p>Roughly how much of any screen or printed piece each colour covers.</p>
+      <div class="balance" style="margin:8px 0 6px">
+        <span style="width:62%;background:var(--nx-linen);color:var(--nx-heartwood);border:1px solid var(--nx-reed)">Linen, Birch, Oat · about 60%</span>
+        <span style="width:20%;background:var(--nx-pine);color:var(--nx-linen)">Pine · 20%</span>
+        <span style="width:12%;background:var(--nx-sage);color:var(--nx-heartwood)">Greens</span>
+        <span style="width:6%;background:var(--nx-clay)"></span>
+      </div>
+      <p class="small">Clay is the last few percent: the focus ring, a count that needs attention, the sun in an illustration. If Clay is the first thing you see on a screen, there is too much of it.</p>
+    </div>
+    <div>
+      <h2>Rules that keep it Nexus</h2>
+      <ul class="tight">
+        <li>The page is Linen. Pure white appears nowhere.</li>
+        <li>Text is Heartwood, never black and never Pine. Pine is for the brand and for actions.</li>
+        <li>Brand green is not a status. "Signed" and "Ready" use the success colour with a word and an icon.</li>
+        <li>Pollen, Bark and Creek belong to illustration and charts. The one exception is a visited link, which is Bark.</li>
+        <li>No gradients and no tints made by lowering opacity over photos.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 8 colour roles -->
+<section class="page" id="colour-roles" data-sec="Colour" data-toc="Colour roles and contrast">
+  <div class="eyebrow">Colour</div>
+  <h1>Colour roles, light and dark</h1>
+  <p class="lead">Components never use a palette colour directly. They use a role, and the role changes with the theme. The dark theme is a forest at night: warm near-black with lichen-green actions, not the light theme inverted.</p>
+  <div class="g2">
+    <div class="themebox"><h2>Light</h2>{{roles light}}</div>
+    <div class="themebox" data-nexus-theme="dark"><h2>Dark</h2>{{roles dark}}</div>
+  </div>
+  <h2 class="mt2">Contrast, measured</h2>
+  <p class="small" style="max-width:600px">All 72 role pairings in <code>brand/tokens/contrast-audit.csv</code> meet their WCAG 2.2 target (7:1 for body text, 4.5:1 for other text, 3:1 for outlines and focus). A sample is below. This checks the tokens; each finished screen still needs its own check.</p>
+  <table class="kv" style="margin-top:8px">
+    <tr><th>Pairing</th><th>Light</th><th>Dark</th><th>Target</th></tr>
+    {{contrast body text on the page|secondary text on a card|primary button label|body text over a leaf vein|focus ring on the page|error message}}
+  </table>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 9 typography -->
+<section class="page" id="type" data-sec="Type" data-toc="Typography">
+  <div class="eyebrow">Type</div>
+  <h1>Typography</h1>
+  <p class="lead">Three families, each with one job. Fraunces gives headings the warmth of pressed wood type. Source Sans 3 does the reading. Manrope sets the numbers that have to land.</p>
+  <div class="g3">
+    <div class="card flat"><div class="big-a" style="font-size:62px">Aa</div><h2 style="margin-top:9px">Fraunces</h2><h3 style="color:var(--nx-accent)">Headings</h3>
+      <p>Page titles, panel headings, the greeting and slide titles in SemiBold. Regular for quotes.</p>
+      <p style="font:600 10.4px/1.5 var(--nx-font-display);color:var(--nx-text-secondary);margin:0">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</p></div>
+    <div class="card flat"><div class="big-a" style="font-family:var(--nx-font-ui);font-weight:600;letter-spacing:0;font-size:62px">Aa</div><h2 style="margin-top:12px;font-family:var(--nx-font-ui);font-weight:600">Source Sans 3</h2><h3 style="color:var(--nx-accent)">Reading</h3>
+      <p>Body text, tables, fields, buttons and labels. Regular for reading, Semibold for emphasis.</p>
+      <p style="font-size:11px;line-height:1.5;color:var(--nx-text-secondary);margin:0">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</p></div>
+    <div class="card flat"><div class="big-a fig" style="font-family:var(--nx-font-figure);font-weight:800;letter-spacing:-.04em;font-size:62px">48</div><h2 style="margin-top:12px;font-family:var(--nx-font-figure);font-weight:800;letter-spacing:-.02em">Manrope</h2><h3 style="color:var(--nx-accent)">Figures</h3>
+      <p>The number on a card, a total, a statistic on a slide. ExtraBold, tight, lining and tabular.</p>
+      <p class="fig" style="font-size:13px;font-weight:700;color:var(--nx-text-secondary);margin:0;letter-spacing:0">0123456789 $ % . , : + −</p></div>
+  </div>
+  <div class="rule"></div>
+  <div class="g2">
+    <div>
+      <h2>Fraunces, set soft</h2>
+      <p>Fraunces has a Soft axis that rounds every terminal, the same thing the press does to the logo. Nexus always uses it at Soft 100, with the Wonk alternates off. The bundled files are cut that way, so there is nothing to set.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
+        <div><div style="font:600 25px/1.15 var(--nx-font-display);color:var(--nx-brand)">Notes to sign</div><div class="cap"><b>Soft 100.</b> Nexus.</div></div>
+        <div><div style="font:600 25px/1.15 'Fraunces VF',serif;font-variation-settings:'SOFT' 0,'WONK' 0,'opsz' 36;color:var(--nx-text-secondary)">Notes to sign</div><div class="cap"><b>Soft 0.</b> Not used.</div></div>
+      </div>
+    </div>
+    <div>
+      <h2>Three jobs, no overlap</h2>
+      <table class="kv">
+        <tr><th>Family</th><th>Yes</th><th>Never</th></tr>
+        <tr><td>Fraunces</td><td>One heading per panel; titles; quotes.</td><td>Buttons, labels, tables, numbers.</td></tr>
+        <tr><td>Source Sans 3</td><td>Everything that is read or typed.</td><td>Page titles.</td></tr>
+        <tr><td>Manrope</td><td>Figures that stand alone, with a label.</td><td>Sentences, or numbers inside a sentence.</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="g2 mt">
+    <div><h3>Rules</h3><ul class="tight"><li>Sentence case everywhere. Capitals only for the small label style.</li><li>No all-capitals headings, and no heading tracked tighter than −0.015em.</li><li>If everything is Fraunces, nothing is. One Fraunces heading per panel.</li></ul></div>
+    <div><h3>Delivery</h3><p>All three are open-licensed (SIL Open Font License) and bundled in <code>brand/fonts/</code> with their licences, so the app hosts them itself. Fraunces and Manrope are fixed cuts; their variable sources are in <code>fonts/variable/</code>. If one fails to load, headings fall back to Iowan Old Style or Georgia and the rest to the system sans.</p></div>
+  </div>
+  <h2 class="mt">All three at work</h2>
+  <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-top:8px">
+    <div class="metric" style="padding:14px 18px"><span>Collected this month</span><strong style="font-size:34px">$48,210</strong><small>93% of expected</small></div>
+    <div class="panel" style="padding:13px 18px"><div style="font:600 18px/1.25 var(--nx-font-display);color:var(--nx-brand)">Three notes are waiting for you.</div><div style="font-size:13.5px;margin-top:3px">The oldest is from Monday's group. Signing takes about a minute each, and billing can see a note as soon as it is signed.</div></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 10 type scale -->
+<section class="page" id="type-scale" data-sec="Type" data-toc="Type scale and figures">
+  <div class="eyebrow">Type</div>
+  <h1>Type scale and figures</h1>
+  <p class="lead">Eight text sizes and three figure sizes cover the product. Each is shown at its real size.</p>
+  <div>
+    <div class="trow"><div class="l">Display<small>600 · 40 / 44</small></div><div style="font:600 40px/1.1 var(--nx-font-display);color:var(--nx-brand);letter-spacing:-.015em">Good morning, Dana.</div></div>
+    <div class="trow"><div class="l">Title<small>600 · 28 / 34</small></div><div style="font:600 28px/1.2 var(--nx-font-display);color:var(--nx-brand);letter-spacing:-.01em">Claim readiness</div></div>
+    <div class="trow"><div class="l">Heading<small>600 · 20 / 26</small></div><div style="font:600 20px/1.3 var(--nx-font-display)">Notes to sign</div></div>
+    <div class="trow"><div class="l">Subheading<small>600 · 16 / 22</small></div><div style="font:600 16px/1.35 var(--nx-font-ui)">Needs before this claim can go</div></div>
+    <div class="trow"><div class="l">Body<small>400 · 15 / 22</small></div><div style="font-size:15px;line-height:1.45">Seven sessions today. Three notes are waiting for your signature.</div></div>
+    <div class="trow"><div class="l">Dense<small>400 · 14 / 20</small></div><div style="font-size:14px;line-height:1.4">Individual therapy, 53 min · Intensive outpatient · <span class="num">MRN 004182</span></div></div>
+    <div class="trow"><div class="l">Small<small>400 · 13 / 18</small></div><div style="font-size:13px;color:var(--nx-text-secondary)">Signed by Dana Reyes, LCSW on Nov 10 at 4:12 PM Pacific</div></div>
+    <div class="trow"><div class="l">Label<small>600 · 11 / 14</small></div><div style="font:600 11px var(--nx-font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--nx-text-secondary)">Sessions today</div></div>
+  </div>
+  <h2 class="mt2">Figures</h2>
+  <div style="display:grid;grid-template-columns:1.15fr 1fr 1.15fr;gap:14px;margin-top:8px">
+    <div class="leaf" style="padding:16px 20px">
+      <div style="font:600 11px var(--nx-font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--nx-text-secondary)">Collected this month</div>
+      <div class="fig" style="font-size:56px;line-height:1.05;margin:2px 0">$48,210</div>
+      <div style="font-size:13px;color:var(--nx-text-secondary)">93% of expected · $3,640 still open</div>
+      <div class="cap" style="margin-top:8px"><b>Hero figure.</b> 800 · 56 / 56</div>
+    </div>
+    <div>
+      <div class="trow" style="grid-template-columns:74px 1fr;padding:6px 0"><div class="l">Figure<small>800 · 30</small></div><div class="fig" style="font-size:30px;line-height:1.1">1,284</div></div>
+      <div class="trow" style="grid-template-columns:74px 1fr;padding:6px 0"><div class="l">Figure<small>800 · 30</small></div><div class="fig" style="font-size:30px;line-height:1.1">93%</div></div>
+      <div class="trow" style="grid-template-columns:74px 1fr;padding:6px 0"><div class="l">Small<small>700 · 18</small></div><div class="fig" style="font-size:18px;font-weight:700;letter-spacing:-.02em">4:12 PM</div></div>
+    </div>
+    <div>
+      <table class="kv" style="font-size:13px"><tr><th>Client</th><th style="text-align:right">Billed</th><th style="text-align:right">Paid</th></tr>
+        <tr><td style="font-weight:400">Priya Raman</td><td class="num" style="text-align:right">$1,202.00</td><td class="num" style="text-align:right">$961.60</td></tr>
+        <tr><td style="font-weight:400">Elena Brooks</td><td class="num" style="text-align:right">$840.00</td><td class="num" style="text-align:right">$0.00</td></tr>
+        <tr><td>Total</td><td class="num" style="text-align:right;font-weight:600">$2,042.00</td><td class="num" style="text-align:right;font-weight:600">$961.60</td></tr></table>
+      <div class="cap">In tables, numbers stay in Source Sans 3 with tabular figures, right-aligned.</div>
+    </div>
+  </div>
+  <div class="g2 mt">
+    <div><h3>Rules for figures</h3><ul class="tight"><li>A figure always has a label above it and, when it helps, one line of context below.</li><li>One hero figure per view. The other cards use the 30 px size.</li><li>Figures are Heartwood. Colour belongs to the context line, never the number.</li><li>No counting-up animation. The number is simply there.</li></ul></div>
+    <div><h3>Writing numbers</h3><ul class="tight"><li>$1,202.00 in tables; $48,210 on a card, where cents add nothing.</li><li>Nov 9, not 11/09. 4:12 PM Pacific when the zone could be in doubt.</li><li>Durations in minutes: 53 min. Percentages without decimals unless they matter.</li><li>Money is stored in whole cents; the type only changes how it is shown.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 11 leaf card -->
+<section class="page" id="leaf" data-sec="Shape" data-toc="The leaf card">
+  <div class="eyebrow">Shape</div>
+  <h1>The leaf card</h1>
+  <p class="lead">The default card in Nexus is a leaf. Two opposite corners are soft, the other two come to a point: a tip at the top left and a short stem at the bottom right. A faint vein runs under the text from stem to tip.</p>
+  <div class="anat" style="height:262px">
+    <div class="leaf lg" style="position:absolute;left:170px;top:36px;width:372px;height:200px">
+      <div style="font:600 10.5px var(--nx-font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--nx-text-secondary)">Care plans</div>
+      <div style="font:600 21px/1.2 var(--nx-font-display);color:var(--nx-brand);margin:6px 0 6px;max-width:280px">Three plans are due for review this week.</div>
+      <div style="font-size:13px;color:var(--nx-text-secondary);max-width:290px">The earliest is Thursday. Each one opens with the last signed version beside it.</div>
+      <div class="lk" style="margin-top:10px">Open care plans</div>
+    </div>
+    <div class="note" style="left:0;top:8px;width:146px"><b>Tip</b>Top left, 2 px. Where the eye starts reading.</div>
+    <div class="note" style="left:566px;top:8px;width:132px"><b>Shoulder</b>Top right, 26 px. The same soft corner the buttons have.</div>
+    <div class="note" style="left:566px;top:196px;width:132px"><b>Stem</b>Bottom right. A 12 px stroke in Sage that leaves the corner.</div>
+    <div class="note" style="left:0;top:206px;width:146px"><b>Second shoulder</b>Bottom left, 26 px.</div>
+    <div class="note" style="left:566px;top:92px;width:132px"><b>Vein</b>Midrib and side veins at about 9% ink, under the text.</div>
+    <div class="ln" style="left:150px;top:30px;width:30px;transform:rotate(28deg)"></div><div class="ln" style="left:558px;top:30px;width:39px;transform:rotate(150deg)"></div><div class="ln" style="left:558px;top:222px;width:19px;transform:rotate(122deg)"></div><div class="ln" style="left:150px;top:232px;width:31px;transform:rotate(-11deg)"></div><div class="ln" style="left:558px;top:118px;width:66px;transform:rotate(148deg)"></div>
+  </div>
+  <div class="g3">
+    <div><div class="stage linen" style="height:112px;gap:8px;flex-direction:column"><div class="leaf sm" style="font:600 12.5px var(--nx-font-ui)">Intake complete</div><div class="leaf sm" style="font:600 12.5px var(--nx-font-ui)">2 of 3 signed</div></div>
+      <div class="cap"><b>Small.</b> <code>2 16 2 16</code>. List items and short summaries.</div></div>
+    <div><div class="stage linen" style="height:112px"><div class="metric" style="width:168px"><span>Notes to sign</span><strong>3</strong><small>1 older than 48 hours</small></div></div>
+      <div class="cap"><b>Default.</b> <code>2 26 2 26</code>. Metric cards, callouts, empty states.</div></div>
+    <div><div class="stage linen" style="height:112px"><div class="leaf lg" style="width:190px;padding:14px 20px;background:var(--nx-pine);border-color:transparent;color:var(--nx-linen)"><div style="font:600 15px/1.2 var(--nx-font-display)">Welcome back, Dana.</div><div style="font-size:11px;color:var(--nx-lichen)">Seven sessions today.</div></div></div>
+      <div class="cap"><b>Large.</b> <code>3 48 3 48</code>. Greetings, quotes, teaching cards.</div></div>
+  </div>
+  <div class="g2 mt">
+    <div>
+      <div class="do"><h3>Do</h3><ul class="tight"><li>Use it for cards that summarise or speak to someone.</li><li>Keep the tip top left and the stem bottom right, always.</li><li>Let the vein stretch with the card. It is one file for every size.</li></ul></div>
+      <div class="dont" style="margin-top:8px"><h3>Avoid</h3><ul class="tight"><li>Tables, forms and dialogs. Anything that holds data stays square.</li><li>Mirroring or rotating it, or drawing the stem on a nested card.</li><li>Darkening the vein. If you notice it before the text, it is too strong.</li></ul></div>
+    </div>
+    <div>
+      <h3>In code</h3>
+      <pre class="code" style="font-size:9px">.leaf { position: relative;
+  border-radius: var(--nx-corner-leaf); }
+.leaf::before {            /* the vein */
+  content: ""; position: absolute; inset: 0;
+  border-radius: inherit;
+  background: var(--nx-vein);
+  mask: url(nexus-leaf-vein.svg) center / 100% 100%; }
+.leaf::after {             /* the stem */
+  content: ""; position: absolute;
+  left: 100%; top: 100%; width: 12px; height: 2.5px;
+  margin: -3.5px 0 0 -3.5px; border-radius: 2px;
+  background: var(--nx-brand-mid);
+  transform-origin: 0 50%; transform: rotate(38deg); }</pre>
+      <p class="small" style="margin-top:6px">Text over the vein is in the contrast audit and passes at 7:1.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 12 soft corner -->
+<section class="page" id="corner" data-sec="Shape" data-toc="One soft corner">
+  <div class="eyebrow">Shape</div>
+  <h1>One soft corner</h1>
+  <p class="lead">Controls and tiles are precise: small radii, straight edges, compact rows, and a single softened corner, always top right, like a page that has been turned. It is the leaf's shoulder on its own, used where a whole leaf would be too much.</p>
+  <div class="g3">
+    <div class="stage linen" style="height:132px;flex-direction:column;gap:9px">
+      <span class="btn primary" style="height:36px;padding:0 18px;font-size:14.5px">Sign note</span>
+      <span class="badge ok" style="height:24px">{{ic success}}Note signed</span>
+      <code>3px 12px 3px 3px</code></div>
+    <div class="stage linen" style="height:132px"><div style="width:146px;border-radius:var(--nx-corner-tile);overflow:hidden;background:var(--nx-birch);border:1px solid var(--nx-reed)">{{svg illustrations/nexus-scene-first-shoot.svg}}</div></div>
+    <div class="stage linen" style="height:132px;gap:16px"><div style="width:76px">{{svg logo/nexus-app-icon.svg}}</div><span class="app-profile" style="border:0;padding:0;background:none"><span class="av" style="width:44px;height:44px;font-size:15px;border-radius:5px 16px 5px 5px">DR</span></span></div>
+  </div>
+  <div class="g3" style="margin-top:6px"><div class="cap"><b>Controls.</b> Primary buttons, status badges, the selected navigation item, counts.</div><div class="cap"><b>Frames.</b> Illustrations, swatches, pattern samples: <code>4px 22px 4px 4px</code>.</div><div class="cap"><b>Tiles.</b> App icon and avatars. The soft corner is about a third of the side.</div></div>
+  <div class="rule"></div>
+  <h2>Which shape, when</h2>
+  <table class="kv" style="margin-top:4px">
+    <tr><th>Shape</th><th>Corners</th><th>Use it for</th><th>Never for</th></tr>
+    <tr><td>Leaf</td><td><code>2 26 2 26</code></td><td>Cards that summarise or speak: metrics, callouts, empty states, quotes.</td><td>Tables, forms, dialogs.</td></tr>
+    <tr><td>Soft corner</td><td><code>3 12 3 3</code></td><td>The primary button, badges, counts, the selected nav item, tiles, frames.</td><td>Secondary buttons, fields.</td></tr>
+    <tr><td>Square</td><td><code>3</code> to <code>6</code></td><td>Anything that holds data or input: panels, tables, fields, menus, dialogs.</td><td>Brand moments.</td></tr>
+  </table>
+  <h2 class="mt">At full size: a welcome banner</h2>
+  <div style="margin-top:8px;height:136px;border-radius:var(--nx-corner-hero);background:var(--nx-pine);position:relative;overflow:hidden;color:var(--nx-linen);padding:20px 28px">
+    {{pat bark #3F5A41 330 360 -40}}
+    <div style="position:relative;max-width:400px"><div style="font:600 22px/1.15 var(--nx-font-display)">Welcome, Cedar Ridge.</div>
+      <div style="font-size:13px;color:var(--nx-lichen);margin:5px 0 12px">Two steps left: add your programs, then invite your team.</div>
+      <span class="btn" style="background:var(--nx-lichen);color:var(--nx-pine);border-radius:var(--nx-corner-control)">Add programs</span></div>
+  </div>
+  <div class="cap"><b>Hero.</b> <code>6px 56px 6px 6px</code>. The largest the corner gets; used once, on first run.</div>
+  <h2 class="mt">Space and density</h2>
+  <div class="g2" style="margin-top:6px">
+    <table class="kv">
+      <tr><th>Token</th><th>Value</th><th>Use</th></tr>
+      <tr><td><code>space-1, 2</code></td><td class="num">4, 8 px</td><td>Inside controls, icon to label</td></tr>
+      <tr><td><code>space-3, 4</code></td><td class="num">12, 16 px</td><td>Card padding, between fields</td></tr>
+      <tr><td><code>space-6, 8</code></td><td class="num">24, 32 px</td><td>Page gutters, between sections</td></tr>
+      <tr><td><code>control-height</code></td><td class="num">32 px</td><td>Buttons, fields (40 px on touch)</td></tr>
+      <tr><td><code>row-height</code></td><td class="num">36 to 44 px</td><td>Table rows, one or two lines</td></tr>
+    </table>
+    <div><h3>Compact, not cramped</h3><p>Clinicians and billers scan long lists all day. Rows are tight, but every row has one clear next action and every number has a label. Remove an empty container before adding a divider. Motion is short: 120 ms for a press, 160 ms for feedback, 200 ms for something opening, and nothing moves while someone is typing.</p></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 13 ring press -->
+<section class="page" id="ring-press" data-sec="Pattern" data-toc="Ring press" style="padding:0;background:var(--nx-linen)">
+  <div style="position:absolute;left:0;top:0;bottom:0;width:440px;background: var(--img-ringpress) 22px 46px/auto 964px no-repeat"></div>
+  <div style="position:absolute;left:470px;right:60px;top:52px">
+    <div class="eyebrow">Pattern</div>
+    <h1>Ring press</h1>
+    <p class="lead" style="font-size:13.5px">The signature texture. Five strips, each cut from a different slab, inked and pressed so the grain skips the way a real print does.</p>
+    <h2>What it is for</h2>
+    <ul class="tight"><li>Covers: proposals, reports, the first slide.</li><li>Section openers and the back of a business card.</li><li>The sign-in screen and the empty workspace on first run.</li></ul>
+    <h2 style="margin-top:14px">How to use it</h2>
+    <ul class="tight"><li>Pine on Linen, or tonal: a slightly lighter green on Pine.</li><li>Crop it. One strip, or part of two, is usually enough.</li><li>Type sits beside it or in a solid band across it, never directly on the rings.</li><li>One ring pattern per view.</li></ul>
+    <h2 style="margin-top:14px">Two versions</h2>
+    <p><b>Pressed</b> (PNG) has the dry-brush texture and is for large areas. <b>Carved</b> (SVG) is clean vector for small sizes, print and cutting.</p>
+    <div style="height:150px;border-radius:var(--nx-corner-card);margin-top:12px;background:var(--nx-pine);position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background: var(--img-ringfield) -120px -260px/900px auto"></div>
+      <div style="position:absolute;left:16px;bottom:14px;width:120px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div>
+    </div>
+    <div class="cap"><b>Ring field.</b> One large slab, cropped off-centre, shown tonal on Pine.</div>
+  </div>
+  <div class="foot" style="left:470px"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 14 pattern library -->
+<section class="page" id="patterns" data-sec="Pattern" data-toc="Bark, contour, understory">
+  <div class="eyebrow">Pattern</div>
+  <h1>Bark, contour, understory</h1>
+  <p class="lead">Three seamless tiles that sit quieter than the ring press. Each is drawn by the same carving method as the logo and repeats without a visible join.</p>
+  <div class="g3">
+    <div><div class="pat" style="height:290px;background:var(--nx-linen)">{{pat bark #2F4631 250}}</div><h2 style="margin-top:8px">Bark</h2><p>Long grain parting around knots. Strong; use it large and cropped, on print and brand pieces.</p></div>
+    <div><div class="pat" style="height:290px;background:var(--nx-birch)">{{pat contour #A7B48B 300}}</div><h2 style="margin-top:8px">Contour</h2><p>Map lines. The quietest pattern and the only one allowed inside the product, at very low contrast.</p></div>
+    <div><div class="pat" style="height:290px;background:var(--nx-lichen)">{{pat understory #2F4631 215}}</div><h2 style="margin-top:8px">Understory</h2><p>Cut-paper pines, ferns, cairns and suns. The friendly one: onboarding, celebrations, wrapping.</p></div>
+  </div>
+  <h2 class="mt2">Colour pairings</h2>
+  <div class="g4" style="margin-top:8px">
+    <div><div class="pat" style="height:128px;border:0;background:var(--nx-pine)">{{pat bark #3F5A41 180}}</div><div class="cap">Tonal on Pine</div></div>
+    <div><div class="pat" style="height:128px;border:0;background:var(--nx-night)">{{pat contour #2A3225 220}}</div><div class="cap">Contour, dark theme</div></div>
+    <div><div class="pat" style="height:128px;background:var(--nx-linen)">{{pat understory #A9502C 150}}</div><div class="cap">Clay on Linen, small doses</div></div>
+    <div><div class="pat" style="height:128px;background:var(--nx-oat)">{{pat contour #CFC8B2 220}}</div><div class="cap">Contour in the product sidebar</div></div>
+  </div>
+  <div class="rule"></div>
+  <div class="g2">
+    <div class="do"><h3>Do</h3><ul class="tight"><li>Use pattern where there is nothing to read: covers, margins, empty space, the area under the navigation.</li><li>Keep one pattern per surface and one colour per pattern.</li><li>Inside the product, use Contour only, in the <code>--nx-pattern-ink</code> colour.</li></ul></div>
+    <div class="dont"><h3>Avoid</h3><ul class="tight"><li>Any pattern behind a table, a form, a chart or a clinical note.</li><li>Stretching, rotating or recolouring a tile in more than one colour.</li><li>Animating a pattern. They are prints; they hold still.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 15 icons -->
+<section class="page" id="icons" data-sec="Icons" data-toc="The icon set">
+  <div class="eyebrow">Icons</div>
+  <h1>Icons, cut from one block</h1>
+  <p class="lead">{{iconcount}} icons drawn for Nexus, not taken from a library. They are made by the same press as the logo: solid shapes, pressed until every corner is round, with one detail carved out at most. No icon package is installed; the app imports the path data from one generated file.</p>
+  <div class="card flat"><div class="igrid">{{iconsgrid}}</div></div>
+  <div class="g3 mt">
+    <div><h2>1. Cut, not outlined</h2><p>Each icon is a solid block of ink. Thin outline icons are what every other product uses; these are not that.</p></div>
+    <div><h2>2. One detail</h2><p>A page has two lines, a card has one stripe, a person has none. If an icon seems to need a second carved detail, it is trying to say two things.</p></div>
+    <div><h2>3. Round and quiet</h2><p>Box shapes keep the soft corner, top right. Growth appears only where it is the meaning: a shoot for a care plan, a leaf for edit, a flower for settings.</p></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 16 icon use -->
+<section class="page" id="icon-use" data-sec="Icons" data-toc="Using icons">
+  <div class="eyebrow">Icons</div>
+  <h1>Using icons</h1>
+  <p class="lead">Icons support a word; they rarely replace one. Sizes, colour and pairing below.</p>
+  <div class="g2">
+    <div class="card flat"><h3 class="comp-h">24 px · page titles, empty states</h3><div class="irow" style="--s:24px;color:var(--nx-brand)">{{iconrow overview clients schedule documentation tasks billing reporting settings care-plan}}</div>
+      <h3 class="comp-h mt">20 px · navigation</h3><div class="irow" style="--s:20px;color:var(--nx-text)">{{iconrow overview clients schedule documentation tasks billing reporting settings care-plan telehealth}}</div>
+      <h3 class="comp-h mt">16 px · inside buttons, badges and tables</h3><div class="irow" style="--s:16px;color:var(--nx-text-secondary)">{{iconrow add edit check close download refresh history lock visible success warning error info}}</div></div>
+    <div class="card flat" data-nexus-theme="dark" style="background:var(--nx-surface);border-color:var(--nx-border)"><h3 class="comp-h">Dark theme</h3><div class="irow" style="--s:24px;color:var(--nx-brand)">{{iconrow overview clients schedule documentation tasks billing reporting settings care-plan}}</div>
+      <h3 class="comp-h mt">&nbsp;</h3><div class="irow" style="--s:20px;color:var(--nx-text)">{{iconrow overview clients schedule documentation tasks billing reporting settings care-plan telehealth}}</div>
+      <h3 class="comp-h mt">&nbsp;</h3><div class="irow" style="--s:16px;color:var(--nx-text-secondary)">{{iconrow add edit check close download refresh history lock visible success warning error info}}</div></div>
+  </div>
+  <h2 class="mt2">Status is a word, an icon and a colour, in that order</h2>
+  <p>Colour alone never carries meaning. Every status badge has a plain word first; the icon and colour reinforce it. "Discharged" and "Reversed" are not errors and do not use the error style.</p>
+  <div class="cluster" style="margin-top:8px;font:14px var(--nx-font-ui)">
+    <span class="badge ok">{{ic success}}Note signed</span><span class="badge warn">{{ic edit}}Draft note</span><span class="badge bad">{{ic error}}Authorization expired</span>
+    <span class="badge info">{{ic info}}Coverage not verified</span><span class="badge">{{ic clock}}Scheduled</span><span class="badge live">{{ic telehealth}}In session</span><span class="badge">{{ic history}}Reversed</span>
+  </div>
+  <h2 class="mt2">With a label, at actual size</h2>
+  <div class="card flat" style="margin-top:8px"><div class="cluster" style="font:14px var(--nx-font-ui);gap:18px">
+    <span class="app-nav" style="width:190px;padding:0;border:0;background:none"><a class="on">{{ic schedule style="width:18px;height:18px"}}Schedule</a></span>
+    <span class="btn primary">{{ic add}}New note</span><span class="btn secondary">{{ic download}}Export</span><span class="btn quiet">{{ic filter}}Filter</span>
+    <span class="chip">{{ic clock}}Service date: Nov 1 to 10</span>
+    <span class="app-search" style="width:200px;flex:none">{{ic search style="width:16px;height:16px"}}<span>Search clients</span></span>
+  </div></div>
+  <div class="rule"></div>
+  <div class="g2">
+    <div>
+      <h2>Drawing a new icon</h2>
+      <ul class="tight"><li>Work on a 24 unit grid; keep the shape inside 2 to 22.</li><li>Stroked parts are 2 to 2.8 units thick. One carved detail at most, at least 1.7 units wide, or it closes up at 16 px.</li><li>Build it from the primitives in <code>brand/tools/build_icons.py</code> and let the press round the corners. Do not hand-edit the output.</li><li>Check it at 16, 20 and 24 px in both themes before adding it.</li></ul>
+    </div>
+    <div>
+      <h2>In the code</h2>
+      <p><code>brand/icons/nexus-icons.ts</code> exports every path and a <code>NexusIconName</code> type. An icon is one <code>&lt;svg&gt;</code> with one <code>&lt;path&gt;</code> in <code>currentColor</code>, so it takes the colour of the text beside it. Decorative icons are hidden from screen readers; an icon-only button needs a label.</p>
+      <p class="small">Individual files are in <code>brand/icons/svg/</code>; a sprite is in <code>brand/icons/nexus-icons.svg</code>.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 17 illustration -->
+<section class="page" id="illustration" data-sec="Illustration" data-toc="Cut-paper illustration">
+  <div class="eyebrow">Illustration</div>
+  <h1>Cut-paper illustration</h1>
+  <p class="lead">Flat shapes that look cut from coloured paper with scissors: no outlines, no shading, no texture. Four scenes so far, each with a daylight and a night form in the same file.</p>
+  <div class="g4"><div><div class="card scn" style="height:112px">{{svg illustrations/nexus-scene-clear-day.svg preserveAspectRatio="xMidYMin slice" style="height:112px"}}</div><div class="cap"><b>Clear day.</b> Nothing scheduled, nothing overdue.</div></div><div><div class="card scn" style="height:112px">{{svg illustrations/nexus-scene-first-shoot.svg preserveAspectRatio="xMidYMin slice" style="height:112px"}}</div><div class="cap"><b>First shoot.</b> A first: new client, setup complete, first signed plan.</div></div><div><div class="card scn" style="height:112px">{{svg illustrations/nexus-scene-waymark.svg preserveAspectRatio="xMidYMin slice" style="height:112px"}}</div><div class="cap"><b>Waymark.</b> Nothing found, or a pause.</div></div><div><div class="card scn" style="height:112px">{{svg illustrations/nexus-scene-record.svg preserveAspectRatio="xMidYMin slice" style="height:112px"}}</div><div class="cap"><b>The record.</b> History, documentation, exports.</div></div></div>
+  <div data-nexus-theme="dark" style="background:var(--nx-page);border-radius:var(--nx-corner-tile);padding:14px 16px 12px;margin-top:14px">
+    <div class="g4"><div class="card scn" style="height:104px">{{svg illustrations/nexus-scene-clear-day.svg preserveAspectRatio="xMidYMin slice" style="height:104px"}}</div><div class="card scn" style="height:104px">{{svg illustrations/nexus-scene-first-shoot.svg preserveAspectRatio="xMidYMin slice" style="height:104px"}}</div><div class="card scn" style="height:104px">{{svg illustrations/nexus-scene-waymark.svg preserveAspectRatio="xMidYMin slice" style="height:104px"}}</div><div class="card scn" style="height:104px">{{svg illustrations/nexus-scene-record.svg preserveAspectRatio="xMidYMin slice" style="height:104px"}}</div></div>
+    <div class="cap" style="color:var(--nx-text-secondary);margin-top:8px"><b style="color:var(--nx-text)">The same four files in the dark theme.</b> The sun gives way to a moon and the colours turn to moonlit greens. Nothing is exported twice: the shapes read the <code style="color:inherit">--nx-illo-*</code> roles.</div>
+  </div>
+  <h2 class="mt2">The motif kit</h2>
+  <p class="small">Nine pieces, plus a moon for night. Scenes are assembled from these, so a new illustration is a new arrangement, not a new style. Files in <code>brand/illustrations/motifs/</code>.</p>
+  <div class="card flat" style="margin-top:8px"><div style="display:grid;grid-template-columns:repeat(9,1fr);gap:6px">{{motifs}}</div></div>
+  <div class="g2 mt">
+    <div><h3>Rules</h3><ul class="tight"><li>Four colours at most in one scene: an ink, one lighter green, one accent and the ground.</li><li>The sun or moon is the only place a warm colour appears large.</li><li>Scenes sit in a frame with the soft corner, on a card surface.</li><li>No people, faces or hands. Nobody should wonder whether a figure is a patient.</li></ul></div>
+    <div><h3>Making a new one</h3><ul class="tight"><li>Arrange motifs in <code>scenes()</code> in <code>brand/tools/build_patterns.py</code>; give each layer a role, not a colour.</li><li>Mark anything that belongs only to day or only to night.</li><li>Keep the horizon in the lower third so the scene crops to a banner.</li><li>Check it at 104 px wide. If it does not read there, it has too much in it.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 18 illustration use -->
+<section class="page" id="illustration-use" data-sec="Illustration" data-toc="Where illustrations appear">
+  <div class="eyebrow">Illustration</div>
+  <h1>Where illustrations appear</h1>
+  <p class="lead">An illustration is a still picture that fills a quiet moment: an empty list, a first, a search that found nothing. It is not an animation, and it is not what confirms an action. A toast and a status badge do that.</p>
+  <div class="g2">
+    <div><div class="stage linen" style="height:150px;border-radius:4px"><div class="comp" style="zoom:.9"><section class="panel empty" style="width:330px">{{svg illustrations/nexus-scene-clear-day.svg class="scene"}}<div><h2>Nothing on your list.</h2><p>New tasks from billing and your team land here.</p></div></section></div></div>
+      <div class="cap"><b>An empty list.</b> The picture says "this is fine", the sentence says what will fill it.</div></div>
+    <div><div class="stage linen" style="height:150px;border-radius:4px"><div style="width:250px;background:var(--nx-surface);border:1px solid var(--nx-border);border-radius:6px;overflow:hidden;display:flex">
+        <div style="width:92px;flex:none;background:var(--nx-surface-subtle);display:flex;align-items:flex-end">{{svg illustrations/nexus-scene-first-shoot.svg style="width:100%"}}</div>
+        <div style="padding:11px 13px"><div style="font:600 14px var(--nx-font-display);color:var(--nx-brand)">First plan signed.</div><div style="font-size:11px;line-height:1.35;color:var(--nx-text-secondary);margin:2px 0 8px">Marcus Hale's care plan is on the record.</div><span class="btn primary sm" style="zoom:.85">Done</span></div></div></div>
+      <div class="cap"><b>A first.</b> Shown once, for a milestone: setup complete, a first signed plan.</div></div>
+    <div><div class="stage linen" style="height:150px;border-radius:4px"><div class="comp" style="zoom:.9"><section class="panel empty" style="width:330px">{{svg illustrations/nexus-scene-waymark.svg class="scene"}}<div><h2>No clients match "rayes".</h2><p>Check the spelling, or search by record number.</p></div></section></div></div>
+      <div class="cap"><b>Nothing found.</b> A place to stop, and a way on.</div></div>
+    <div><div class="stage night" data-nexus-theme="dark" style="height:150px;border-radius:4px;background:var(--nx-page)"><div class="comp" style="zoom:.9"><section class="panel empty" style="width:330px">{{svg illustrations/nexus-scene-clear-day.svg class="scene"}}<div><h2>Nothing on your list.</h2><p>New tasks from billing and your team land here.</p></div></section></div></div>
+      <div class="cap"><b>At night.</b> The dark theme gets the night form without a second file.</div></div>
+  </div>
+  <h2 class="mt2">What you see when something happens</h2>
+  <table class="kv" style="margin-top:6px">
+    <tr><th>Moment</th><th>What appears</th><th>Illustration</th></tr>
+    <tr><td>You sign a note</td><td>A toast: "Signed. Billing can see it now." The badge changes to Note signed.</td><td>None</td></tr>
+    <tr><td>You clear a list</td><td>The list is replaced by an empty state.</td><td>Clear day</td></tr>
+    <tr><td>A first for a client or a center</td><td>A one-time card, dismissed with one button.</td><td>First shoot</td></tr>
+    <tr><td>A search or filter finds nothing</td><td>A sentence and a way out.</td><td>Waymark</td></tr>
+    <tr><td>You open history or an export</td><td>A small header image on the page.</td><td>The record</td></tr>
+    <tr><td>Something fails</td><td>A plain sentence and a button. The typed text is kept.</td><td>Never</td></tr>
+  </table>
+  <div class="g2 mt">
+    <div class="card flat" style="background:var(--nx-accent-soft);border-color:transparent"><h3>Do they move?</h3><p style="margin:0">No. A scene fades in with its panel over 360 ms and then holds still. Nothing loops, bounces or plays on completion. Motion for buttons and cards is on page {{pg interaction}}.</p></div>
+    <div><h3>Limits</h3><ul class="tight"><li>One illustration per view, never beside a table of live data.</li><li>Never on an error that needs action, and never in a clinical note.</li><li>The same scene should not appear twice in one session's worth of screens.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 19 voice -->
+<section class="page" id="voice" data-sec="Words" data-toc="Voice and wording">
+  <div class="eyebrow">Words</div>
+  <h1>Voice and wording</h1>
+  <p class="lead">Nexus talks like a colleague who has done this job for years: friendly, exact, and brief. It says what happened, what it means, and what to do next, and then it stops.</p>
+  <div class="g2">
+    <div class="card" style="background:var(--nx-oat);border-color:transparent">
+      <h2>Lines that capture it</h2>
+      <p style="font:400 14.5px/1.5 var(--nx-font-display);margin:0">"Seven sessions today. Three notes are waiting for your signature."<br>"Signed. Billing can see it now."<br>"This claim needs one thing: an active authorization."<br>"Nothing overdue. Enjoy the quiet."</p>
+    </div>
+    <div>
+      <h2>How it sounds</h2>
+      <ul class="tight"><li><b>Specific.</b> Counts, names and dates instead of "some items need attention".</li><li><b>Short.</b> One idea per sentence. Most messages fit on one line.</li><li><b>Warm without performing.</b> A dry aside when things are calm; none when they are not.</li><li><b>Steady about hard things.</b> Relapse, discharge and denial are stated plainly, without euphemism or alarm.</li><li><b>Honest about limits.</b> If a draft was written by a model, it says so and asks for review.</li></ul>
+    </div>
+  </div>
+  <h2 class="mt2">Before and after</h2>
+  <table class="kv" style="margin-top:6px">
+    <tr><th>Moment</th><th>Not this</th><th>This</th></tr>
+    <tr><td>Empty task list</td><td>You have no tasks at this time.</td><td>Nothing on your list. New tasks from billing and your team land here.</td></tr>
+    <tr><td>Save failed</td><td>An error occurred. Please try again later.</td><td>That did not save. Your text is still here. Try again, or copy it before you leave the page.</td></tr>
+    <tr><td>Blocked action</td><td>Action unavailable.</td><td>This note cannot be signed until the session has an end time.</td></tr>
+    <tr><td>Claim not ready</td><td>Claim validation failed (3).</td><td>Three things to fix before this claim can go: an unsigned note, an expired authorization, a missing diagnosis.</td></tr>
+    <tr><td>Signing</td><td>Are you sure you want to sign?</td><td>Sign this note? After signing, changes are added as amendments.</td></tr>
+    <tr><td>Model draft</td><td>AI-generated note ready!</td><td>Draft from the session recording. Review each statement before you keep it.</td></tr>
+  </table>
+  <div class="g2 mt">
+    <div><h3>Words to keep consistent</h3><table class="kv">
+      <tr><td>Client</td><td>The person in care, on every screen. "Patient" only where a payer or form requires it.</td></tr>
+      <tr><td>Session</td><td>A scheduled visit. "Encounter" only in billing and exports.</td></tr>
+      <tr><td>Note, plan, claim</td><td>Lower case in sentences. No "Progress Note" capitals.</td></tr>
+      <tr><td>Sign</td><td>The verb for making a record final. Not "submit", "finalize" or "lock".</td></tr></table></div>
+    <div><h3>Phrases to steer clear of</h3><p>Healing journey. Empower. Seamless. Unlock. Supercharge. Whoops. Any exclamation mark after an error. They sound like every other product and say less than a plain sentence would.</p>
+      <h3 style="margin-top:10px">Numbers and time</h3><p>$1,202.00, not $1202. Nov 9, not 11/09. 4:12 PM Pacific when the time zone could be in doubt. Durations in minutes: "53 min".</p></div>
+  </div>
+  <p class="small" style="margin-top:6px">The client and session wording is a recommendation based on how the product reads today; confirm it against payer and state form language before it is treated as settled.</p>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 20 clinical light -->
+<section class="page" id="clinical" data-sec="In the product" data-toc="Clinical workspace, light">
+  <div class="eyebrow">In the product</div>
+  <h1>Clinical workspace, light</h1>
+  <p class="lead">A clinician's morning. Built from the real tokens, icons and components in this guide, with synthetic names and records. Nothing here is a drawing of a screen; it is the same HTML and CSS the app can use.</p>
+  <div class="shot">{{screen clinical}}</div>
+  <div class="g3 mt">
+    <div><h3>What carries the brand</h3><ul class="tight"><li>Linen page, Birch cards, Pine for the logo, the greeting and the one primary action.</li><li>Leaf cards for the four figures and the empty state; the soft corner on the selected nav item, badges and the avatar.</li><li>Contour lines under the navigation, at almost no contrast.</li></ul></div>
+    <div><h3>What stays out of the way</h3><ul class="tight"><li>The schedule is plain: no pattern, no illustration, hairline rules only.</li><li>Colour appears only where a session needs something.</li><li>One Fraunces heading per panel, figures in Manrope, everything else in Source Sans 3.</li></ul></div>
+    <div><h3>Details worth keeping</h3><ul class="tight"><li>Profile, appearance and sign-out live bottom left, under the navigation.</li><li>The greeting is a summary, not a slogan: it tells her the day.</li><li>The empty state says when the list will next have something in it.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 21 clinical dark -->
+<section class="page" id="clinical-dark" data-sec="In the product" data-toc="Clinical workspace, dark" data-nexus-theme="dark">
+  <div class="eyebrow">In the product</div>
+  <h1>The same screen, dark</h1>
+  <p class="lead">Identical markup with <code>data-nexus-theme="dark"</code> on the root. Night instead of Linen, lichen-green actions instead of Pine, and the same hierarchy. Compare it with the previous page element by element.</p>
+  <div class="shot">{{screen clinical}}</div>
+  <div class="g3 mt">
+    <div><h3>What changed</h3><ul class="tight"><li>Surfaces step up from Night to Loam to Duff; they do not invert.</li><li>The primary button becomes light lichen with dark text.</li><li>Status colours lighten and their backgrounds deepen. The leaf vein turns from Pine to Lichen.</li></ul></div>
+    <div><h3>What did not</h3><ul class="tight"><li>Layout, spacing, type sizes, the leaf and the soft corner.</li><li>The order of emphasis: greeting, figures, then the list.</li><li>The illustration turns to its night form: same file, moon for sun.</li></ul></div>
+    <div><h3>Still to check</h3><ul class="tight"><li>Focus rings on every control in both themes.</li><li>Charts and the calendar grid, which are not shown here.</li><li>Long sessions on a dim display with real clinicians.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 22 billing -->
+<section class="page" id="billing" data-sec="In the product" data-toc="Billing workspace">
+  <div class="eyebrow">In the product</div>
+  <h1>Billing workspace</h1>
+  <p class="lead">A biller's hierarchy is different from a clinician's: money and blockers first, people second. The same system, arranged around a queue and what each row needs before it can go.</p>
+  <div class="shot">{{screen billing}}</div>
+  <div class="g3 mt">
+    <div><h3>Arranged for the job</h3><ul class="tight"><li>The table leads with what each session needs, in words.</li><li>Amounts are tabular, right-aligned and totalled.</li><li>The selected row opens a checklist that mirrors the server's readiness rules.</li></ul></div>
+    <div><h3>Same parts, new order</h3><ul class="tight"><li>Metric cards, tabs, badges and buttons are the clinical ones.</li><li>No illustration here: this view always has data.</li><li>Clay marks the counts that are waiting on someone.</li></ul></div>
+    <div><h3>Not shown yet</h3><ul class="tight"><li>The executive workspace, which needs charts in the chart palette.</li><li>The calendar, telehealth room and note composer.</li><li>Phone layouts. These three screens are desktop only.</li></ul></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 23 components -->
+<section class="page" id="components" data-sec="In the product" data-toc="Components and states">
+  <div class="eyebrow">In the product</div>
+  <h1>Core components and their states</h1>
+  <p class="lead">The first set, drawn with the tokens in both themes. Each state below is a real style, not a mock-up. The remaining components in the inventory follow these.</p>
+  <div class="g2">
+    <div class="themebox"><div class="comp">
+      <h3 class="comp-h">Buttons</h3>
+      <div class="cluster"><span class="btn primary">Sign note</span><span class="btn primary hover">Hover</span><span class="btn primary pressed">Pressed</span><span class="btn primary focus">Focus</span><span class="btn off">Disabled</span></div>
+      <div class="cluster" style="margin-top:10px"><span class="btn secondary">Save draft</span><span class="btn secondary hover">Hover</span><span class="btn quiet text">Cancel</span><span class="btn danger">Void claim</span><span class="btn primary">{{ic sun}}Saving</span></div>
+      <h3 class="comp-h mt">Fields</h3>
+      <div class="g2" style="gap:12px"><div class="fld"><label>Session end time</label><div class="in">4:15 PM</div><span class="hint">Pacific time</span></div>
+        <div class="fld"><label>Service code</label><div class="in focus">9083</div><span class="hint">Type to search codes</span></div>
+        <div class="fld"><label>Authorization number</label><div class="in err"></div><span class="err-t">{{ic error}}Enter the number from the payer letter.</span></div>
+        <div class="fld"><label>Program</label><div class="in">Intensive outpatient<span style="margin-left:auto;display:flex">{{ic chevron-down}}</span></div></div></div>
+      <h3 class="comp-h mt">Choices</h3>
+      <div class="cluster"><span class="chk on"><i>{{ic check}}</i>Consent on file</span><span class="chk"><i></i>Telehealth</span><span class="chk" style="gap:8px"><span class="sw-t on"></span>Record session</span><span class="chk" style="gap:8px"><span class="sw-t"></span>Reminders</span></div>
+      <h3 class="comp-h mt">Status</h3>
+      <div class="cluster"><span class="badge ok">{{ic success}}Signed</span><span class="badge warn">{{ic edit}}Draft</span><span class="badge bad">{{ic error}}Denied</span><span class="badge info">{{ic info}}Pending</span><span class="badge">{{ic clock}}Scheduled</span></div>
+      <h3 class="comp-h mt">Tabs and feedback</h3>
+      <div class="cluster"><div class="tabs"><span class="on">Day</span><span>Week</span><span>Month</span><span>Agenda</span></div></div>
+      <div class="cluster" style="margin-top:10px"><span class="toast">{{ic success}}Signed. Billing can see it now.<a>Undo</a></span></div>
+    </div></div>
+    <div class="themebox" data-nexus-theme="dark"><div class="comp">
+      <h3 class="comp-h">Buttons</h3>
+      <div class="cluster"><span class="btn primary">Sign note</span><span class="btn primary hover">Hover</span><span class="btn primary pressed">Pressed</span><span class="btn primary focus">Focus</span><span class="btn off">Disabled</span></div>
+      <div class="cluster" style="margin-top:10px"><span class="btn secondary">Save draft</span><span class="btn secondary hover">Hover</span><span class="btn quiet text">Cancel</span><span class="btn danger">Void claim</span><span class="btn primary">{{ic sun}}Saving</span></div>
+      <h3 class="comp-h mt">Fields</h3>
+      <div class="g2" style="gap:12px"><div class="fld"><label>Session end time</label><div class="in">4:15 PM</div><span class="hint">Pacific time</span></div>
+        <div class="fld"><label>Service code</label><div class="in focus">9083</div><span class="hint">Type to search codes</span></div>
+        <div class="fld"><label>Authorization number</label><div class="in err"></div><span class="err-t">{{ic error}}Enter the number from the payer letter.</span></div>
+        <div class="fld"><label>Program</label><div class="in">Intensive outpatient<span style="margin-left:auto;display:flex">{{ic chevron-down}}</span></div></div></div>
+      <h3 class="comp-h mt">Choices</h3>
+      <div class="cluster"><span class="chk on"><i>{{ic check}}</i>Consent on file</span><span class="chk"><i></i>Telehealth</span><span class="chk" style="gap:8px"><span class="sw-t on"></span>Record session</span><span class="chk" style="gap:8px"><span class="sw-t"></span>Reminders</span></div>
+      <h3 class="comp-h mt">Status</h3>
+      <div class="cluster"><span class="badge ok">{{ic success}}Signed</span><span class="badge warn">{{ic edit}}Draft</span><span class="badge bad">{{ic error}}Denied</span><span class="badge info">{{ic info}}Pending</span><span class="badge">{{ic clock}}Scheduled</span></div>
+      <h3 class="comp-h mt">Tabs and feedback</h3>
+      <div class="cluster"><div class="tabs"><span class="on">Day</span><span>Week</span><span>Month</span><span>Agenda</span></div></div>
+      <div class="cluster" style="margin-top:10px"><span class="toast">{{ic success}}Signed. Billing can see it now.<a>Undo</a></span></div>
+    </div></div>
+  </div>
+  <div class="g3 mt">
+    <div><h3>Buttons</h3><p>One primary button per view, with the soft corner. Its hover and pressed states are on the next page. Secondary buttons are outlined and square. Destructive actions are named for what they do ("Void claim"), never "Delete" or "OK". A busy button keeps its width and shows the sun.</p></div>
+    <div><h3>Fields</h3><p>Labels sit above and never disappear. Hints are under the field. An error is a red outline, an icon and a sentence that says what to enter; the text already typed is kept.</p></div>
+    <div><h3>Focus</h3><p>Every interactive element shows a 2 px Clay ring with a 2 px gap when reached by keyboard. It is the same in both themes apart from the lighter Clay on dark.</p></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 24 interaction -->
+<section class="page" id="interaction" data-sec="In the product" data-toc="Interaction and motion">
+  <div class="eyebrow">In the product</div>
+  <h1>Interaction and motion</h1>
+  <p class="lead">This is where the personality lives once a screen is in use, and none of it is loud: a corner that opens, a stem that grows, ink that presses down. Every state is a real style. In the HTML edition of this guide the first row responds to the pointer.</p>
+  <h3 class="comp-h">Primary button</h3>
+  <div class="states live">
+    <div class="st"><div class="sp"><span class="btn primary">Sign note</span></div><b>Rest</b><i>Soft corner at 12 px.</i></div>
+    <div class="st"><div class="sp"><span class="btn primary hover">Sign note</span></div><b>Hover</b><i>The corner opens to 17 px and the ink deepens.</i></div>
+    <div class="st"><div class="sp"><span class="btn primary pressed">Sign note</span></div><b>Pressed</b><i>The corner closes to 3 px and the button drops 1 px, like a block meeting paper.</i></div>
+    <div class="st"><div class="sp"><span class="btn primary focus">Sign note</span></div><b>Focus</b><i>2 px Clay ring, 2 px gap.</i></div>
+    <div class="st"><div class="sp"><span class="btn primary">{{ic sun}}Signing</span></div><b>Busy</b><i>The sun turns. Width does not change.</i></div>
+    <div class="st"><div class="sp"><span class="btn primary done">{{ic check}}Signed</span></div><b>Done</b><i>Success colour for 1.2 s, then back to rest.</i></div>
+  </div>
+  <h3 class="comp-h mt">Links and navigation</h3>
+  <div class="states">
+    <div class="st"><div class="sp"><span class="lk">Open care plan</span></div><b>Link</b><i>Link green, no underline in lists.</i></div>
+    <div class="st"><div class="sp"><span class="lk hover">Open care plan</span></div><b>Hover</b><i>A 2 px underline grows in.</i></div>
+    <div class="st"><div class="sp"><span class="lk visited">Open care plan</span></div><b>Visited</b><i>Bark. Only on links that leave the page.</i></div>
+    <div class="st"><div class="sp"><span class="navi">{{ic schedule}}Schedule</span></div><b>Nav item</b><i>Plain.</i></div>
+    <div class="st"><div class="sp"><span class="navi hover">{{ic schedule}}Schedule</span></div><b>Hover</b><i>Oat fill, soft corner.</i></div>
+    <div class="st"><div class="sp"><span class="navi on">{{ic schedule}}Schedule</span></div><b>Selected</b><i>Lichen fill, Semibold.</i></div>
+  </div>
+  <h3 class="comp-h mt">Leaf card, when it opens something</h3>
+  <div class="states s3">
+    <div class="st"><div class="sp" style="height:92px"><div class="metric " style="width:164px;text-align:left"><span>Notes to sign</span><strong>3</strong><small>1 older than 48 hours</small></div></div><b>Rest</b><i>12 px stem, vein at 9%.</i></div>
+    <div class="st"><div class="sp" style="height:92px"><div class="metric leaf hover" style="width:164px;text-align:left"><span>Notes to sign</span><strong>3</strong><small>1 older than 48 hours</small></div></div><b>Hover</b><i>The stem grows to 19 px, the vein deepens to 15%, the outline firms up.</i></div>
+    <div class="st"><div class="sp" style="height:92px"><div class="metric leaf sel" style="width:164px;text-align:left"><span>Notes to sign</span><strong>3</strong><small>1 older than 48 hours</small></div></div><b>Selected</b><i>Lichen fill, no outline.</i></div>
+  </div>
+  <div class="g2 mt">
+    <div>
+      <h3>Timing</h3>
+      <table class="kv">
+        <tr><th>Token</th><th>Time</th><th>Used for</th></tr>
+        <tr><td><code>motion-press</code></td><td class="num">120 ms</td><td>A press, a corner opening, a tick.</td></tr>
+        <tr><td><code>motion-feedback</code></td><td class="num">160 ms</td><td>Hover colour, the stem, a toast arriving.</td></tr>
+        <tr><td><code>motion-disclosure</code></td><td class="num">200 ms</td><td>Menus, dialogs and panels opening.</td></tr>
+        <tr><td><code>motion-grow</code></td><td class="num">360 ms</td><td>An illustration or first-run banner. Once.</td></tr>
+      </table>
+      <p class="small" style="margin-top:6px">One easing curve, <code>--nx-ease</code>. With reduced motion set, all are 0.</p>
+    </div>
+    <div>
+      <h3>What never moves</h3>
+      <ul class="tight"><li>Patterns and the logo. They are prints; they hold still.</li><li>Numbers. No counting up, no ticking.</li><li>Layout. A hover never shifts what is around it.</li><li>Anything at all while someone is typing.</li><li>Nothing bounces or overshoots.</li></ul>
+      <p class="small" style="margin-top:6px">Button, card and focus states are built in the app. The busy sun and the 360 ms arrival are not used there yet.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 25 applications -->
+<section class="page" id="applications" data-sec="In use" data-toc="Beyond the screen">
+  <div class="eyebrow">In use</div>
+  <h1>Beyond the screen</h1>
+  <p class="lead">The same few pieces, a symbol, two colours, one pattern, one soft corner, carried onto the things a new company needs first. Teaching slides have their own page next.</p>
+  <div class="g2">
+    <div>
+      <div class="stage linen" style="height:232px;gap:14px;flex-direction:column;border-radius:4px">
+        <div style="width:300px;height:92px;background:var(--nx-pine);border-radius:3px 26px 3px 3px;position:relative;overflow:hidden">
+          {{pat bark #3F5A41 170}}
+          <div style="position:absolute;left:18px;top:50%;transform:translateY(-50%);width:128px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div></div>
+        <div style="width:300px;height:92px;background:var(--nx-birch);border-radius:3px 26px 3px 3px;position:relative;border:1px solid var(--nx-reed);padding:14px 18px">
+          <div style="font:600 13px var(--nx-font-display);color:var(--nx-pine)">Your Name</div><div style="font:600 7.5px var(--nx-font-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--nx-text-secondary)">Title</div>
+          <div style="position:absolute;left:18px;bottom:12px;font-size:8.5px;line-height:1.45;color:var(--nx-text)">name@example.com<br>000 000 0000</div>
+          <div style="position:absolute;right:16px;bottom:12px;width:26px;color:var(--nx-pine)">{{svg logo/nexus-symbol-small-pine.svg}}</div></div>
+      </div>
+      <div class="cap"><b>Business card.</b> Tonal bark and the reversed logo on the front; Birch, the tile corner and the small symbol on the back. Contact details are placeholders.</div>
+    </div>
+    <div>
+      <div class="stage birch" style="height:232px;padding:0;border-radius:4px;overflow:hidden;display:block">
+        <div style="display:flex;height:100%">
+          <div style="width:44%;background:var(--nx-pine);position:relative"><div style="position:absolute;inset:0;background: var(--img-ringfield) -90px -140px/620px auto"></div>
+            <div style="position:absolute;left:16px;bottom:16px;right:12px;font:600 15px/1.15 var(--nx-font-display);color:var(--nx-linen)">Growth,<br>on the record.</div></div>
+          <div style="flex:1;padding:26px 22px;display:flex;flex-direction:column;gap:9px;justify-content:center">
+            <div style="width:104px;color:var(--nx-pine)">{{svg logo/nexus-logo-horizontal-pine.svg}}</div>
+            <div style="font:600 14px var(--nx-font-display);margin-top:4px">Sign in</div>
+            <div class="fld" style="zoom:.66"><label>Work email</label><div class="in"></div></div>
+            <div class="fld" style="zoom:.66"><label>Password</label><div class="in"></div></div>
+            <span class="btn primary" style="zoom:.66;align-self:flex-start">Sign in</span></div></div>
+      </div>
+      <div class="cap"><b>Sign-in.</b> The one screen where the ring field runs large. Authentication itself is not built yet; this is the layout.</div>
+    </div>
+  </div>
+  <div class="g2 mt">
+    <div>
+      <div class="stage birch" style="height:200px;border-radius:4px;display:block;padding:18px 20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid var(--nx-pine);padding-bottom:9px">
+          <div style="width:96px">{{svg logo/nexus-logo-horizontal-ink.svg}}</div>
+          <div style="font-size:8.5px;text-align:right;line-height:1.4;color:var(--nx-text-secondary)"><b style="color:var(--nx-text)">Cedar Ridge Outpatient</b><br>Claim review export · Nov 1 to 10, 2026</div></div>
+        <div style="font:600 15px var(--nx-font-display);margin:11px 0 4px">Sessions needing attention</div>
+        <table class="kv" style="font-size:8.5px"><tr><th>Client</th><th>Date</th><th>Code</th><th>Needs</th></tr><tr><td>Priya Raman</td><td class="num">Nov 10</td><td class="num">90834</td><td>Unsigned note</td></tr><tr><td>Elena Brooks</td><td class="num">Nov 9</td><td class="num">90837</td><td>Authorization expired</td></tr></table>
+        <div style="font-size:7.5px;color:var(--nx-text-secondary);margin-top:8px">Synthetic example · Page 1 of 3</div>
+      </div>
+      <div class="cap"><b>Exported documents.</b> One-colour ink logo, a Pine rule, Fraunces title. Prints cleanly in greyscale.</div>
+    </div>
+    <div>
+      <div class="stage linen" style="height:200px;border-radius:4px;gap:16px;align-items:flex-end;padding-bottom:30px">
+        <div style="width:96px">{{svg logo/nexus-app-icon.svg}}<div class="cap" style="text-align:center">App tile</div></div>
+        <div style="width:64px">{{svg logo/nexus-app-icon-linen.svg}}<div class="cap" style="text-align:center">Light</div></div>
+        <div style="width:64px;border-radius:50%;overflow:hidden">{{svg logo/nexus-app-icon-maskable.svg}}</div>
+        <div style="width:32px">{{svg logo/nexus-app-icon.svg}}<div class="cap" style="text-align:center">32</div></div>
+        <div style="width:16px;color:var(--nx-pine)">{{svg logo/nexus-symbol-small-pine.svg}}<div class="cap" style="text-align:center">16</div></div>
+      </div>
+      <div class="cap"><b>App icons and favicon.</b> Tile, light tile, the maskable version cropped to a circle, and the browser-tab sizes.</div>
+    </div>
+  </div>
+  <div class="g2 mt">
+    <div>
+      <div style="height:190px;border-radius:4px;background:var(--nx-pine);position:relative;overflow:hidden;color:var(--nx-linen)">
+        <div style="position:absolute;right:0;top:0;bottom:0;width:46%;background:var(--nx-linen)"></div>
+        <div style="position:absolute;right:0;top:0;bottom:0;width:46%;background: var(--img-ringpress) 10px -96px/330px auto no-repeat"></div>
+        <div style="position:absolute;left:22px;top:20px;width:84px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div>
+        <div style="position:absolute;left:22px;bottom:40px;font:600 23px/1.1 var(--nx-font-display);max-width:150px">Outcomes review</div>
+        <div style="position:absolute;left:22px;bottom:20px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--nx-sage)">Third quarter 2026</div>
+      </div>
+      <div class="cap"><b>Slide and report cover.</b> Pine field, Fraunces title, ring press strips cropped down one side.</div>
+    </div>
+    <div>
+      <div style="height:190px;border-radius:4px;background:var(--nx-lichen);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">{{pat understory #A7B48B 190}}
+        <div style="background:var(--nx-birch);border-radius:5px 34px 5px 5px;padding:16px 20px;width:214px;position:relative">
+          <div style="width:30px;color:var(--nx-pine);margin-bottom:8px">{{svg logo/nexus-symbol-small-pine.svg}}</div>
+          <div style="font:600 17px/1.2 var(--nx-font-display);color:var(--nx-pine)">Thank you for a good first month.</div>
+          <div style="font-size:10px;color:var(--nx-text-secondary);margin-top:4px">From everyone at Nexus</div></div>
+      </div>
+      <div class="cap"><b>Notes and cards.</b> Understory in a quiet green behind a Birch tile. The friendliest the brand gets.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 26 teaching -->
+<section class="page" id="teaching" data-sec="In use" data-toc="Teaching and group materials">
+  <div class="eyebrow">In use</div>
+  <h1>Teaching and group materials</h1>
+  <p class="lead">Slides for treatment groups should guide the room, not script it. This page applies the co-founder's curriculum review of November 2026 to six layouts. The principles are theirs; the layouts and numbers are a first proposal.</p>
+  <div class="g3">
+    <div><div class="slide pine"><div style="position:absolute;right:0;top:0;bottom:0;width:38%;background: var(--img-ringfield) -70px -70px/330px auto"></div>
+        <div class="k" style="margin-top:22px">Week 3 · Group session</div><div class="t" style="max-width:118px">How habits form</div>
+        <div class="ft"><span style="width:44px">{{svg logo/nexus-logo-horizontal-linen.svg style="width:44px"}}</span></div></div>
+      <div class="cap"><b>Title.</b> Says what today is about, nothing else.</div></div>
+    <div><div class="slide"><div class="k">One idea</div><div class="t" style="margin-top:8px">Habits are learned. What is learned can be relearned.</div>
+        <div class="ft"><span style="color:var(--nx-pine)">{{svg logo/nexus-symbol-small-pine.svg}}</span><span>4</span></div></div>
+      <div class="cap"><b>One idea.</b> A sentence the facilitator can talk around.</div></div>
+    <div><div class="slide lichen"><div class="k">Ask the room</div><div class="t" style="margin-top:6px">Where have you seen this show up in your own life?</div>
+        <div style="margin-top:6px;color:var(--nx-understory)">Two minutes. Then whoever wants to share.</div>
+        <div class="ft"><span style="color:var(--nx-pine)">{{svg logo/nexus-symbol-small-pine.svg}}</span><span>5</span></div></div>
+      <div class="cap"><b>Ask the room.</b> A specific question, written in advance.</div></div>
+    <div><div class="slide" style="background:var(--nx-birch);align-items:center;justify-content:center;text-align:center"><div style="width:30px;color:var(--nx-clay)">{{svg illustrations/motifs/nexus-motif-sun.svg}}</div>
+        <div class="t" style="margin-top:4px">Pause.</div><div style="color:var(--nx-understory)">Let that land before the next idea.</div></div>
+      <div class="cap"><b>Pause.</b> Room to process one idea before the next.</div></div>
+    <div><div class="slide" style="padding:0;flex-direction:row"><div style="width:44%;background:var(--nx-birch);border-right:1px solid var(--nx-reed)">{{svg illustrations/nexus-scene-first-shoot.svg preserveAspectRatio="xMidYMid slice" style="height:100%;width:100%"}}</div>
+        <div style="flex:1;padding:13px 12px 10px;display:flex;flex-direction:column"><div class="k">Picture and idea</div><div class="t" style="font-size:12px">A habit has three parts</div>
+          <div style="margin-top:6px;font-size:8.2px;line-height:1.7"><b>Cue.</b> What sets it off.<br><b>Routine.</b> What you do.<br><b>Reward.</b> What you get.</div></div></div>
+      <div class="cap"><b>Picture and idea.</b> Half image, three short lines.</div></div>
+    <div><div class="slide" style="background:var(--nx-birch)"><div class="k" style="color:var(--nx-understory)">Appendix A2 · For facilitators</div><div class="t" style="font-size:10.5px">Where this comes from</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:7px"><div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:96%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:88%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:92%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:70%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:94%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:82%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:60%"></div></div><div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:96%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:88%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:92%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:70%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:94%"></div><div style="height:2.4px;border-radius:2px;background:var(--nx-reed);margin-bottom:3.4px;width:82%"></div></div></div>
+        <div class="ft"><span>Sources and the longer explanation</span><span>A2</span></div></div>
+      <div class="cap"><b>Appendix.</b> Dense on purpose, and kept out of the session.</div></div>
+  </div>
+  <div class="g2 mt">
+    <div><h3>A guide, not a script</h3><ul class="tight"><li>One idea per slide, in about 25 words or fewer. The facilitator carries the rest.</li><li>A question slide after each concept. "Any questions?" is not one.</li><li>Sources and long explanations go in the appendix. A dense slide is a choice with a reason, such as reading an original text.</li><li>Plain words first. A recovery term is explained the first time it appears.</li><li>A small Clay leaf in a corner marks "your story goes here" for the facilitator.</li></ul></div>
+    <div><h3>Built for a video call</h3><ul class="tight"><li>Linen background, Heartwood text. Nothing smaller than 28 pt on a 1920 px slide.</li><li>Keep the top right clear; that is where video tiles sit.</li></ul>
+      <h3 style="margin-top:9px">On camera</h3><p style="margin:0">A baseline above an ordinary call: light on the face from the front, camera at eye level, a separate microphone.</p></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 132px;gap:18px;margin-top:12px;align-items:start">
+    <div><h3>Three lengths, made on purpose</h3>
+      <table class="kv">
+        <tr><th>Form</th><th>What it holds</th><th>Suggested format</th></tr>
+        <tr><td>Long</td><td>The whole session, with its context and depth.</td><td>Recording, Title slide first.</td></tr>
+        <tr><td>Medium</td><td>One concept or one practical use, complete on its own.</td><td>A few minutes; One idea slide first.</td></tr>
+        <tr><td>Short</td><td>A single insight, question or human moment.</td><td>Under a minute; the square card.</td></tr>
+      </table>
+      <p class="small" style="margin-top:6px">Short pieces are better made on purpose than cut out of a 90-minute session. These are layouts; editable slide files have not been made.</p></div>
+    <div><div style="aspect-ratio:1;border-radius:var(--nx-corner-tile);background:var(--nx-pine);position:relative;overflow:hidden;padding:14px;color:var(--nx-linen);display:flex;flex-direction:column">
+        {{pat understory #3F5A41 120}}
+        <div style="position:relative;font:600 6px var(--nx-font-ui);letter-spacing:.14em;text-transform:uppercase;color:var(--nx-sage)">A question to sit with</div>
+        <div style="position:relative;font:600 15px/1.15 var(--nx-font-display);margin-top:6px">What would it look like to actually apply this?</div>
+        <div style="position:relative;margin-top:auto;width:46px">{{svg logo/nexus-logo-horizontal-linen.svg}}</div></div>
+      <div class="cap"><b>Short-form card.</b></div></div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 27 asset library -->
+<section class="page" id="assets" data-sec="Reference" data-toc="The asset library">
+  <div class="eyebrow">Reference</div>
+  <h1>The asset library</h1>
+  <p class="lead">Everything in this guide is a real file in <code>brand/</code>. The artwork is generated by small Python scripts, so any of it can be adjusted and rebuilt instead of redrawn. This guide and the library are meant to be used together.</p>
+  <table class="kv">
+    <tr><th>Folder</th><th>What is in it</th><th>Use it for</th></tr>
+    <tr><td><code>logo/</code></td><td>Lockups, symbol, small-size symbol and wordmark in Pine, Linen and Ink; app tiles; favicon. 19 SVG, 9 PNG.</td><td>Anywhere the logo appears</td></tr>
+    <tr><td><code>logo/masters/</code></td><td>The two symbol drawings and the wordmark in <code>currentColor</code>.</td><td>Source for the logo build</td></tr>
+    <tr><td><code>icons/</code></td><td>{{iconcount}} icons as SVG files, a sprite, and <code>nexus-icons.ts</code> with a <code>NexusIconName</code> type.</td><td>The product</td></tr>
+    <tr><td><code>patterns/</code></td><td>Ring press, ring field, bark, contour, understory, leaf vein. SVG, plus pressed PNG masks.</td><td>Covers, sign-in, sidebar, cards</td></tr>
+    <tr><td><code>illustrations/</code></td><td>Four scenes, each with a day and night form, and ten motifs. SVG.</td><td>Empty states, firsts, slides</td></tr>
+    <tr><td><code>tokens/</code></td><td><code>nexus-tokens.css</code>, <code>.json</code>, <code>.ts</code> and <code>contrast-audit.csv</code> (72 pairings).</td><td>Import the CSS; set the theme</td></tr>
+    <tr><td><code>fonts/</code></td><td>Fraunces (SemiBold, Regular), Manrope (ExtraBold, Bold), Source Sans 3, with licences and the variable sources.</td><td>Self-hosting in the app</td></tr>
+    <tr><td><code>guidelines/</code></td><td>The source of this document and its HTML edition.</td><td>Reference styling</td></tr>
+    <tr><td><code>tools/</code></td><td>The generators. <code>build_all.py</code> rebuilds everything, including this PDF.</td><td>Extending the kit</td></tr>
+  </table>
+  <div class="g2 mt2">
+    <div>
+      <h2>In code</h2>
+      <pre class="code" style="font-size:9px">@import "brand/tokens/nexus-tokens.css";
+&lt;html data-nexus-theme="dark"&gt;  /* omit for light */
+
+.title  { font: var(--nx-text-title) var(--nx-font-display); }
+.figure { font: var(--nx-text-figure) var(--nx-font-figure); }
+.button { border-radius: var(--nx-corner-control); }
+.card   { border-radius: var(--nx-corner-leaf); }
+
+import { nexusIcons } from "brand/icons/nexus-icons";
+&lt;svg viewBox="0 0 24 24" fill="currentColor"&gt;
+  &lt;path fillRule="evenodd"
+        d={nexusIcons["care-plan"]} /&gt;
+&lt;/svg&gt;</pre>
+      <p class="small" style="margin-top:6px">Components use role tokens, never palette colours. No icon, font or UI package is installed.</p>
+    </div>
+    <div>
+      <h2>The React library</h2>
+      <p class="small">In <code>frontend/src/nexus-ui</code>, styled only with role tokens. <code>build_frontend.py</code> copies tokens, icons, artwork and fonts into <code>frontend/src/brand</code>. Older view styles sit in a <code>legacy</code> layer underneath.</p>
+      <table class="kv">
+        <tr><th>Component</th><th>Specified on</th></tr>
+        <tr><td>NxButton, NxBadge</td><td>Components ({{pg components}}), interaction ({{pg interaction}})</td></tr>
+        <tr><td>LeafCard, MetricCard</td><td>The leaf card ({{pg leaf}}), figures ({{pg type-scale}})</td></tr>
+        <tr><td>Field</td><td>Components ({{pg components}})</td></tr>
+        <tr><td>NxTabs, Toast</td><td>Components ({{pg components}})</td></tr>
+        <tr><td>App shell, Logo</td><td>Clinical workspace ({{pg clinical}})</td></tr>
+        <tr><td>Tables, NxPanel</td><td>Billing workspace ({{pg billing}})</td></tr>
+        <tr><td>NxIcon</td><td>Using icons ({{pg icon-use}})</td></tr>
+        <tr><td>EmptyState, Scene</td><td>Where illustrations appear ({{pg illustration-use}})</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 28 open decisions -->
+<section class="page" id="open" data-sec="Reference" data-toc="Open decisions and changes">
+  <div class="eyebrow">Reference</div>
+  <h1>Open decisions and changes</h1>
+  <p class="lead">What still needs an owner's answer, what this edition leaves out, and how the guide got here.</p>
+  <div class="g2">
+    <div class="card flat" style="background:var(--nx-accent-soft);border-color:transparent">
+      <h2>Decisions for the owners</h2>
+      <ul class="tight"><li><b>The line:</b> "Growth, on the record."</li><li><b>The wordmark and type:</b> Fraunces and Manrope are new in this edition.</li><li><b>The leaf card:</b> which cards get it, and whether the stem stays on every one.</li><li><b>The bark line:</b> how wavy it should be.</li><li><b>Client and session wording,</b> against payer and state form language.</li><li><b>Teaching slides:</b> whether these six layouts are the right set.</li></ul>
+    </div>
+    <div class="card flat">
+      <h2>Not in this edition</h2>
+      <ul class="tight"><li>A trademark search and recognition testing for the symbol. Both should happen before it goes on anything public.</li><li>Photography: no images have been chosen or licensed.</li><li>Editable templates: slides, letterhead, social posts. What is shown are layouts, not files.</li><li>The executive workspace, charts, calendar and phone layouts.</li><li>Checkbox and toggle components, and a data-table component. Tables are styled, not yet componentised.</li><li>A view-by-view review of the restyled app with clinicians and billers.</li></ul>
+    </div>
+  </div>
+  <h2 class="mt2">How it got here</h2>
+  <table class="kv" style="margin-top:6px">
+    <tr><th>Edition</th><th>What it was</th></tr>
+    <tr><td>0.1</td><td>A starter kit: outline icons, three geometric marks, simple patterns. Set aside as too generic.</td></tr>
+    <tr><td>0.2</td><td>Rebuilt from the product and the style references: the cross-section symbol, forest-floor palette, ring press and other patterns, cut icons, cut-paper illustration, product screens. Convergence chosen as the symbol on November 11, 2026.</td></tr>
+    <tr><td>0.3</td><td>This edition. Bark line on the symbol; new wordmark; Fraunces and Manrope in place of Georgia; the leaf card and its vein; simpler icons; night illustrations; interaction states; teaching materials; contents and index. The unused symbol studies were removed.</td></tr>
+  </table>
+  <div class="g2 mt2">
+    <div><h3>Checked in this edition</h3><ul class="tight"><li>72 colour pairings, light and dark, against WCAG 2.2 targets: all pass.</li><li>Every page of this guide reviewed as rendered, in the PDF.</li><li>All fonts are open-licensed and bundled with their licences.</li></ul></div>
+    <div><h3>Not checked</h3><ul class="tight"><li>Contrast on each finished app screen. The tokens are audited; the screens were checked by eye in both themes.</li><li>The symbol and icons with clinicians or billers.</li><li>Print: no piece has been proofed on paper.</li></ul></div>
+  </div>
+  <p class="small mt">All names, records and amounts shown in this guide are synthetic. The style references that informed the kit were used for direction only; no artwork from them is reproduced.</p>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+<!-- 29 index -->
+<section class="page" id="index" data-sec="Reference" data-toc="Index">
+  <div class="eyebrow">Reference</div>
+  <h1>Index</h1>
+  <p class="lead" style="margin-bottom:14px">Page numbers link to the page in the PDF and the HTML edition.</p>
+  <div class="ix">{{index}}</div>
+  <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
+</section><!--/page-->
+
+</body>
+</html>

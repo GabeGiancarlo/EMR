@@ -6,7 +6,7 @@
 - prefer async-first APIs where I/O or concurrency is involved
 - keep Actix handlers thin; move business logic into services
 - keep data access logic in repositories
-- keep domain concepts and reusable contracts in `core/`
+- keep active domain concepts and reusable contracts in focused `api/src` modules; `core/` is parked and is not an active Cargo member
 
 ## Error Handling
 

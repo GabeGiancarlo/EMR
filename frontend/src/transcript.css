@@ -1,0 +1,29 @@
+/* nexus-migrated */
+@layer legacy {
+.tx-panel{display:flex;flex-direction:column;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--nx-border);border-radius:var(--nx-radius-overlay);background:var(--nx-surface);color:var(--nx-text);max-width:100%}
+.tx-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.tx-head h3,.tx-panel legend{margin:0;font-size:18px;color:var(--nx-text)}
+.tx-panel legend{font-size:15px;font-weight:800}
+.tx-note,.tx-meta,.tx-job p,.tx-excerpt p{margin:0;font-size:15px;line-height:1.5;color:var(--nx-brand)}
+.tx-warn{margin:0;font-weight:750;color:var(--nx-danger)}
+.tx-ok{margin:0;font-weight:750;color:var(--nx-brand)}
+.tx-form,.tx-seg,.tx-job,.tx-excerpt{display:flex;flex-direction:column;gap:8px}
+.tx-panel fieldset{margin:0;padding:10px;border:1px solid var(--nx-border);border-radius:var(--nx-radius-panel)}
+.tx-panel label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:700;color:var(--nx-brand)}
+.tx-panel label.tx-check{flex-direction:row;align-items:flex-start;gap:8px;font-weight:650}
+.tx-panel input,.tx-panel select,.tx-panel textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--nx-border);border-radius:var(--nx-radius-panel);background:var(--nx-surface);color:var(--nx-text);font:inherit}
+.tx-panel textarea{min-height:68px;resize:vertical}
+.tx-panel input[type="checkbox"]{width:auto;flex:none;margin-top:2px}
+.tx-actions{display:flex;flex-wrap:wrap;gap:8px}
+.tx-job,.tx-seg,.tx-excerpt{border:1px solid var(--nx-border);border-radius:var(--nx-radius-panel);padding:10px}
+.tx-state{font-weight:800}
+.tx-grid,.tx-times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tx-seg header{display:flex;justify-content:space-between;gap:8px;font-size:15px}
+.tx-seg[data-uncertain="true"]{border-color:var(--nx-warning)}
+.tx-seg[data-excluded="true"]{opacity:.8}
+.tx-panel code,.tx-excerpt blockquote{overflow-wrap:anywhere;white-space:pre-wrap}
+.tx-excerpt blockquote{margin:0;font:inherit}
+.tx-panel .error-banner{margin:0;padding:10px 12px;border-radius:var(--nx-radius-panel);background:var(--nx-danger-bg);border:1px solid var(--nx-danger);color:var(--nx-danger)}
+.tx-panel :focus-visible{outline:2px solid var(--nx-focus);outline-offset:2px}
+@media(max-width:700px){.tx-panel{padding:12px}.tx-head{flex-direction:column}.tx-grid,.tx-times{grid-template-columns:1fr}.tx-actions .button{flex:1 1 42%}}
+}

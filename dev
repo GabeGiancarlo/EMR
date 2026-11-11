@@ -4,4 +4,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 export EMR_PORT="${EMR_PORT:-8090}"
-exec env PORT="$EMR_PORT" cargo run -p emr-api
+exec env NEXUS_LOCAL_DEV=1 HOST=127.0.0.1 PORT="$EMR_PORT" cargo run -p emr-api

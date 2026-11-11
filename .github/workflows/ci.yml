@@ -2,14 +2,25 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev, develop, nexus/integrated-prototype, 'codex/**', 'feature/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev, develop, nexus/integrated-prototype]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  orchestration:
+    name: Worker accounting regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tools -p 'test_grok_research.py' -v
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -52,6 +63,20 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     needs: [build]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus_local
+          POSTGRES_DB: nexus_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus -d nexus_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://nexus:nexus_local@127.0.0.1:55432/nexus_test
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -63,7 +88,54 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
+      - name: PostgreSQL workflow integration
+        run: cargo test --locked --test postgres -- --ignored
+      - name: PostgreSQL CSV export integration
+        run: cargo test --locked --test exports_postgres -- --ignored
+      - name: PostgreSQL form routing integration
+        run: cargo test --locked --test form_requirements_postgres -- --ignored
+      - name: PostgreSQL speech authorization integration
+        run: cargo test --locked --test speech_postgres -- --ignored
+      - name: PostgreSQL adult intake integration
+        run: cargo test --locked --test intake_postgres -- --ignored
+      - name: PostgreSQL patient identity and admission integration
+        run: cargo test --locked --test patient_identity_postgres --test admissions_postgres -- --ignored
+      - name: PostgreSQL program configuration and routing integration
+        run: cargo test --locked --test program_catalog_postgres --test program_admission_postgres --test program_services_postgres -- --ignored
+      - name: PostgreSQL canonical claim identity and migration integration
+        run: cargo test --locked --test service_code_upgrade_postgres --test claim_canonical_http -- --ignored --test-threads=1
+      - name: PostgreSQL scheduling and availability integration
+        run: cargo test --locked --test scheduling_postgres -- --ignored
+      - name: PostgreSQL telehealth participation and signaling integration
+        run: cargo test --locked --test telehealth_postgres -- --ignored
+      - name: PostgreSQL transcript review and provenance integration
+        run: cargo test --locked --test transcripts_postgres -- --ignored
+      - name: PostgreSQL approved patient knowledge integration
+        run: cargo test --locked --test knowledge_postgres -- --ignored
+      - name: PostgreSQL owned worker terminal recovery
+        run: cargo test --locked --lib worker::tests:: -- --ignored --test-threads=1
+      - name: PostgreSQL clinical drafting and review integration
+        run: cargo test --locked --test drafting_postgres -- --ignored
+      - name: PostgreSQL recording consent and encrypted media integration
+        run: cargo test --locked --test recordings_postgres -- --ignored
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
 
   docker-api-smoke:
     name: Docker API Build Smoke
