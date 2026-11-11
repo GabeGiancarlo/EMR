@@ -6,9 +6,9 @@ export type ThemeMode = (typeof THEME_MODES)[number];
 
 export type ResolvedTheme = "light" | "dark";
 
-const DARK_CANVAS = "#121a18";
-const LIGHT_CANVAS = "#f7f8f5";
-const LIGHT_THEME_COLOR = "#183e3c";
+const DARK_CANVAS = "#161A13";      // --nx-page, dark (Night)
+const LIGHT_CANVAS = "#F4EFE3";     // --nx-page, light (Linen)
+const LIGHT_THEME_COLOR = "#2F4631"; // Pine
 
 export function isThemeMode(value: unknown): value is ThemeMode {
   return value === "light" || value === "dark" || value === "system";
@@ -57,9 +57,10 @@ export function applyTheme(mode: ThemeMode, osDark = systemPrefersDark()): Resol
   const root = document.documentElement;
   root.setAttribute("data-theme", mode);
   root.setAttribute("data-resolved-theme", resolved);
+  root.setAttribute("data-nexus-theme", resolved); // switches the --nx-* role tokens
   root.style.colorScheme = resolved;
   root.style.backgroundColor = resolved === "dark" ? DARK_CANVAS : LIGHT_CANVAS;
-  root.style.color = resolved === "dark" ? "#e7f1eb" : "#253c3a";
+  root.style.color = resolved === "dark" ? "#EEEDE0" : "#232B1E";
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", resolved === "dark" ? DARK_CANVAS : LIGHT_THEME_COLOR);
   return resolved;

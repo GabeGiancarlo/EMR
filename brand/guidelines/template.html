@@ -317,7 +317,7 @@ pre.code { margin: 0; font: 10px/1.5 var(--nx-font-mono); background: var(--nx-s
           <li>The two symbol studies that were not chosen have been removed.</li>
         </ul>
       </div>
-      <p class="small mt">A working edition. Everything shown is a real file in <code>brand/</code>, and all names, records and amounts are synthetic. The app itself has not been restyled yet.</p>
+      <p class="small mt">A working edition. Everything shown is a real file in <code>brand/</code>, and all names, records and amounts are synthetic. The app uses these tokens and the component library in <code>frontend/src/nexus-ui</code>.</p>
     </div>
   </div>
   <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
@@ -1077,7 +1077,7 @@ pre.code { margin: 0; font: 10px/1.5 var(--nx-font-mono); background: var(--nx-s
     <div>
       <h3>What never moves</h3>
       <ul class="tight"><li>Patterns and the logo. They are prints; they hold still.</li><li>Numbers. No counting up, no ticking.</li><li>Layout. A hover never shifts what is around it.</li><li>Anything at all while someone is typing.</li><li>Nothing bounces or overshoots.</li></ul>
-      <p class="small" style="margin-top:6px">Motion is specified here and in the tokens. It has not been built or tested in the app yet.</p>
+      <p class="small" style="margin-top:6px">Button, card and focus states are built in the app. The busy sun and the 360 ms arrival are not used there yet.</p>
     </div>
   </div>
   <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
@@ -1252,18 +1252,18 @@ import { nexusIcons } from "brand/icons/nexus-icons";
       <p class="small" style="margin-top:6px">Components use role tokens, never palette colours. No icon, font or UI package is installed.</p>
     </div>
     <div>
-      <h2>Toward the React library</h2>
-      <p class="small">The next step after this guide. None of these exist as components yet; the styles in <code>guidelines/template.html</code> are the specification for each.</p>
+      <h2>The React library</h2>
+      <p class="small">In <code>frontend/src/nexus-ui</code>, styled only with role tokens. <code>build_frontend.py</code> copies tokens, icons, artwork and fonts into <code>frontend/src/brand</code>. Older view styles sit in a <code>legacy</code> layer underneath.</p>
       <table class="kv">
-        <tr><th>Component</th><th>Specified by</th></tr>
-        <tr><td>Button, Badge</td><td>Components ({{pg components}}), interaction ({{pg interaction}})</td></tr>
+        <tr><th>Component</th><th>Specified on</th></tr>
+        <tr><td>NxButton, NxBadge</td><td>Components ({{pg components}}), interaction ({{pg interaction}})</td></tr>
         <tr><td>LeafCard, MetricCard</td><td>The leaf card ({{pg leaf}}), figures ({{pg type-scale}})</td></tr>
-        <tr><td>Field, Checkbox, Toggle</td><td>Components ({{pg components}})</td></tr>
-        <tr><td>Tabs, Toast</td><td>Components ({{pg components}})</td></tr>
-        <tr><td>Sidebar, NavItem</td><td>Clinical workspace ({{pg clinical}})</td></tr>
-        <tr><td>DataTable</td><td>Billing workspace ({{pg billing}})</td></tr>
-        <tr><td>Icon</td><td>Using icons ({{pg icon-use}})</td></tr>
-        <tr><td>EmptyState</td><td>Where illustrations appear ({{pg illustration-use}})</td></tr>
+        <tr><td>Field</td><td>Components ({{pg components}})</td></tr>
+        <tr><td>NxTabs, Toast</td><td>Components ({{pg components}})</td></tr>
+        <tr><td>App shell, Logo</td><td>Clinical workspace ({{pg clinical}})</td></tr>
+        <tr><td>Tables, NxPanel</td><td>Billing workspace ({{pg billing}})</td></tr>
+        <tr><td>NxIcon</td><td>Using icons ({{pg icon-use}})</td></tr>
+        <tr><td>EmptyState, Scene</td><td>Where illustrations appear ({{pg illustration-use}})</td></tr>
       </table>
     </div>
   </div>
@@ -1282,7 +1282,7 @@ import { nexusIcons } from "brand/icons/nexus-icons";
     </div>
     <div class="card flat">
       <h2>Not in this edition</h2>
-      <ul class="tight"><li>A trademark search and recognition testing for the symbol. Both should happen before it goes on anything public.</li><li>Photography: no images have been chosen or licensed.</li><li>Editable templates: slides, letterhead, social posts. What is shown are layouts, not files.</li><li>The executive workspace, charts, calendar and phone layouts.</li><li>React components, and motion built in the app.</li><li>The app itself still uses its old styles. Nothing here is wired in.</li></ul>
+      <ul class="tight"><li>A trademark search and recognition testing for the symbol. Both should happen before it goes on anything public.</li><li>Photography: no images have been chosen or licensed.</li><li>Editable templates: slides, letterhead, social posts. What is shown are layouts, not files.</li><li>The executive workspace, charts, calendar and phone layouts.</li><li>Checkbox and toggle components, and a data-table component. Tables are styled, not yet componentised.</li><li>A view-by-view review of the restyled app with clinicians and billers.</li></ul>
     </div>
   </div>
   <h2 class="mt2">How it got here</h2>
@@ -1294,7 +1294,7 @@ import { nexusIcons } from "brand/icons/nexus-icons";
   </table>
   <div class="g2 mt2">
     <div><h3>Checked in this edition</h3><ul class="tight"><li>72 colour pairings, light and dark, against WCAG 2.2 targets: all pass.</li><li>Every page of this guide reviewed as rendered, in the PDF.</li><li>All fonts are open-licensed and bundled with their licences.</li></ul></div>
-    <div><h3>Not checked</h3><ul class="tight"><li>Finished app screens, since none use the brand yet.</li><li>The symbol and icons with clinicians or billers.</li><li>Print: no piece has been proofed on paper.</li></ul></div>
+    <div><h3>Not checked</h3><ul class="tight"><li>Contrast on each finished app screen. The tokens are audited; the screens were checked by eye in both themes.</li><li>The symbol and icons with clinicians or billers.</li><li>Print: no piece has been proofed on paper.</li></ul></div>
   </div>
   <p class="small mt">All names, records and amounts shown in this guide are synthetic. The style references that informed the kit were used for direction only; no artwork from them is reproduced.</p>
   <div class="foot"><span>Nexus · Brand guidelines v0.3</span><span class="n"></span></div>
