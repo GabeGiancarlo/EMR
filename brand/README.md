@@ -4,7 +4,8 @@ Start with [Nexus-Brand-Guidelines-v0.3.pdf](Nexus-Brand-Guidelines-v0.3.pdf) (2
 index), or open [guidelines/index.html](guidelines/index.html) in a browser. The HTML edition is the same
 document with live hover states.
 
-Nothing here is wired into the app yet; `frontend/` still uses its old styles and `frontend/public/nexus.svg`.
+The app uses this kit: `brand/tools/build_frontend.py` copies the tokens, icons, artwork and subset fonts into
+`frontend/src/brand`, and the component library in `frontend/src/nexus-ui` is built on them.
 
 ## What is in it
 
@@ -12,7 +13,7 @@ Nothing here is wired into the app yet; `frontend/` still uses its old styles an
 | --- | --- |
 | `logo/` | Horizontal and stacked lockups, symbol, small-size symbol and wordmark in Pine, Linen and Ink; app tiles; favicon. SVG, with PNG exports in `logo/png/`. |
 | `logo/masters/` | The two symbol drawings (full and small-size), the wordmark, and the four build steps shown in the guide, in `currentColor`. |
-| `icons/` | 46 icons: one SVG each in `svg/`, a sprite, and `nexus-icons.ts` with the path data and a `NexusIconName` type. |
+| `icons/` | 49 icons: one SVG each in `svg/`, a sprite, and `nexus-icons.ts` with the path data and a `NexusIconName` type. |
 | `patterns/` | Ring press, ring field, bark, contour, understory, and the leaf vein. Carved SVG; pressed PNG for the ring and bark prints (`-pressed-pine.png` is coloured, `-pressed-mask.png` is an alpha mask for CSS `mask-image`). |
 | `illustrations/` | Four cut-paper scenes, each with a day and a night form in one file, and ten motifs. SVG. |
 | `tokens/` | `nexus-tokens.css`, `.json`, `.ts`, and `contrast-audit.csv` (72 pairings, all passing). |
@@ -29,7 +30,9 @@ Nothing here is wired into the app yet; `frontend/` still uses its old styles an
 Set `data-nexus-theme="dark"` on the root element for the dark theme. Components should use role tokens
 (`--nx-action`, `--nx-surface`) and never palette colours directly. The styles under "product UI" and
 "the leaf card" in `guidelines/template.html` are the working reference for the sidebar, tables, badges,
-buttons, fields and cards. No React components exist yet; the guide's asset-library page lists what to build.
+buttons, fields and cards. The React components are in `frontend/src/nexus-ui` (`NxButton`, `NxBadge`, `LeafCard`,
+`MetricCard`, `Field`, `NxTabs`, `Toast`, `EmptyState`, `NxPanel`, `NxIcon`, `Logo`, `Scene`). The older view
+stylesheets were migrated onto role tokens and sit in `@layer legacy`, so the library styles always win.
 
 ```tsx
 import { nexusIcons, type NexusIconName } from "brand/icons/nexus-icons";
@@ -62,5 +65,6 @@ to `guidelines/template.html`; `data-sec` and `data-toc` put it in the contents,
   session wording are still the owners' to confirm.
 - No trademark search or recognition testing has been done.
 - No photography, editable templates (slides, letterhead), executive workspace, charts or phone layouts.
-- Motion and hover states are specified in the guide and tokens but not built or tested in the app.
+- Button, card and focus states are built in the app; the busy sun and arrival motion are not used there yet.
+- The restyled app has been checked by eye in both themes with synthetic data, not reviewed with clinicians or billers.
 - The style references that informed the kit live outside the repo and are not reproduced here.
