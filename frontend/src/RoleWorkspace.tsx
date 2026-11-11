@@ -396,7 +396,7 @@ function BillingHome(props: RoleWorkspaceProps & { now: Date; today: string | nu
                   <button type="button" onClick={() => onNavigate("billing", status)}>
                     <span>{label(status)}</span>
                     <span className="ws-track" aria-hidden="true">
-                      <span className="ws-fill" style={{ width: `${(count / max) * 100}%`, background: status === "denied" ? "#b45c4e" : "var(--ws-accent)" }} />
+                      <span className="ws-fill" style={{ width: `${(count / max) * 100}%`, background: status === "denied" ? "var(--nx-danger)" : "var(--ws-accent)" }} />
                     </span>
                     <strong>{count}</strong>
                   </button>

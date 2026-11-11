@@ -1,0 +1,65 @@
+<div class="app">
+  <aside class="app-nav">
+    <div class="app-logo">{{svg logo/masters/nexus-symbol-convergence-small.svg class="sym"}}{{svg logo/masters/nexus-wordmark.svg class="wm"}}</div>
+    <div class="app-ws">Billing workspace</div>
+    <a>{{ic overview}}Overview</a>
+    <a class="on">{{ic claim}}Claims<b>6</b></a>
+    <a>{{ic payment}}Payments</a>
+    <a>{{ic billing}}Coverage</a>
+    <a>{{ic clients}}Clients</a>
+    <a>{{ic reporting}}Exports</a>
+    <a>{{ic tasks}}Tasks<b>4</b></a>
+    <div class="app-nav-art">{{pat contour currentColor 420}}</div>
+    <div class="app-profile"><span class="av">LN</span><span><strong>Lena Novak</strong><small>Cedar Ridge Outpatient</small></span>{{ic chevron-up}}</div>
+  </aside>
+  <main class="app-main">
+    <header class="app-top">
+      <div class="app-search">{{ic search}}<span>Search clients, notes, claims</span><kbd>/</kbd></div>
+      <span class="app-date">Wednesday, November 11</span>
+      <button class="btn quiet">{{ic notification}}</button>
+      <button class="btn primary">{{ic download}}Export review file</button>
+    </header>
+    <div class="app-body">
+      <div class="app-hello">
+        <h1>Claim readiness</h1>
+        <p>Sessions from November 1 to 10. Eighteen are ready to submit; six need something first.</p>
+      </div>
+      <div class="app-metrics">
+        <div class="metric"><span>Ready to submit</span><strong>18</strong><small class="num">$3,942.00 billed</small></div>
+        <div class="metric"><span>Needs attention</span><strong>6</strong><small class="warn">{{ic warning}}3 unsigned notes</small></div>
+        <div class="metric"><span>Awaiting authorization</span><strong>4</strong><small>Oldest request 6 days</small></div>
+        <div class="metric"><span>Unposted payments</span><strong class="num">$4,310.00</strong><small>5 remittances</small></div>
+      </div>
+      <div class="app-cols">
+        <section class="panel">
+          <div class="panel-h"><h2>Sessions</h2><div class="tabs"><span>All 28</span><span class="on">Needs attention 6</span><span>Ready 18</span><span>Submitted</span></div></div>
+          <div class="filters"><span class="chip">{{ic filter}}Payer: all</span><span class="chip">Service date: Nov 1 to 10</span><span class="chip">Clinician: all</span></div>
+          <table class="tbl">
+            <thead><tr><th>Client</th><th>Service date</th><th>Code</th><th>Payer</th><th class="r">Amount</th><th>What it needs</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Priya Raman</strong><small>MRN 004397</small></td><td class="num">Nov 10</td><td class="num">90834</td><td>Cascade Health</td><td class="num r">$148.00</td><td><span class="badge warn">{{ic edit}}Unsigned note</span></td></tr>
+              <tr class="sel"><td><strong>Elena Brooks</strong><small>MRN 004266</small></td><td class="num">Nov 9</td><td class="num">90837</td><td>Northline PPO</td><td class="num r">$219.00</td><td><span class="badge bad">{{ic error}}Authorization expired</span></td></tr>
+              <tr><td><strong>Sam Delgado</strong><small>MRN 004305</small></td><td class="num">Nov 9</td><td class="num">90853</td><td>Cascade Health</td><td class="num r">$62.00</td><td><span class="badge warn">{{ic edit}}Unsigned note</span></td></tr>
+              <tr><td><strong>Jordan Whitfield</strong><small>MRN 004431</small></td><td class="num">Nov 6</td><td class="num">90791</td><td>Self-pay</td><td class="num r">$240.00</td><td><span class="badge info">{{ic info}}Coverage not verified</span></td></tr>
+              <tr><td><strong>Amara Okafor</strong><small>MRN 004120</small></td><td class="num">Nov 5</td><td class="num">90834</td><td>Northline PPO</td><td class="num r">$148.00</td><td><span class="badge warn">{{ic edit}}Unsigned note</span></td></tr>
+              <tr><td><strong>Marcus Hale</strong><small>MRN 004182</small></td><td class="num">Nov 3</td><td class="num">H0015</td><td>State Medicaid</td><td class="num r">$385.00</td><td><span class="badge info">{{ic clock}}Authorization requested</span></td></tr>
+            </tbody>
+            <tfoot><tr><td colspan="4">6 sessions</td><td class="num r">$1,202.00</td><td></td></tr></tfoot>
+          </table>
+        </section>
+        <div class="side">
+          <section class="panel">
+            <div class="panel-h"><h2>Elena Brooks · Nov 9</h2></div>
+            <ul class="checks">
+              <li class="y">{{ic success}}Note signed by Dana Reyes, LCSW</li>
+              <li class="y">{{ic success}}Service code matches program</li>
+              <li class="y">{{ic success}}Coverage active on service date</li>
+              <li class="n">{{ic error}}Authorization ended Nov 7 <small>12 of 12 visits used</small></li>
+            </ul>
+            <div class="row"><button class="btn primary sm">Request authorization</button><button class="btn secondary sm">Open claim</button></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
