@@ -1,32 +1,24 @@
-# Architecture Overview
+# Architecture overview
 
-## Current State
+Nexus has a persistent local application: a custom React/TypeScript interface, a Rust/Actix API, and PostgreSQL with versioned SQLx migrations. The ordinary database starts empty; the earlier mock API has been replaced.
 
-- Active implementation is the Rust API in `api/`.
-- `api/` currently exposes scaffold-level endpoints and includes mock behavior.
-- `core/` exists as a domain-layer seed, not a complete domain model.
+The same stored client, episode and session link care documentation to claims readiness. Signed records remain immutable; corrections preserve originals. Financial transitions reserve authorization units and serialize payments. Executive metrics come from stored records with clinical narrative restricted by role.
 
-## Planned State
+Authentication is deliberately deferred. Local operator selection exercises policies but does not establish identity. Startup requires development mode and a loopback bind. Facility relationships exist, but a complete facility ACL is not implemented.
 
-- Backend evolves into clear route/handler/service/repository boundaries.
-- Postgres + migration discipline becomes the persistence baseline.
-- A React + TypeScript frontend is planned for role-based workspaces.
+The active build includes `api/` and `frontend/`. `core/`, `fhir/` and `jobs/` remain parked legacy material. Use root `compose.local.yml` or the portable database helper; older infrastructure files are not a complete deployment design.
 
-## Parked Areas
+```mermaid
+flowchart LR
+    UI[Custom React / TypeScript] --> API[Rust / Actix API]
+    API --> DB[(PostgreSQL: records, audit, jobs, encrypted media)]
+    API --> STT[Local whisper.cpp + Whisper model]
+    API --> LLM[Local llama.cpp + Qwen model]
+    UI <-->|Peer-to-peer media| PEER[Other admitted browser]
+    API <-->|Signaling and participation state| PEER
+    KEY[Separately stored installation media key] --> API
+```
 
-- `fhir/` is parked for future interoperability work.
-- `jobs/` is parked for future background automation/runtime work.
+This is the current local development structure, not a production deployment diagram. The API owns authorization checks and durable workflow transitions. Model outputs require review and separate signing. Browser video is peer-to-peer; the API does not mix everyone's media into one server recording. Production identity, remote-network relay validation and key recovery remain open. Development Grok calls review selected source/public research outside this patient-data flow; xAI is not an application runtime dependency.
 
-## Removed Areas
-
-- Static `demo/` has been removed.
-- Previous Leptos/Rust `web/` frontend has been removed.
-- Legacy script-based development paths were removed or retired.
-
-## How the Areas Relate
-
-- `api/` defines current HTTP behavior and integration points.
-- `core/` should provide reusable domain concepts independent of transport/storage.
-- Future frontend should consume backend APIs and align to role workspaces.
-- `infra/` contains environment and deployment references, but still needs production hardening.
-- `fhir/` and `jobs/` should remain isolated until clear activation milestones are met.
+See the [data model](data-model.md), [API contract](api-contract.md), [verification](../development/verification.md) and [delivery plan](../development/delivery-plan.md).

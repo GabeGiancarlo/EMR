@@ -1,0 +1,63 @@
+-- Empty by design: all organization and clinical records come from real user input.
+CREATE TABLE organizations (id uuid PRIMARY KEY, name text NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200), created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE facilities (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), name text NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200), timezone text NOT NULL DEFAULT 'America/New_York', active boolean NOT NULL DEFAULT true,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id));
+CREATE TABLE staff (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), facility_id uuid, name text NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200), email text NOT NULL,
+ role text NOT NULL CHECK(role IN ('admin','clinical_lead','clinician','billing','executive','support')), active boolean NOT NULL DEFAULT true,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(organization_id,email), FOREIGN KEY(facility_id,organization_id) REFERENCES facilities(id,organization_id));
+CREATE TABLE clients (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), facility_id uuid NOT NULL, first_name text NOT NULL CHECK(length(trim(first_name)) BETWEEN 1 AND 100), last_name text NOT NULL CHECK(length(trim(last_name)) BETWEEN 1 AND 100), preferred_name text NOT NULL DEFAULT '',
+ birth_date date NOT NULL CHECK(birth_date >= '1900-01-01'), email text NOT NULL DEFAULT '', phone text NOT NULL DEFAULT '', emergency_contact text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'intake' CHECK(status IN ('inquiry','intake','active','discharged')), primary_clinician_id uuid,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), FOREIGN KEY(facility_id,organization_id) REFERENCES facilities(id,organization_id), FOREIGN KEY(primary_clinician_id,organization_id) REFERENCES staff(id,organization_id));
+CREATE TABLE episodes (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, facility_id uuid NOT NULL, level_of_care text NOT NULL CHECK(level_of_care IN ('outpatient','iop','php','residential','detox')), start_date date NOT NULL, end_date date,
+ status text NOT NULL DEFAULT 'active' CHECK(status IN ('planned','active','discharged')), discharge_reason text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(id,client_id,organization_id),
+ CHECK(end_date IS NULL OR end_date >= start_date), CHECK(status <> 'discharged' OR (end_date IS NOT NULL AND length(trim(discharge_reason)) > 0)), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id), FOREIGN KEY(facility_id,organization_id) REFERENCES facilities(id,organization_id));
+CREATE TABLE sessions (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, episode_id uuid NOT NULL, clinician_id uuid NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL CHECK(ends_at > starts_at), kind text NOT NULL CHECK(kind IN ('individual','group','assessment','family','case_management')), status text NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','completed','cancelled','no_show')), location text NOT NULL DEFAULT '',
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(id,client_id,organization_id), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id), FOREIGN KEY(episode_id,client_id,organization_id) REFERENCES episodes(id,client_id,organization_id), FOREIGN KEY(clinician_id,organization_id) REFERENCES staff(id,organization_id));
+CREATE TABLE templates (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), name text NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200), kind text NOT NULL CHECK(kind IN ('intake','progress','assessment','discharge','consent')), description text NOT NULL DEFAULT '', fields jsonb NOT NULL DEFAULT '[]' CHECK(jsonb_typeof(fields)='array'), active boolean NOT NULL DEFAULT true,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id));
+CREATE TABLE notes (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, session_id uuid, template_id uuid, author_id uuid NOT NULL, title text NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200), body text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','signed')),
+ signed_at timestamptz, signed_by uuid, amends_note_id uuid, amendment_reason text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id),
+ CHECK((status='draft' AND signed_at IS NULL AND signed_by IS NULL) OR (status='signed' AND signed_at IS NOT NULL AND signed_by IS NOT NULL)), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id), FOREIGN KEY(session_id,client_id,organization_id) REFERENCES sessions(id,client_id,organization_id), FOREIGN KEY(template_id,organization_id) REFERENCES templates(id,organization_id), FOREIGN KEY(author_id,organization_id) REFERENCES staff(id,organization_id), FOREIGN KEY(signed_by,organization_id) REFERENCES staff(id,organization_id), FOREIGN KEY(amends_note_id,organization_id) REFERENCES notes(id,organization_id));
+CREATE TABLE tasks (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid, assignee_id uuid, title text NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200), description text NOT NULL DEFAULT '', due_date date, priority text NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high','urgent')), status text NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','done')),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id), FOREIGN KEY(assignee_id,organization_id) REFERENCES staff(id,organization_id));
+CREATE TABLE policies (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, payer_name text NOT NULL CHECK(length(trim(payer_name)) BETWEEN 1 AND 200), member_id text NOT NULL CHECK(length(trim(member_id)) > 0), group_number text NOT NULL DEFAULT '', effective_date date NOT NULL, termination_date date, status text NOT NULL DEFAULT 'active' CHECK(status IN ('active','inactive')),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(id,client_id,organization_id), CHECK(termination_date IS NULL OR termination_date >= effective_date), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id));
+CREATE TABLE authorizations (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, policy_id uuid NOT NULL, authorization_number text NOT NULL CHECK(length(trim(authorization_number)) > 0), service_code text NOT NULL CHECK(length(trim(service_code)) > 0), units_approved integer NOT NULL CHECK(units_approved > 0), starts_on date NOT NULL, ends_on date NOT NULL CHECK(ends_on >= starts_on), status text NOT NULL DEFAULT 'active' CHECK(status IN ('active','expired','exhausted')),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(id,client_id,organization_id), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id), FOREIGN KEY(policy_id,client_id,organization_id) REFERENCES policies(id,client_id,organization_id));
+CREATE TABLE claims (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, policy_id uuid NOT NULL, session_id uuid NOT NULL, authorization_id uuid, service_code text NOT NULL CHECK(length(trim(service_code)) > 0), diagnosis_code text NOT NULL CHECK(length(trim(diagnosis_code)) > 0), amount_cents bigint NOT NULL CHECK(amount_cents > 0), status text NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','ready','submitted','denied','paid')), external_reference text NOT NULL DEFAULT '', denial_reason text NOT NULL DEFAULT '',
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(organization_id,session_id,service_code), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id), FOREIGN KEY(policy_id,client_id,organization_id) REFERENCES policies(id,client_id,organization_id), FOREIGN KEY(session_id,client_id,organization_id) REFERENCES sessions(id,client_id,organization_id), FOREIGN KEY(authorization_id,client_id,organization_id) REFERENCES authorizations(id,client_id,organization_id));
+CREATE TABLE payments (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), claim_id uuid NOT NULL, amount_cents bigint NOT NULL CHECK(amount_cents > 0), received_on date NOT NULL, reference text NOT NULL CHECK(length(trim(reference)) > 0), source text NOT NULL CHECK(source IN ('payer','client','adjustment')),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), UNIQUE(organization_id,claim_id,reference), FOREIGN KEY(claim_id,organization_id) REFERENCES claims(id,organization_id));
+CREATE TABLE consents (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), client_id uuid NOT NULL, kind text NOT NULL CHECK(length(trim(kind)) > 0), scope text NOT NULL CHECK(length(trim(scope)) > 0), granted_on date NOT NULL, expires_on date, revoked_on date,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), CHECK(expires_on IS NULL OR expires_on >= granted_on), CHECK(revoked_on IS NULL OR revoked_on >= granted_on), FOREIGN KEY(client_id,organization_id) REFERENCES clients(id,organization_id));
+CREATE TABLE exceptions (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), staff_id uuid NOT NULL, resource text NOT NULL CHECK(resource IN ('clients','episodes','sessions','notes','tasks','policies','authorizations','claims','payments','templates','consents')), reason text NOT NULL CHECK(length(trim(reason)) >= 10), expires_at timestamptz NOT NULL, revoked boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(id,organization_id), FOREIGN KEY(staff_id,organization_id) REFERENCES staff(id,organization_id));
+CREATE TABLE audit_events (
+ id uuid PRIMARY KEY, organization_id uuid NOT NULL REFERENCES organizations(id), actor_id uuid NOT NULL, action text NOT NULL, resource text NOT NULL, record_id uuid, occurred_at timestamptz NOT NULL DEFAULT now(), FOREIGN KEY(actor_id,organization_id) REFERENCES staff(id,organization_id));
+CREATE INDEX clients_org ON clients(organization_id,status);
+CREATE INDEX episodes_client ON episodes(organization_id,client_id);
+CREATE INDEX sessions_calendar ON sessions(organization_id,starts_at);
+CREATE INDEX notes_client ON notes(organization_id,client_id,status);
+CREATE INDEX tasks_queue ON tasks(organization_id,assignee_id,status);
+CREATE INDEX claims_queue ON claims(organization_id,status);
+CREATE INDEX payments_claim ON payments(organization_id,claim_id);
+CREATE INDEX audit_org_time ON audit_events(organization_id,occurred_at DESC);
+CREATE FUNCTION protect_signed_note() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.status = 'signed' THEN RAISE EXCEPTION 'Signed clinical notes are immutable; create an amendment'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER immutable_signed_note BEFORE UPDATE OR DELETE ON notes FOR EACH ROW EXECUTE FUNCTION protect_signed_note();
+CREATE FUNCTION protect_append_only() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'This history is append only'; END $$;
+CREATE TRIGGER immutable_payments BEFORE UPDATE OR DELETE ON payments FOR EACH ROW EXECUTE FUNCTION protect_append_only();
+CREATE TRIGGER immutable_audit BEFORE UPDATE OR DELETE ON audit_events FOR EACH ROW EXECUTE FUNCTION protect_append_only();

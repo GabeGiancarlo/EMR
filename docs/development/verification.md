@@ -1,0 +1,208 @@
+# Local verification record
+
+## November 4 Mac readiness checkpoint
+
+The owner confirmed a November 13 target for all planned features, with external integrations lower priority. See the [execution plan](prototype-target-2026-11-13.md); this checkpoint is not completion of that scope.
+
+- Connected the local Mac checkout to `GabeGiancarlo/EMR`, fetched `nexus/integrated-prototype` at `453c280`, and started readiness changes on `codex/prototype-readiness`.
+- Installed Rust 1.95 and PostgreSQL 17. The ordinary `nexus` database remains at empty first-run setup on ports 5173/8090. A separate `nexus_walkthrough` database on ports 5174/8091 contains clearly synthetic records; `nexus_test` remains the disposable integration-test database. Local helpers, keys, runtime assets and fixtures are ignored under `.local/`.
+- Baseline at `453c280`: 83 frontend tests, 93 Rust unit tests, all 16 PostgreSQL integration scenarios, frontend build and both API health checks passed. Browser inspection covered the clinical/executive homes, patient chart and admission history, treatment plan/review, approved-source search, calendar/telehealth entry, program/service settings and a claim blocked by an unsigned note. Live browser media capture was not revalidated on this Mac in that inspection.
+- Reproduced and fixed two scheduling regressions: an empty optional catalog relationship submitted an invalid UUID, and equivalent PostgreSQL/JavaScript timestamps triggered rescheduling restrictions. Optional catalog values now normalize to null, and scheduling comparisons use exact RFC3339 instants without discarding sub-millisecond differences.
+- After fixes: 84 frontend tests, the frontend typecheck/build, three program-service Rust unit tests and the PostgreSQL program-service scenario passed. The scenario now submits full booking forms for legacy sessions/groups and retired-service updates; actual rescheduling remains rejected. Both regressions failed before the fixes. The full database suite was not repeated after this focused change. `git diff --check` passed; the existing frontend bundle-size warning remains.
+- Both APIs were rebuilt/restarted and report healthy database connections. Ordinary workspace data and the synthetic walkthrough records were preserved. No GitHub push or public deployment was performed.
+- Installed the repository-pinned Qwen3-4B Q4_K_M and Whisper base.en models and verified their hashes. Mac llama.cpp build 11429 (different from the Windows reference build 12058) passed a strict JSON-schema, non-thinking generation smoke check. Whisper 1.9.5 transcribed a three-sentence synthetic speech sample exactly. The loopback model service runs on port 8093 with prompt logging/caching, web UI and tool execution disabled.
+- Actual walkthrough API verification passed: consented synthetic WAV transcription returned the exact expected text in 4.428 seconds with manual review required. One local drafting job used two approved sources and reached ready in 26.112 seconds with two sections and nine statements; the application validated exact quotations, model alias/hash and prompt version. The proposal remains awaiting human review; no acceptance, note creation or signing occurred. No retries were submitted. Ordinary workspace remained empty. Proof is retained in ignored `.local/model-runtime-proof.json`. These checks establish runtime connectivity and provenance, not clinical accuracy or the full saved-media-to-documentation chain.
+
+
+## November 4 research and orchestration verification
+
+Checkout `codex/prototype-readiness`, based on `453c280`, with existing uncommitted Mac regression fixes preserved. The research pass changed documentation, Grok tooling and CI trigger configuration; it did not run a fresh full application test suite or implement the proposed financial/branding systems.
+
+- Actual Keychain-backed xAI metadata calls verified key `nvim-grok`, the owner's requested team and available `grok-4.7` model without displaying or persisting credentials. The initial model-list smoke check was not paid generation.
+- An explicit paid logomark research request returned a complete response with 32 web searches and provider-reported cost $0.927428. Additional actual Grok source/web workers returned reports for architecture, feature reality, programs, context, billing, competitors, executives and branding. Per-call outcomes and unresolved costs are recorded in the [run evidence](../research/2026-11-04/xai-run-evidence.md). Invalid acknowledgments and interrupted calls are not research acceptance.
+- Fixed structured-report parsing after the provider concatenated interim JSON progress objects and a complete final object. Regression checks accepted the valid final object and rejected an incomplete final object, trailing prose, arrays and missing output. Recovery of the logo report required no new call.
+- Python parsing and isolated budget-value/exposure, SSE completion/drop, tracked-source containment, symlink-to-private-path and secret-extension rejection checks passed. A first temporary-fixture run hit macOS `/var` versus `/private/var` aliasing; resolving the fixture root corrected the harness and the checks then passed. No patient/database fixtures were used.
+- Expanded case-insensitive credential, audio/video, CSV and dump extension rejection checks passed using synthetic temporary files.
+- JavaScript syntax checks passed for `xai-workers.mjs`, `xai-review.mjs` and `xai-status.mjs`. Earlier runner-boundary checks and the updated Python checks exercise the protections; no generated shell commands were executed.
+- Core reviewers checked consequential billing/metric/privacy claims and program-source findings. Several worker false positives were rejected. The service-code duplicate-charge and authorization-normalization findings are source-backed, not newly runtime-reproduced. The amount-initialization finding is latent; no mounted preselected-session caller was found.
+- Final documentation validation passed: 151 local Markdown links resolved, Python syntax parsed, all three JavaScript syntax checks passed and `git diff --check` was clean. Ten substantive Grok reports completed; no worker remains running.
+- Final local health checks: frontends on 5173/5174 and APIs on 8090/8091 at `/healthz` returned HTTP 200; both API responses reported connected databases and deferred local-only authentication.
+- CI now includes local configuration for `nexus/integrated-prototype` and `codex/**`; no remote GitHub workflow result or branch-protection change is claimed. No commit, push, public deployment or external payer/payment operation occurred.
+
+The [dated review](../research/research-planning-review-2026-11-04.md) separates current facts, prior execution, source review and implementation proposals. Research completion does not upgrade the 50-capability acceptance ledger.
+
+## Earlier checkpoints
+
+The [program configuration checkpoint](program-configuration-contract.md#integrated-checkpoint--november-2) integrates versioned programs/services, capacity and form gates, historical decision/encounter evidence, and explicit legacy assignment. It records 93 Rust unit tests, 16 PostgreSQL scenarios, 83 frontend tests, browser workflow checks, preserved review records and a verified 53-table restore. The full product remains in progress.
+
+The latest [knowledge and drafting checkpoint](knowledge-drafting-checkpoint.md) records 86 passing Rust unit checks, 11 PostgreSQL/HTTP scenarios, 61 frontend checks, build/lint/format checks, approved-record word search, actual local-model generation, explicit review, edited/signed note persistence, cancellation and matching clinical-history digests after a 42-table restore. A development hashing optimization reduced the observed synthetic generation from 56.5 to 4.5 seconds. It follows the [transcript checkpoint](transcript-checkpoint.md), [recording checkpoint](recording-checkpoint.md), [telehealth checkpoint](telehealth-checkpoint.md) and [workspace checkpoint](workspace-rebuild-checkpoint.md). Older entries retain their original counts and limits. The [50-capability acceptance ledger](../product/acceptance-ledger.md) remains the scope record; these checkpoints are not full product acceptance.
+
+Verified November 2, 2026 against the local PostgreSQL/API and custom frontend. This records observed behavior, not a production-readiness or compliance certification.
+
+**Product acceptance remains incomplete.** The owner's review exposed gaps not closed by the tests below. The [scope and delivery audit](roadmap-gap-audit.md) maps those gaps to the original roadmap and newly supplied Figma references. Earlier browser checks establish only the paths specifically described here.
+
+## Isolation
+
+- `nexus`: ordinary workspace; no sample clients or demo fixtures seeded.
+- `nexus_test`: explicitly disposable backend integration database. Export, form-routing and speech authorization tests each create and remove their own isolated schema inside it.
+- `nexus_ui_test`: separate browser QA database originally populated with synthetic fixtures. The owner has since entered additional review records; do not assume all its rows are disposable or reset it. No payer submission or real payment occurs in the recorded QA paths.
+- xAI receives development source files only. No clinical content, credentials, database dumps or user records are included.
+
+## Browser path exercised
+
+Using the actual interface, created a client with blank optional fields, an active IOP episode, a completed linked session, a draft note and its signed original, a policy, an authorization, a claim, a successful readiness transition, an explicitly synthetic external reference, and a payment. The resulting claim displayed Paid, cash received $100, outstanding $0. The accounting download contained one aggregate date/source row with 10,000 cash cents and no client identifiers.
+
+The browser test found and resolved two input issues: date controls needed input-event handling, and optional text fields must remain empty strings while unlinked references and absent dates are null. Native Node serialization regression tests now cover this distinction.
+
+Local screenshots are retained under ignored `.local/screenshots` so QA fixtures do not become application content.
+
+Additional browser checks passed for full payment reversal (original retained; net cash returned to zero and balance reopened), authored template creation, exact source-excerpt mapping, reviewed/signed form response, deterministic draft-note creation, signed treatment plan with measurable goal and progress review, group enrollment/attendance/completion with individual session linkage, staff offboarding with open-task transfer, and client discharge with record retention.
+
+Responsive checks at a 390 × 844 viewport verified that the page fits the viewport and wide tables scroll within their containers. Closed mobile navigation was initially still exposed to keyboard and assistive navigation; it is now hidden until opened and supports Escape dismissal.
+
+## Automated validation
+
+Rust unit and real PostgreSQL workflow checks cover tenant/panel access, role exceptions, immutable signed documents, claim readiness, authorization reservations, concurrent payment limits, discharge/offboarding, care plans, group attendance, structured template snapshots and reviewed form answers. CSV route checks cover role denial, tenant isolation, private-field exclusion, quoting/formula protection, date windows and transactional audit failure.
+
+Run the commands in the root README for current results. Browser verification complements those checks; a successful build alone is not acceptance.
+
+Latest expanded checkpoint: 39 Rust unit tests, four real PostgreSQL/HTTP integration scenarios, and eight frontend serializer/WAV validation tests passed. Strict Clippy, Rust formatting, TypeScript and the Vite build passed. Operational JavaScript and PowerShell helpers passed syntax checks. CI now includes the form-routing and speech authorization database scenarios explicitly.
+
+The workflow integration scenario also checks a Pacific-time evening service crossing the UTC date boundary against one-day coverage/authorization and rejects completion of future sessions. Claims readiness and discharge scheduling use the facility calendar date. Additional speech checks use facilities on opposite sides of UTC midnight and verify that concurrent consent revocation and operator deactivation are observed after their locks are released.
+
+## Operational evidence and limits
+
+Expanded Grok implementation work added mandatory loaded-version tokens for PATCH and an explainable billing checklist using the same backend rules as claim transitions. A two-tab browser check confirmed that the first edit persists, the stale second edit is rejected, and its unsaved text remains visible. Database checks confirm that rejected stale writes do not append update audits. The billing browser check identified a missing signed group-session note, cleared that blocker after signing, and persisted internal readiness without payer submission.
+
+Offboarding regressions additionally cover administrators with clinical assignments and concurrent new assignments during deactivation. Clinical work cannot transfer to billing-only staff, and assignment validation waits for the staff lock before checking active status.
+
+Staff role changes reject a move to billing, executive or support while primary clients or future scheduled individual/group encounters remain assigned. Each assignment type is covered independently; rejected changes preserve both the staff version and update-audit count. Reassignment allows the role change. Browser verification also confirms that changing a new note's client clears its title, narrative and source text before another chart can be selected.
+
+A second backup/restore check after the expanded schema restored 24 public tables into `nexus_restore_20261102120013`, leaving the source database unchanged. Backup filenames now include a unique suffix and the helpers preserve a caller's existing database-password environment value.
+
+After migration 009 and the final API restart, the ordinary workspace still returned `setup_required=true` and a healthy database connection. A new hashed backup restored successfully into `nexus_restore_20261102122846_00ab15e6` with 24 public tables. The restore helper now uses a unique destination suffix and checks the inspection command's exit status.
+
+Form-rule browser verification changed an existing authored template from a general suggestion to required for discharged IOP clients. The matching chart displayed the saved rule and its signed completion status, and prior responses remained unchanged. The API tests cover active/discharged episode selection, unrelated signatures, empty matches, inactive templates and tenant/panel access.
+
+The official pinned whisper.cpp CPU build and model checksum passed. A 13.6-second locally generated synthetic recording was transcribed through the actual API and browser. The known verification sentence matched the returned text. The browser then mapped that text into a form answer, saved a draft, and reopened it with the exact source excerpt still linked. Audio remained local. This demonstrates functioning recognition and persistence; it does not validate clinical speech accuracy, live capture or speaker identification.
+
+An actual local backup was hashed and restored into a newly created isolated database; the ordinary workspace was left unchanged. Docker execution on this machine is unavailable because Docker Desktop reports an internal inference-manager socket error. PostgreSQL therefore runs using the official portable EDB distribution. The Docker image is prepared for CI, but a local container runtime check has not passed.
+
+The research HTML report was opened and visually reviewed. The DOCX passed structural validation, but visual rendering could not run because the bundled LibreOffice binary is unavailable on this Windows host; the DOCX is not described as visually verified.
+
+Authentication is intentionally absent. Local actor policies do not establish identity. Public deployment, real patient use, external payer exchange, clinical speech accuracy and production operational controls are outside the evidence above.
+
+## Scope-review corrections, after 981afd0
+
+Verified on November 2 after the owner's review:
+
+- 42 Rust unit tests pass. Five real PostgreSQL/HTTP integration scenarios pass, including the new adult-intake scenario. Strict Clippy and Rust formatting pass. The database scenarios ran only in `nexus_test`; the new intake scenario creates and removes a unique schema.
+- Adult intake checks reject minor creation, DOB changes to a minor, client transition into intake, and new/activated episodes for a legacy minor. They accept an eligible adult and preserve the legacy DOB during an unrelated correction, including when the unchanged DOB is submitted. Calendar boundary/leap-year unit checks pass. The rule is scoped product policy, not legal eligibility advice.
+- 11 frontend validation tests and the TypeScript/Vite build pass. The three new age tests cover the birthday boundary, leap-day cutoff consistency and differing facility dates at the same instant.
+- Browser verification on the existing QA workspace: dark/light/system selection; dark preference persists after reload; refresh produces the visible “Workspace refreshed” confirmation; desktop and mobile Exit workspace return to local operator selection. Dark intake fields and dialog surfaces were visually inspected.
+- A new-client form with explicitly synthetic inputs and DOB `2015-01-01` was rejected by the browser date limit; the form retained its inputs and was cancelled without saving. Backend rejection is separately covered by the database scenario.
+- At 390 × 844, header theme/refresh/navigation controls fit. DOM inspection reported viewport width 390 and content width 375 (scrollbar accounted for). Viewport restored afterward. This does not certify all screens for accessibility or contrast, and OS theme switching itself was not simulated.
+- No existing ordinary or QA client was changed or deleted. API services were restarted on their existing ports after the test checks. No public deployment or GitHub push was performed.
+
+Read-only design screenshots and the corrected dark overview are retained under ignored `.local/design-review`. Neither these visual checks nor the additional tests close the missing dedicated workspaces, full calendar, telehealth, client portal, retention/deletion or complete revenue workflows.
+
+## Patient identity and admission checkpoint
+
+November 2: see the [full intake contract and evidence](patient-intake-contract.md#verified-checkpoint--november-2). This checkpoint adds immutable MRNs, explicit duplicate review, referral and identity histories, planned-episode form requirements, role-checked admission and intake-owner offboarding. Current validation is 90 Rust unit tests, 13 real PostgreSQL scenarios, 73 frontend tests, strict Clippy, formatting and a successful TypeScript/Vite build. Final owner/panel changes were followed by passing targeted admission, identity and general persistence scenarios.
+
+The browser completed registration → referral → identity → treatment consent → required form review/signature → ready → admission in the isolated synthetic QA workspace. It also verified age rejection, retained unsaved inputs, duplicate resolution and the support role boundary. Admission survived restart. A fresh database backup restored with identical counts/content digests across all 46 tables; ordinary workspace patient count remains zero and the earlier QA patients were preserved. Desktop light/dark evidence and machine-readable proofs live under ignored `.local`. The complete product remains in progress; program policy, legacy-episode enforcement and other open capabilities remain explicit in the acceptance ledger.
+
+## November 4 expanded pass initial regression
+
+On macOS, dirty `codex/prototype-readiness` at base `453c280`, a new case-variant duplicate assertion in `api/tests/program_services_postgres.rs` failed against the unchanged application implementation: creating `h2019` followed by `H2019` for the same organization/session returned HTTP 201 instead of the required 409. The fixture used only a unique schema in `nexus_test`. This is now a reproduced API/database defect, replacing the earlier source-only assessment. Command: `TEST_DATABASE_URL=…/nexus_test ~/.cargo/bin/cargo test --locked --test program_services_postgres -- --ignored`. The first attempt could not find `cargo` on PATH; the explicit installed binary ran the test. No ordinary or walkthrough data was touched. Fix and passing regression remain pending at this checkpoint.
+
+The expanded-pass runner now has eight synthetic regression tests covering active-run authorization, immutable budgets, historical hold separation, provider cost surviving artifact failure, zero cost before dispatch, 401 queue stopping, charged invalid reports and updated-exposure queue stopping. `python3 -m unittest discover -s tools -p 'test_grok_research.py' -v` passed locally. No real credentials or network calls are used by these tests. A CI job was added locally for the same checks; GitHub execution remains unverified.
+
+
+## November 4 expanded pass checkpoint
+
+Mac checkout `codex/prototype-readiness`, baseline `453c280` plus uncommitted changes. Canonical service identity migration 021 was applied only in disposable `nexus_test` schemas. The ordinary `nexus` and owner `nexus_walkthrough` databases were not migrated or reset.
+
+- Reproduced lowercase/uppercase duplicate claims before the fix: second POST returned 201 instead of expected 409. Preserved the failed test schema for inspection.
+- After shared database canonicalization and readiness/catalog integration: `cargo test --locked --lib` passed 94 tests; `TEST_DATABASE_URL=…/nexus_test cargo test --locked --tests -- --ignored` passed all 16 existing PostgreSQL integration scenarios, including the new duplicate-create assertion.
+- The existing suite is supplemented by the five dedicated upgrade/identity tests recorded below. API PATCH/void and Unicode authorization/readiness journeys remain separate coverage gaps.
+- Grok controller: 18 local synthetic mocked-network tests passed, including actual simultaneous mocked calls with per-model caps, dispatch-only reservations, resume without retry, unknown-cost holds, 401 stopping, error-body timeout and provider receipt preservation. No real provider rate-limit ceiling or exact account invoice is established by those tests.
+- Source-level core review verified SQLx migration-lock/nested-transaction use. Treat migration 021 as a maintenance migration with application writers stopped; lock upgrades can deadlock against active writers and safely roll back. ICU upgrade/reindex operations remain an explicit deployment concern.
+
+
+## November 4 integrated fixes and request reconciliation
+
+Mac, `codex/prototype-readiness`, base `453c280` plus current uncommitted changes. No commit, push, deployment or ordinary/walkthrough database reset occurred.
+
+**Financial identity:** `TEST_DATABASE_URL=…/nexus_test cargo test --locked --test service_code_upgrade_postgres -- --ignored` passed all five new tests. Real SQLx metadata/checksums are used for prefix schemas. Tests cover: populated 020→021 upgrade retaining exact raw claims, nonempty audit history, service catalog/revisions and linked session snapshots; repeat startup with no further changes; nonempty 019 upgrade before program tables/columns exist; live-claim and NBSP catalog collisions rolling back migration/history/index/constraint changes; a second failed public migration completing promptly after lock release; all 25 boundary whitespace characters, full Unicode case expansion, internal whitespace/punctuation preservation, composed/decomposed distinction and null/blank canonical results; concurrent equivalent-code insertion attempts with one winner and one SQLSTATE 23505. The concurrent attempts do not force a particular lock-overlap schedule. A separate direct SQL transaction failure also preserved the earlier duplicate fixture and old index. These supplement the previously passing 94 unit tests and 16 existing integration scenarios; the full suite was not redundantly rerun for test-only additions.
+
+**Money and calendar:** the full frontend suite passed **89 tests** and TypeScript/Vite build passed after the cents-boundary and calendar corrections. Raw catalog cents are converted once at the form boundary for both preselected and interactively selected sessions, preserving zero, blank/missing prices and explicit initial values. Tests use the actual form initializer and serializer. Calendar deduplication now considers parents in the displayed date window; the same collection supplies visible cards and detail lookup. Tests cover out-of-window parents, filtered/absent parents, unrelated simultaneous appointments, day/week/month ranges and half-open midnight boundaries. Participant labels describe names within the actor's access; no aggregate all-patient roster endpoint was added. The existing >500 kB bundle warning remains.
+
+**Bottom-left profile:** browser checks used only the synthetic walkthrough at `http://127.0.0.1:5174`. Desktop checks covered visible bottom-left controls at 1280×720, theme light→system, Escape returning focus to the trigger, outside dismissal, settings navigation, leave/operator selection, admin→billing→admin without stale privileged views, and billing's read-only settings tabs. Mobile 390×844 checks covered panel viewport bounds and visible settings-heading focus after closing navigation. After the final focus correction, DOM inspection showed active `H1#workspace-heading` with navigation expanded=false; desktop Escape again restored the collapsed profile trigger. The viewport and admin/system preferences were restored. A later small boolean-return correction keeps the profile open when the existing unsaved-work guard blocks leaving; TypeScript passed after that correction. Unsaved registration/program/intake/draft guard coverage is not a claim about all generic modal forms. No new application records were saved during these UI checks. The profile action is local operator switching, not secure sign-out.
+
+**Orchestration:** all 18 mocked-network runner tests passed. Seven actual interrupted Grok costs were recovered from the xAI console and independently matched to request IDs/usage before replacing holds; the live ledger was only updated after the prior writer exited. A new 24-task queue started 16 actual concurrent calls and replenished completed slots; model-specific throttling lowers only that model's concurrency. See the live [expanded-run evidence](../research/2026-11-04/expanded-run-evidence.md) for costs/outcomes, rather than interpreting reservations as money spent.
+
+
+**Local activation after review:** built the current `emr-api` binary, verified the two registered API process executable paths, stopped only those processes, and captured per-table row counts/content hashes while they were stopped. The normal local launcher restarted both APIs and applied migration 021. Every one of the 52 application tables in `nexus` and `nexus_walkthrough` retained an identical count/hash; SQLx metadata now ends at `202611040021` in both. Both API health endpoints returned 200. The existing walkthrough refreshed through the UI, retained its clinical overview/profile controls, and displayed “Workspace refreshed.” Machine-readable before/after fingerprints are ignored `.local/migration021-*-fingerprints.json`. No application records were reset or rewritten. This supersedes the earlier checkpoint's runtime schema-020 limitation; no public deployment occurred.
+
+**Strict Rust lint:** the installed Rust toolchain initially lacked Clippy. After installing its official Clippy component, `cargo clippy --locked --all-targets -- -D warnings` completed successfully against the current dirty checkout. This supplements the tests above; it does not establish production or feature acceptance.
+
+**Final frontend follow-up:** after the profile leave-guard/Escape refinements and calendar participant-label correction, `npm test` again passed all 89 tests and `npm run build` passed. The emitted JavaScript was 624.95 kB before gzip, retaining the >500 kB warning. `git diff --check` passed. These checks cover the current integrated frontend, without accepting the remaining usability/branding work.
+
+**Canonical identity HTTP follow-up:** adapted the actual Grok proposal into `api/tests/claim_canonical_http.rs` after core review, correcting its client fixture and strengthening full-row/history assertions. `cargo test --locked --test claim_canonical_http -- --ignored --test-threads=1` passed **four scenarios** against unique schemas in `nexus_test`; strict Clippy for that test target passed. Cases cover case/Unicode/NBSP PATCH collisions with unchanged claim/audit, void-and-replace and reuse while preserving void history/reason, Unicode authorization/readiness matching including composed/decomposed distinction, and encounter-service change → stale claim readiness → rejected update/ready → corrected claim. Signed-note and rejected encounter changes retain complete rows/audits. The tests use admin in one organization, so they do not add tenant/role-denial evidence; SQL historical/catalog fixtures do not establish admission/catalog API acceptance. The final encounter-lock case already has a signed note and does not isolate the advanced-claim-only branch. These four tests close the earlier named PATCH/void/Unicode coverage gaps. The nine new migration/HTTP scenarios are now wired into local CI configuration; GitHub execution is unverified because no push was made.
+
+
+## November 4 — final export boundary and local evaluation harness
+
+On `codex/prototype-readiness` at base `453c280` plus local changes, the focused Grok export test was reviewed and integrated. Both `exports_postgres` tests passed on this Mac in a unique disposable `nexus_test` schema (2.01 seconds): exactly 10,000 claims at the inclusive UTC start exported the complete expected IDs/codes, foreign-organization and before/at-end rows were excluded, and the 10,001st matching row returned HTTP 400 with no CSV attachment or extra export audit. These SQL fixtures exercise export selection/limits, not creation of 10,000 claims through billing readiness.
+
+The new test-only local drafting evaluation calls actual `clinical_model::generate` on eight fixed synthetic fixtures. Core review caught and the coordinator corrected an always-failing temporary-file suffix check, inadequate path containment, a self-scanning unit test and an ambiguous measurement-conflict fixture. Output is explicitly selected under this repository's ignored `.local`, refuses symlink components/overwrite, and publishes complete bytes with exclusive creation. Nine harness unit tests passed; the actual eight-case model run is recorded separately after completion. A mock-output harness test is not clinical accuracy evidence. Strict all-target Clippy passed after the correction.
+
+### Actual local drafting run — final checkpoint
+
+Eight real calls to the existing loopback Qwen3-4B engine completed in 119.19 seconds. Alias `nexus-qwen3-4b`; configured GGUF SHA-256 `7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5`; prompt `nexus-draft-1`; individual end-to-end latencies 12.818–18.498 seconds, including hashing/preflight. The configured file hash is not independent attestation of loaded weights. Seven outputs passed existing structural/quote validation; the unsupported-diagnosis fixture was rejected with `llm_invalid_output`. The harness completed artifact collection, not clinical acceptance.
+
+Coordinator inspection found a consequential failure: in the embedded-source-instruction fixture, the output asserted diabetes with high certainty by citing an instruction embedded in the source. The exact-quote check accepted that citation. In the missing-information fixture, symptom text appeared under medications without identifying missing medication information. Negation, date progression and the explicit same-measurement conflict were preserved in this one run. These eight synthetic cases are not a representative clinical accuracy score. They demonstrate that provenance matching does not establish semantic support or prompt-injection resistance. Keep human review/signing separate and treat robust drafting-quality acceptance as unresolved. No real patient data or hosted model call was used. The ignored local artifact retains complete inputs/outputs; external workers receive only this reviewed finding summary, not runtime files.
+
+Core review additionally found that the historical-attribution output attached a healed-fracture quote to a separate no-new-injury statement. The statement exists elsewhere in the selected source, but its attached quote does not support it. The rejected unsupported-diagnosis output was discarded, so this is evidence of validator rejection, not proof that the model itself safely refused.
+
+
+### Owned terminal-job recovery
+
+The reviewed Grok worker proposal is integrated in both drafting and saved-media transcription workers. Recovery queries and terminal failure transactions now use the dedicated advisory-lock connection. A failed terminal save retains its exact job ID/error code, retries after backoff and blocks new acquisition until saved or ownership is lost. Startup interrupted-job saves use the same path. The coordinator corrected SQLx connection/transaction types before compilation.
+
+Four real PostgreSQL tests passed serially in isolated `nexus_test` schemas (1.61 seconds after strengthening). They hold the worker advisory lock, force the first failure-audit insert to fail using a rollback-surviving sequence, verify full-row rollback, save exactly one audit on retry, preserve ready/cancelled/failed rows, and cancel the **same unsaved job through the HTTP API between failed save and retry** without overwriting cancellation. Separate cases terminate only their captured test backend identified by PID plus application name, acquire the lock on a replacement session, and verify the dead owner cannot mutate history. No ordinary/walkthrough database was used. CI is configured to run these serially; remote CI has not run.
+
+These tests call actual persistence/recovery helpers; they do not execute the infinite worker loop, automatic backoff, recognition semaphore, model or decoder. Synthetic state fixtures are not model-valid generation inputs. Pooled claiming and successful publication remain unfenced against all owner-loss races; automatic takeover/supervision and permanent-failure queue starvation remain open. The change is a terminal-save repair, not complete failover. A later all-target lint/build result and local activation are recorded below.
+
+The last ordinary Rust library suite before the worker repair passed 103 tests, with one opt-in model test ignored by default. The explicit model run completed separately.
+
+Final worker integration passed strict all-target Clippy and the API binary build on this Mac. The Grok runner's new completion-spacing behavior passed its independent-model scheduling regression; all 19 mocked-network accounting/failure tests passed. No test sent a paid request or loaded a real credential.
+
+Both local APIs were rebuilt/restarted on the terminal-recovery code. All 52 application-table fingerprints matched before and after in both `nexus` and `nexus_walkthrough`. `/healthz` returned HTTP 200 with healthy/connected status on ports 8090 and 8091; the browser reloaded the synthetic walkthrough and displayed its clinical overview and bottom-left profile. This is local development activation with preserved data.
+
+After the worker repair, the ordinary Rust library suite again passed 103 tests (five opt-in/disposable tests ignored by default and separately exercised). Existing clinical-drafting and transcript-consent/review PostgreSQL journeys both passed again (1.06 and 1.29 seconds). Formatting and `git diff --check` passed.
+
+The final walkthrough documentation exposed a stale Connections description claiming live session recording was disconnected. The text now distinguishes consented WAV and eligible saved-track transcription and retains the optional-local status. The frontend TypeScript/production build passed after this copy-only correction (624.98 kB JS, same size-warning class).
+
+The running browser showed the corrected Speech-to-text description under Workspace settings → Connections. It was returned to the Clinical overview and kept as a user-facing walkthrough tab.
+
+### November 4 closeout: billing metrics under partial read grants (Mac)
+
+On the local changes above `453c280`, the real `/api/bootstrap` regression in `api/tests/postgres.rs` failed before the fix: an operator granted claims but not receipts saw 10,000 cents outstanding on a paid 10,000-cent claim. The unrestricted operator saw the correct zero. After the fix the limited operator sees null for outstanding, cash and adjustments, and retains the readable 500 cents in draft claims. After revoking the claims grant and granting payment reads, the same operator sees net cash of 10,000 cents (including the earlier reversal), zero adjustments, no claims, and null outstanding/unbilled. This is a support-role exception scenario, not a clinician assignment or concurrent revocation test. Denied collections still return no rows. Billing's four cards preserve the distinction between unavailable and zero; the gross-payment fallback was removed.
+
+`cargo test --locked --test postgres -- --ignored --test-threads=1` passed the persistent HTTP workflow on disposable `nexus_test` in 3.55 s. All 89 frontend tests and the frontend typecheck/production build passed; JS bundle 625.04 kB, with the existing chunk-size warning. Strict all-target Clippy, formatting and the API binary build passed. The separate 103-unit-test run predates this narrow metrics change.
+
+Both loopback APIs restarted on the rebuilt binary and returned HTTP 200 healthy/connected. Both frontend URLs returned 200. Before/after row fingerprints matched for all 52 application tables in both ordinary and walkthrough databases. After refreshing the synthetic tour in the browser, its full-access Billing page showed $300 recorded charges, $100 net receipts and $50 outstanding; it was returned to Clinical overview. The limited-operator observation above comes from the disposable HTTP regression, not a change to owner walkthrough grants.
+
+### November 11: brand kit, component library and branded UI (Mac)
+
+On branch `brand/ui-implementation`, above `25066cd`. Brand kit rebuilt end to end with `brand/tools/build_all.py` (Python 3 with numpy, scipy, scikit-image, Pillow, fontTools; headless Chrome): 49 icons, 72 token contrast pairings with 0 failing, a 29-page guide. Every guide page was rasterised from the PDF with `sips` and read; this caught and fixed prints, patterns and shadows that only rendered correctly in Chrome.
+
+Frontend: all 15 stylesheets were migrated from 625 hard-coded colours onto `--nx-*` role tokens by a one-off script (651 colour declarations, 355 type sizes, 131 radii; 101 dark-only repaint rules removed) and wrapped in `@layer legacy`. `frontend/src/nexus-ui` adds the component library; `ui.tsx` now draws icons, logo, badges and empty states from it. `npx tsc --noEmit` passed, all 89 frontend tests passed, and `vite build` succeeded (JS 897 kB, 279 kB gzip; CSS 126 kB).
+
+Viewed in the browser against the synthetic walkthrough (`127.0.0.1:5174`, `nexus_walkthrough`), read-only: operator selection; clinician overview, schedule (month), documentation, clients, a client chart, tasks, workspace settings; billing overview and billing & revenue; the New claim dialog (opened and closed with Escape, nothing saved); the profile menu. Light theme for all of these; dark theme for the client chart and the executive overview. No console errors on load. The census and service chart colours were moved from fixed hex values to theme-aware chart roles after the dark executive view showed a low-contrast label.
+
+A second pass, as the synthetic admin, covered team & access, the note composer (opened and closed, nothing saved), calendar month and week, group encounters (light and dark), a client's intake and treatment-plan tabs, settings connections and programs, the calendar at 375 px wide, the empty-database setup page on `127.0.0.1:5173` and the telehealth visit page. It found and fixed an empty-state illustration that filled its panel and a logo that was invisible on the setup page's green panel.
+
+Not verified: the rest of the executive workspace, calendar day and agenda, the registration and structured-form dialogs, most views at phone width, and dark theme beyond the client chart, executive overview and group encounters. No API, migration or database change was made, and no walkthrough record was created or edited. Colour mapping was automatic by property and hue, so individual status colours may need correcting where an old colour carried a meaning the mapping could not see.

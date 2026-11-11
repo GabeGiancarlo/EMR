@@ -1,42 +1,7 @@
-# Database Strategy
+# Database strategy
 
-## Direction
+PostgreSQL is the implemented persistence layer. SQLx migrations in root `migrations/` run on API startup. Local PostgreSQL 17 can run through `compose.local.yml`; earlier Windows evidence used ignored portable EDB, and the November 4 Mac uses a native installation with its cluster under `.local/postgres`. Schema changes ship with application changes and relevant regression tests.
 
-Nexus is moving toward Postgres with explicit migration discipline (SQLx planned).
+The [data model](data-model.md) describes actual clinical, financial and operational relationships. Organization-qualified foreign keys prevent cross-tenant links. Amounts use integer cents. Signed originals and ledger entries have guarded correction paths. Transactions and row locks protect authorization reservations, payment limits and state transitions. Facility timezone defines a session's service date for coverage and authorization checks.
 
-## Why Postgres
-
-Recovery EMR and billing workflows are relational and require strong consistency for:
-
-- client and episode records
-- billing entities and lifecycle transitions
-- authorization and claim state tracking
-- audit events and reporting
-
-## Migration Approach
-
-- Keep schema changes in versioned migrations.
-- Require migration tests for non-trivial schema changes.
-- Coordinate application-layer updates with schema updates in the same milestone.
-
-## Likely Early Tables
-
-These are planned starting points, not guaranteed current implementation:
-
-- organizations
-- facilities
-- users
-- roles
-- clients
-- episodes_of_care
-- audit_events
-- tasks
-- sessions
-- clinical_notes
-- insurance_policies
-- authorizations
-- claims
-
-## Current Gap
-
-The repo currently has infrastructure and SQL reference material, but the complete production schema and migration flow are still in progress.
+The ordinary `nexus` database starts empty. Backend tests use explicitly disposable `nexus_test`. Earlier Windows browser work used `nexus_ui_test`, which later contained owner review records and must not be reset as disposable. The November 4 Mac synthetic walkthrough uses separate `nexus_walkthrough`. Check [current context](../PROJECT_CONTEXT.md) and the actual launcher before operating any database. Backup and restore helpers retain local artifacts under ignored `.local/backups`. Encrypted production backup, retention and recovery operations remain deployment work.

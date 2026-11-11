@@ -1,4 +1,4 @@
-# Nexus backend-focused development commands
+# Optional POSIX helpers. Windows contributors should use tools/start-api.ps1.
 
 EMR_PORT := "8090"
 
@@ -7,15 +7,13 @@ default:
 
 dev:
     @echo "Starting Nexus API on port {{EMR_PORT}}"
-    PORT={{EMR_PORT}} cargo run -p emr-api
+    NEXUS_LOCAL_DEV=1 HOST=127.0.0.1 PORT={{EMR_PORT}} cargo run -p emr-api
 
 api:
     @just dev
 
 dev-stop:
-    @echo "Stopping local Nexus API processes"
-    @pkill -f "emr-api" || true
-    @pkill -f "cargo run -p emr-api" || true
+    @echo "Press Ctrl+C in the terminal that started this API. Other checkouts are not stopped."
 
 open-health:
     @echo "Opening health endpoint"
@@ -25,8 +23,8 @@ api-test:
     @echo "Testing /healthz"
     @curl -s "http://localhost:{{EMR_PORT}}/healthz" | jq '.'
     @echo ""
-    @echo "Testing /api/patients"
-    @curl -s "http://localhost:{{EMR_PORT}}/api/patients" | jq '.'
+    @echo "Testing /api/bootstrap"
+    @curl -fsS "http://localhost:{{EMR_PORT}}/api/bootstrap" | jq '.'
 
 fmt:
     cargo fmt --all
