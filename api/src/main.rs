@@ -8,10 +8,22 @@ use emr_api::{
     AppState,
 };
 use sqlx::postgres::PgPoolOptions;
-use std::{io, sync::Arc};
+use std::{io, process::ExitCode, sync::Arc};
 
+/// Print a startup failure as one plain sentence, the way it should read in a
+/// container log, instead of the debug form of an error.
 #[actix_web::main]
-async fn main() -> io::Result<()> {
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Nexus API did not start: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> io::Result<()> {
     dotenvy::dotenv().ok();
     env_logger::init();
     let config = ServerConfig::from_env().map_err(io::Error::other)?;

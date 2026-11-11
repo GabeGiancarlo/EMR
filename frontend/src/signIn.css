@@ -1,0 +1,52 @@
+/* Sign-in and access screens. Brand role tokens only, so both themes follow. */
+.sign-in-card {
+  width: min(100%, 500px);
+  text-align: left;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+}
+.sign-in-card h1 {
+  margin: 16px 0 10px;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--nx-text);
+}
+.sign-in-card p {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--nx-text-secondary);
+}
+.sign-in-card p strong {
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
+}
+.sign-in-card .error-banner {
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+.sign-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sign-in-card .sign-in-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 24px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--nx-border);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--nx-text-secondary);
+}
+.sign-in-notice .nx-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nx-info);
+}
+@media (max-width: 520px) {
+  .sign-in-card h1 { font-size: 22px; }
+  .sign-in-actions > .nx-button { flex: 1 1 100%; }
+}
