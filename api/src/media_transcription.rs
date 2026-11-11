@@ -411,9 +411,11 @@ fn wav_info(bytes: &[u8]) -> std::result::Result<WavInfo, ()> {
         return Err(());
     }
     let duration_ms = duration_ms_from_samples((data.len() / 2) as u64).ok_or(())?;
-    let silent = data
-        .chunks_exact(2)
-        .all(|c| i16::from_le_bytes([c[0], c[1]]).saturating_abs() <= NEAR_ZERO);
+    // `data.len()` is even (checked above), so there is no remainder to consider.
+    let (samples, _) = data.as_chunks::<2>();
+    let silent = samples
+        .iter()
+        .all(|c| i16::from_le_bytes(*c).saturating_abs() <= NEAR_ZERO);
     Ok(WavInfo {
         duration_ms,
         silent,
