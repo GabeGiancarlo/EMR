@@ -114,7 +114,7 @@ jobs:
       - name: PostgreSQL approved patient knowledge integration
         run: cargo test --locked --test knowledge_postgres -- --ignored
       - name: PostgreSQL owned worker terminal recovery
-        run: cargo test --locked --lib worker::tests:: -- --ignored --test-threads=1
+        run: "cargo test --locked --lib worker::tests:: -- --ignored --test-threads=1"
       - name: PostgreSQL clinical drafting and review integration
         run: cargo test --locked --test drafting_postgres -- --ignored
       - name: PostgreSQL recording consent and encrypted media integration
