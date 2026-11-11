@@ -1,3 +1,5 @@
+/* nexus-migrated */
+@layer legacy {
 .client-registration {
   color: var(--ink);
   min-width: 0;
@@ -5,7 +7,7 @@
 
 .client-registration fieldset {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--nx-radius-panel);
   margin: 0 0 16px;
   min-width: 0;
   padding: 12px 14px 16px;
@@ -15,7 +17,7 @@
 
 .client-registration legend {
   padding: 0 6px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 750;
   color: var(--ink);
 }
@@ -24,7 +26,7 @@
 .registration-status {
   margin: 4px 0 12px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -53,7 +55,7 @@
   align-items: center;
   justify-content: space-between;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--nx-radius-panel);
   padding: 12px;
   background: var(--cream);
   color: var(--ink);
@@ -74,7 +76,7 @@
 
 .match-identity span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .match-card .button {
@@ -85,11 +87,11 @@
 
 .registration-block {
   margin: 12px 0 0;
-  border: 1px solid #eecfc8;
-  border-radius: 8px;
+  border: 1px solid var(--nx-danger);
+  border-radius: var(--nx-radius-panel);
   padding: 12px 14px;
-  background: #fff4ef;
-  color: #8a3f32;
+  background: var(--nx-page);
+  color: var(--nx-danger);
   line-height: 1.6;
 }
 
@@ -104,18 +106,6 @@
 .registration-confirm p {
   flex: 1 1 100%;
   color: var(--ink);
-}
-
-html[data-resolved-theme="dark"] .registration-block {
-  background: #3d2422;
-  border-color: #c47b70;
-  color: #ffd8d2;
-}
-
-html[data-resolved-theme="dark"] .match-card {
-  background: #182420;
-  border-color: #3a524b;
-  color: #e7f1eb;
 }
 
 @media (max-width: 760px) {
@@ -140,4 +130,5 @@ html[data-resolved-theme="dark"] .match-card {
   .registration-block {
     border: 1px solid ButtonText;
   }
+}
 }

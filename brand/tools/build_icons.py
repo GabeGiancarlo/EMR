@@ -337,6 +337,21 @@ def encounter():
     return (a & ~grow(b, 1.4)) | b
 
 
+def menu():
+    return cap(4.2, 6.4, 19.8, 6.4, 2.7) | cap(4.2, 12, 19.8, 12, 2.7) | cap(4.2, 17.6, 19.8, 17.6, 2.7)
+
+
+def link():
+    a = cap(6.4, 17.6, 10.6, 13.4, 6.6) & ~cap(6.4, 17.6, 10.6, 13.4, 2.0)
+    b = cap(13.4, 10.6, 17.6, 6.4, 6.6) & ~cap(13.4, 10.6, 17.6, 6.4, 2.0)
+    return a | b | cap(9.4, 14.6, 14.6, 9.4, 2.3)
+
+
+def shield():
+    m = grow(poly([(12, 3.6), (19.2, 6.4), (19.2, 11.4), (12, 20.6), (4.8, 11.4), (4.8, 6.4)]), 1.1)
+    return m & ~line([(8.3, 11.4), (11.0, 14.1), (15.8, 8.7)], 2.0)
+
+
 ICONS = {
     "overview": overview, "clients": clients, "group": group, "schedule": schedule,
     "documentation": documentation, "tasks": tasks, "billing": billing, "reporting": reporting,
@@ -348,7 +363,7 @@ ICONS = {
     "success": success, "warning": warning, "error": error, "info": info,
     "chevron-down": chevron("down"), "chevron-up": chevron("up"), "chevron-left": chevron("left"),
     "chevron-right": chevron("right"), "arrow-left": arrow_left, "arrow-right": arrow_right,
-    "sun": sun, "moon": moon, "logout": logout,
+    "sun": sun, "moon": moon, "logout": logout, "menu": menu, "link": link, "shield": shield,
 }
 
 
