@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub async fn health(state: web::Data<AppState>) -> Result<HttpResponse> {
     sqlx::query("SELECT 1").execute(&state.pool).await?;
     Ok(HttpResponse::Ok().json(
-        json!({"status":"healthy","database":"connected","authentication":"deferred-local-only"}),
+        json!({"status":"healthy","database":"connected","authentication":state.auth.label()}),
     ))
 }
 #[derive(Deserialize)]
@@ -24,6 +24,11 @@ pub struct Setup {
     admin_email: String,
 }
 pub async fn setup(state: web::Data<AppState>, body: web::Json<Setup>) -> Result<HttpResponse> {
+    // First-run setup creates an administrator from unverified input. A hosted
+    // workspace is seeded by its operator instead (docs/deployment/demo-hosting.md).
+    if !state.auth.is_local() {
+        return Err(ApiError::denied());
+    }
     for value in [
         &body.organization_name,
         &body.facility_name,
@@ -100,7 +105,7 @@ pub async fn rows(
     })
 }
 pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse> {
-    let mut data = json!({"setup_required":false,"program_configuration":true,"authentication":"deferred-local-only","actor":null,"organizations":[],"audit":[],"metrics":{}});
+    let mut data = json!({"setup_required":false,"program_configuration":true,"authentication":state.auth.label(),"actor":null,"organizations":[],"audit":[],"metrics":{}});
     for resource in RESOURCES {
         data[*resource] = json!([]);
     }
@@ -110,8 +115,9 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
             .await?;
     data["setup_required"] = json!(organizations.is_empty());
     data["organizations"] = json!(organizations);
-    if req.headers().get("x-nexus-actor").is_none() {
+    if state.auth.is_local() && req.headers().get("x-nexus-actor").is_none() {
         // Minimal local actor picker. No clinical or financial records without an actor.
+        // Hosted mode never lists operators: the gate has already identified the caller.
         data["staff"]=json!(sqlx::query_scalar::<_,Value>("SELECT jsonb_build_object('id',id,'name',name,'role',role,'organization_id',organization_id,'facility_id',facility_id,'active',active) FROM staff WHERE active ORDER BY name").fetch_all(&state.pool).await?);
         data["facilities"] = json!(
             sqlx::query_scalar::<_, Value>("SELECT to_jsonb(f) FROM facilities f WHERE active")

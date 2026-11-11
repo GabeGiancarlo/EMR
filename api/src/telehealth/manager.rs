@@ -91,12 +91,7 @@ pub(super) async fn managed(
     id: Uuid,
     tx: &mut Transaction<'_, Postgres>,
 ) -> Result<(Actor, Value)> {
-    let actor_id = req
-        .headers()
-        .get("x-nexus-actor")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| Uuid::parse_str(s).ok())
-        .ok_or_else(ApiError::denied)?;
+    let actor_id = access::staff_id(req)?;
     let org: Uuid = sqlx::query_scalar("SELECT organization_id FROM staff WHERE id=$1 AND active")
         .bind(actor_id)
         .fetch_optional(&mut **tx)

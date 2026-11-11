@@ -54,7 +54,7 @@ async fn main() -> io::Result<()> {
             .max_age(600);
         App::new()
             .wrap(cors)
-            .app_data(web::Data::new(AppState { pool: pool.clone() }))
+            .app_data(web::Data::new(AppState::local(pool.clone())))
             .app_data(web::JsonConfig::default().limit(1_048_576))
             .app_data(web::PayloadConfig::new(emr_api::MAX_WAV_BYTES))
             .configure(configure)

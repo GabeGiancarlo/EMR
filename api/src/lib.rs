@@ -1,8 +1,10 @@
-//! Persistent Nexus application API. Local actors exercise policies, not authentication.
+//! Persistent Nexus application API. Local actors exercise policies, not authentication;
+//! hosted mode authenticates staff through an OIDC identity provider (see `auth`).
 mod access;
 mod admissions;
 mod adult;
 mod applicability;
+pub mod auth;
 mod availability;
 mod clinical;
 mod clinical_model;
@@ -29,6 +31,23 @@ use sqlx::PgPool;
 
 pub struct AppState {
     pub pool: PgPool,
+    pub auth: auth::Auth,
+}
+impl AppState {
+    /// Loopback development: operators are selected, not authenticated.
+    pub fn local(pool: PgPool) -> Self {
+        Self {
+            pool,
+            auth: auth::Auth::Local,
+        }
+    }
+    /// Hosted: staff are identified by tokens from the configured identity provider.
+    pub fn oidc(pool: PgPool, provider: std::sync::Arc<auth::Oidc>) -> Self {
+        Self {
+            pool,
+            auth: auth::Auth::Oidc(provider),
+        }
+    }
 }
 pub fn start_background_workers(pool: PgPool) {
     tokio::spawn(telehealth::recording::transcripts::worker::start(
@@ -51,6 +70,23 @@ impl ApiError {
             status: StatusCode::BAD_REQUEST,
             code: "validation",
             message: message.into(),
+        }
+    }
+    /// No usable proof of identity. The browser should sign in again.
+    pub fn unauthenticated() -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            code: "unauthenticated",
+            message: "Sign in to continue.".into(),
+        }
+    }
+    /// A genuine sign-in that maps to no usable staff account. Deliberately the same
+    /// for unknown, inactive and unverified accounts.
+    pub fn no_access() -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            code: "no_access",
+            message: "This account does not have access to this workspace.".into(),
         }
     }
     pub fn denied() -> Self {
@@ -87,8 +123,11 @@ impl ResponseError for ApiError {
         self.status
     }
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status)
-            .json(json!({"error":{"code":self.code,"message":self.message}}))
+        let mut response = HttpResponse::build(self.status);
+        if self.status == StatusCode::UNAUTHORIZED {
+            response.insert_header(("WWW-Authenticate", "Bearer"));
+        }
+        response.json(json!({"error":{"code":self.code,"message":self.message}}))
     }
 }
 impl From<sqlx::Error> for ApiError {
@@ -169,6 +208,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/healthz", web::get().to(routes::health))
         .service(
             web::scope("/api")
+                // Always installed, so hosted mode cannot be served without it.
+                .wrap(actix_web::middleware::from_fn(auth::gate))
+                .route("/auth/config", web::get().to(auth::config))
                 .configure(telehealth::configure)
                 .configure(knowledge::configure)
                 .configure(drafting::configure)

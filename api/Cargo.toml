@@ -14,7 +14,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 ring = "0.17"
-reqwest = { workspace = true }
+# rustls (ring) is needed to fetch the identity provider's signing keys over HTTPS.
+reqwest = { workspace = true, features = ["rustls-tls"] }
+# Hosted sign-in: verifies identity-provider JWTs. No PEM parsing; keys arrive as JWKs.
+jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }
@@ -35,3 +38,7 @@ thiserror = "1.0"
 # UUID generation
 uuid = { version = "1.0", features = ["v4", "serde"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
+
+[dev-dependencies]
+# Test-only: generates the RSA signing key inside the OIDC verification tests.
+aws-lc-rs = "1.15"

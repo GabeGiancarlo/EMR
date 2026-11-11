@@ -16,7 +16,7 @@ async fn send(
 ) -> (StatusCode, Value) {
     let app = test::init_service(
         App::new()
-            .app_data(web::Data::new(AppState { pool: pool.clone() }))
+            .app_data(web::Data::new(AppState::local(pool.clone())))
             .configure(configure),
     )
     .await;

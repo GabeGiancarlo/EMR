@@ -345,12 +345,7 @@ async fn recheck(
     admin: bool,
 ) -> Result<Actor> {
     crate::scheduling::lock_org(tx, org).await?;
-    let id = req
-        .headers()
-        .get("x-nexus-actor")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| Uuid::parse_str(value).ok())
-        .ok_or_else(ApiError::denied)?;
+    let id = crate::access::staff_id(req)?;
     let value: Value = sqlx::query_scalar(
         "SELECT to_jsonb(s) FROM staff s WHERE id=$1 AND organization_id=$2 AND active",
     )
