@@ -1,5 +1,6 @@
 import { apiUrl } from "./apiBase";
 import { authHeaders, recoverSession } from "./authSession";
+import { ApiRequestError, sendWithRecovery } from "./transport.ts";
 export type Row = { id: string; [key: string]: unknown };
 export type FormField = {
   key: string;
@@ -53,35 +54,36 @@ export type Bootstrap = Record<Resource, Row[]> & {
 };
 export { apiUrl } from "./apiBase";
 export { actorStorageKey } from "./authSession";
-/** A refused request. `status` and `code` let a screen tell "sign in again" from "not allowed". */
-export class ApiRequestError extends Error {
-  readonly status: number;
-  readonly code: string;
-  constructor(message: string, status: number, code: string) {
-    super(message);
-    this.name = "ApiRequestError";
-    this.status = status;
-    this.code = code;
-  }
+export { ApiRequestError } from "./transport.ts";
+
+type FetchInit = Omit<RequestInit, "headers"> & { headers?: Record<string, string> };
+
+/**
+ * `fetch` for an API path whose answer is not plain JSON (a download, an upload, a
+ * cancellable check). It signs the request as the current person, repeats it once if the
+ * API answers 401 and the session could be recovered, and reports an unreachable API as an
+ * `ApiRequestError` with status 0 instead of the browser's own wording. The caller reads
+ * the response. Not for the patient visit API, which carries its own invitation token.
+ */
+export function authorizedFetch(path: string, init: FetchInit = {}): Promise<Response> {
+  return sendWithRecovery(
+    async () => fetch(apiUrl(path), { ...init, headers: { ...init.headers, ...(await authHeaders()) } }),
+    recoverSession,
+  );
 }
 export async function request<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const send = async () =>
-    fetch(apiUrl(path), {
-      method,
-      headers: {
-        Accept: "application/json",
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(await authHeaders()),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-  let response = await send();
-  // 401 comes from the sign-in gate, before any handler ran, so repeating is safe.
-  if (response.status === 401 && (await recoverSession())) response = await send();
+  const response = await authorizedFetch(path, {
+    method,
+    headers: {
+      Accept: "application/json",
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
   const data = await response.json().catch(() => null);
   if (!response.ok)
     throw new ApiRequestError(
