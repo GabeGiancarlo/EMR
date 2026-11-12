@@ -11,7 +11,7 @@ use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
@@ -151,17 +151,37 @@ pub(super) async fn event(
     sqlx::query("INSERT INTO telehealth_events(id,organization_id,room_id,participant_id,actor_id,action) VALUES($1,$2,$3,$4,$5,$6)").bind(Uuid::new_v4()).bind(uid(room,"organization_id")?).bind(uid(room,"id")?).bind(participant).bind(actor).bind(action).execute(&mut **tx).await?;
     Ok(())
 }
-pub(super) async fn authorize(
-    req: &HttpRequest,
-    tx: &mut Transaction<'_, Postgres>,
-) -> Result<(Value, Value)> {
-    let raw = req
-        .headers()
+/// The bearer credential, if it has the shape of a token this module issues.
+pub(super) fn capability(req: &HttpRequest) -> Option<&str> {
+    req.headers()
         .get("authorization")
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "))
         .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or_else(denied)?;
+}
+/// Run before a visit route reads its request body: the caller must present an
+/// invitation that exists. This is one indexed lookup on a pooled connection that is
+/// returned before the body is read. It grants nothing; [`authorize`] still makes
+/// every check, under the organization lock, once the body has arrived.
+pub(super) async fn known_invitation(req: &HttpRequest, pool: &PgPool) -> Result<()> {
+    let raw = capability(req).ok_or_else(denied)?;
+    let known: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM telehealth_participants WHERE token_hash=$1)",
+    )
+    .bind(hash_token(raw))
+    .fetch_one(pool)
+    .await?;
+    if known {
+        Ok(())
+    } else {
+        Err(denied())
+    }
+}
+pub(super) async fn authorize(
+    req: &HttpRequest,
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<(Value, Value)> {
+    let raw = capability(req).ok_or_else(denied)?;
     let hash = hash_token(raw);
     let address: Option<(Uuid, Uuid)> = sqlx::query_as(
         "SELECT room_id,organization_id FROM telehealth_participants WHERE token_hash=$1",

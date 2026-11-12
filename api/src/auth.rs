@@ -413,6 +413,16 @@ impl Oidc {
     /// Check signature, issuer, audience, expiry and not-before, then return the
     /// verified email in lower case.
     pub async fn verify(&self, token: &str) -> Result<String, Rejection> {
+        self.verify_for(token, "-").await
+    }
+
+    /// [`Oidc::verify`], naming the request in the operator's log line when a
+    /// correctly signed token is refused.
+    pub(crate) async fn verify_for(
+        &self,
+        token: &str,
+        request_id: &str,
+    ) -> Result<String, Rejection> {
         if token.len() > MAX_TOKEN_BYTES {
             return Err(Rejection::Unauthenticated);
         }
@@ -453,7 +463,9 @@ impl Oidc {
         } else {
             "its email_verified claim is not true; the account's email is unverified at the provider"
         };
-        log::warn!("Sign-in refused for a correctly signed identity token: {cause}");
+        log::warn!(
+            "Sign-in refused for a correctly signed identity token: {cause} (request_id={request_id})"
+        );
         Err(Rejection::Forbidden)
     }
 }
@@ -491,9 +503,10 @@ async fn identify(
     state: &AppState,
     oidc: &Oidc,
 ) -> Result<Identity, ApiError> {
+    let request_id = crate::observe::request_id(req);
     let token = bearer(req).ok_or_else(ApiError::unauthenticated)?;
     let email = oidc
-        .verify(token)
+        .verify_for(token, &request_id)
         .await
         .map_err(|rejection| match rejection {
             Rejection::Unauthenticated => ApiError::unauthenticated(),
@@ -514,7 +527,9 @@ async fn identify(
     match (id, matches.pop()) {
         (Some(id), Some(staff)) => Ok(Identity { id, staff }),
         _ => {
-            log::info!("Sign-in refused: the verified email matches no single active staff member");
+            log::info!(
+                "Sign-in refused: the verified email matches no single active staff member (request_id={request_id})"
+            );
             Err(ApiError::no_access())
         }
     }

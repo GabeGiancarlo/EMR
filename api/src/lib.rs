@@ -17,7 +17,9 @@ mod knowledge;
 pub mod limits;
 mod media_transcription;
 mod note_lineage;
+pub mod observe;
 mod patient_identity;
+mod payload;
 mod programs;
 mod readiness;
 mod records;
@@ -258,9 +260,32 @@ pub use speech::MAX_WAV_BYTES;
 pub fn speech_configuration_label() -> &'static str {
     speech::configuration_label()
 }
+/// Extractor limits and error handlers, so a malformed body, path or query string is
+/// answered in the API's own envelope and never with the parser's description.
+pub fn error_handlers(cfg: &mut web::ServiceConfig) {
+    cfg.app_data(
+        web::JsonConfig::default()
+            .limit(payload::JSON_LIMIT)
+            .error_handler(|error, _| payload::json_error(&error).into()),
+    )
+    .app_data(
+        web::PathConfig::default().error_handler(|error, _| payload::path_error(&error).into()),
+    )
+    .app_data(
+        web::QueryConfig::default().error_handler(|error, _| payload::query_error(&error).into()),
+    );
+}
+async fn not_found() -> Result<HttpResponse> {
+    Err(observe::envelope_for(StatusCode::NOT_FOUND))
+}
+pub(crate) async fn method_not_allowed() -> Result<HttpResponse> {
+    Err(observe::envelope_for(StatusCode::METHOD_NOT_ALLOWED))
+}
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    // Liveness: the process is serving. It never touches the database.
-    cfg.route("/livez", web::get().to(routes::live))
+    cfg.configure(error_handlers)
+        .default_service(web::to(not_found))
+        // Liveness: the process is serving. It never touches the database.
+        .route("/livez", web::get().to(routes::live))
         // Readiness: the database answers. Worker states are reported, not judged.
         .route("/healthz", web::get().to(routes::health))
         .service(
@@ -303,7 +328,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .service(
                     web::resource("/speech/transcribe")
                         .app_data(web::PayloadConfig::new(speech::MAX_WAV_BYTES))
-                        .route(web::post().to(speech::transcribe)),
+                        .route(web::post().to(speech::transcribe))
+                        .default_service(web::to(method_not_allowed)),
                 )
                 .route(
                     "/claims/{id}/readiness",

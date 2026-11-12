@@ -1,11 +1,11 @@
 //! Nexus API server. `NEXUS_AUTH_MODE=local` is loopback development with selected
 //! operators; `NEXUS_AUTH_MODE=oidc` is the hosted mode with identity-provider sign-in.
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware::from_fn, web, App, HttpServer};
 use emr_api::{
     auth::{Auth, Oidc},
     configure, db,
     hosting::{self, Mode, ServerConfig},
-    AppState,
+    observe, AppState,
 };
 use std::{io, process::ExitCode, sync::Arc};
 
@@ -78,8 +78,9 @@ async fn run() -> io::Result<()> {
         App::new()
             .wrap(hosting::security_headers(hosted))
             .wrap(hosting::cors(&origins, hosted))
+            // Outermost: request id, access log, deadline and the error envelope.
+            .wrap(from_fn(observe::track))
             .app_data(web::Data::new(state.clone()))
-            .app_data(web::JsonConfig::default().limit(1_048_576))
             .app_data(web::PayloadConfig::new(emr_api::MAX_WAV_BYTES))
             .configure(configure)
     })

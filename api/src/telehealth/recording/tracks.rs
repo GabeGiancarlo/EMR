@@ -2,6 +2,7 @@ use super::*;
 use sha2::{Digest, Sha256};
 use sqlx::Row;
 const MAX_TRACK_BYTES: i64 = 256 * 1024 * 1024;
+const MAX_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Open {
@@ -18,8 +19,11 @@ pub async fn create(
     req: HttpRequest,
     state: web::Data<AppState>,
     id: web::Path<Uuid>,
-    body: web::Json<Open>,
+    body: web::Payload,
 ) -> Result<HttpResponse> {
+    // The invitation is checked before any of the body is read.
+    known_invitation(&req, &state.pool).await?;
+    let body: Open = payload::json(&req, body, payload::VISIT_JSON_LIMIT).await?;
     let mut tx = state.pool.begin().await?;
     let (room, p) = authorize(&req, &mut tx).await?;
     super::super::visitor::connection(&p, body.connection_id)?;
@@ -80,18 +84,31 @@ pub async fn create(
         json!({"track_id":id,"upload_token":token,"mime_type":mime}),
     ))
 }
+/// Run before an upload route reads its request body: the caller must present the
+/// upload token of this track. One indexed lookup on a pooled connection that is
+/// returned before the body is read. It grants nothing; [`upload_access`] still makes
+/// every check, under the organization lock, once the body has arrived.
+async fn known_upload(req: &HttpRequest, pool: &sqlx::PgPool, id: Uuid) -> Result<()> {
+    let raw = capability(req).ok_or_else(ApiError::denied)?;
+    let known: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM recording_tracks WHERE id=$1 AND token_hash=$2)",
+    )
+    .bind(id)
+    .bind(hash_token(raw))
+    .fetch_one(pool)
+    .await?;
+    if known {
+        Ok(())
+    } else {
+        Err(ApiError::denied())
+    }
+}
 async fn upload_access(
     req: &HttpRequest,
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<(Value, Value, Value)> {
-    let raw = req
-        .headers()
-        .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .filter(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or_else(ApiError::denied)?;
+    let raw = capability(req).ok_or_else(ApiError::denied)?;
     let address:Option<(Uuid,Uuid)>=sqlx::query_as("SELECT r.room_id,t.organization_id FROM recording_tracks t JOIN recordings r ON r.id=t.recording_id WHERE t.id=$1 AND t.token_hash=$2").bind(id).bind(hash_token(raw)).fetch_optional(&mut **tx).await?;
     let (room_id, org) = address.ok_or_else(ApiError::denied)?;
     crate::scheduling::lock_org(tx, org).await?;
@@ -139,10 +156,19 @@ pub async fn upload(
     req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<(Uuid, i32)>,
-    body: web::Bytes,
+    body: web::Payload,
 ) -> Result<HttpResponse> {
     let (id, sequence) = path.into_inner();
-    if body.is_empty() || body.len() > 8 * 1024 * 1024 || !(0..3600).contains(&sequence) {
+    // The upload token is checked before any of the media is read, so only the
+    // holder of this track's token can make the server buffer a piece.
+    known_upload(&req, &state.pool, id).await?;
+    if !(0..3600).contains(&sequence) {
+        return Err(ApiError::invalid(
+            "A media piece must be 1 byte to 8 MiB with a valid sequence",
+        ));
+    }
+    let body = payload::bytes(&req, body, MAX_CHUNK_BYTES).await?;
+    if body.is_empty() {
         return Err(ApiError::invalid(
             "A media piece must be 1 byte to 8 MiB with a valid sequence",
         ));
@@ -222,12 +248,15 @@ pub async fn finish(
     req: HttpRequest,
     state: web::Data<AppState>,
     id: web::Path<Uuid>,
-    body: web::Json<Finish>,
+    body: web::Payload,
 ) -> Result<HttpResponse> {
+    let id = id.into_inner();
+    // The upload token is checked before any of the body is read.
+    known_upload(&req, &state.pool, id).await?;
+    let body: Finish = payload::json(&req, body, payload::VISIT_JSON_LIMIT).await?;
     if !(0..=3600).contains(&body.expected_chunks) {
         return Err(ApiError::invalid("Invalid media piece count"));
     }
-    let id = id.into_inner();
     let mut tx = state.pool.begin().await?;
     let (room, _, track) = match upload_access(&req, &mut tx, id).await {
         Ok(v) => v,

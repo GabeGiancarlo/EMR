@@ -1,5 +1,5 @@
 use super::*;
-use crate::AppState;
+use crate::{payload, AppState};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -200,7 +200,7 @@ pub async fn action(
     req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
-    body: web::Json<Command>,
+    body: web::Payload,
 ) -> Result<HttpResponse> {
     let action = path.into_inner();
     if !matches!(
@@ -209,6 +209,9 @@ pub async fn action(
     ) {
         return Err(ApiError::missing());
     }
+    // The invitation is checked before any of the body is read.
+    known_invitation(&req, &state.pool).await?;
+    let body: Command = payload::json(&req, body, payload::VISIT_JSON_LIMIT).await?;
     let mut tx = state.pool.begin().await?;
     let (room, mut p) = authorize(&req, &mut tx).await?;
     let id = uid(&p, "id")?;

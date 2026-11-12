@@ -3,7 +3,7 @@ mod crypto;
 mod tracks;
 pub(crate) mod transcripts;
 use super::*;
-use crate::AppState;
+use crate::{payload, AppState};
 use serde::Deserialize;
 pub(super) fn configure(cfg: &mut web::ServiceConfig) {
     cfg.configure(transcripts::configure);
@@ -21,10 +21,12 @@ pub(super) fn configure(cfg: &mut web::ServiceConfig) {
             "/telehealth/visit/recordings/{id}/tracks",
             web::post().to(tracks::create),
         )
+        // The handler reads the body itself, after checking the upload token, and
+        // applies the 8 MiB limit there.
         .service(
             web::resource("/recording-tracks/{id}/chunks/{sequence}")
-                .app_data(web::PayloadConfig::new(8 * 1024 * 1024))
-                .route(web::put().to(tracks::upload)),
+                .route(web::put().to(tracks::upload))
+                .default_service(web::to(crate::method_not_allowed)),
         )
         .route(
             "/recording-tracks/{id}/finish",
@@ -278,7 +280,7 @@ pub async fn action(
     req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
-    body: web::Json<Command>,
+    body: web::Payload,
 ) -> Result<HttpResponse> {
     let action = path.into_inner();
     if !matches!(
@@ -287,6 +289,9 @@ pub async fn action(
     ) {
         return Err(ApiError::missing());
     }
+    // The invitation is checked before any of the body is read.
+    known_invitation(&req, &state.pool).await?;
+    let body: Command = payload::json(&req, body, payload::VISIT_JSON_LIMIT).await?;
     let mut tx = state.pool.begin().await?;
     let (room, p) = authorize(&req, &mut tx).await?;
     super::visitor::connection(&p, body.connection_id)?;
