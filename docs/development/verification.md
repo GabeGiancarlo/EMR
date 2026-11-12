@@ -195,6 +195,18 @@ On the local changes above `453c280`, the real `/api/bootstrap` regression in `a
 
 Both loopback APIs restarted on the rebuilt binary and returned HTTP 200 healthy/connected. Both frontend URLs returned 200. Before/after row fingerprints matched for all 52 application tables in both ordinary and walkthrough databases. After refreshing the synthetic tour in the browser, its full-access Billing page showed $300 recorded charges, $100 net receipts and $50 outstanding; it was returned to Clinical overview. The limited-operator observation above comes from the disposable HTTP regression, not a change to owner walkthrough grants.
 
+### November 11: Security Analysis workflow repair (GitHub Actions and Mac)
+
+On branch `feature/fix-security-workflow`, above `dev` at `efc13d8`. The checks ran on GitHub-hosted `ubuntu-latest` runners for commit `42db081`; the job definitions are described in [security-checks.md](security-checks.md).
+
+- Pull request run 43123815259: CodeQL, dependency scan (`cargo audit`, `cargo deny` advisories, licenses, bans and sources), cargo-geiger, Gitleaks, licence inventory and the source guardrails all passed. Scorecard and the Docker scan were skipped by design on a pull request. `Continuous Integration` run 43123815247 passed, including the PostgreSQL integration steps, with actix-web 4.18.2 and actix-http 3.20.3.
+- Manual run 43123274620 on the first commit (`a49507d`) exercised the two jobs a pull request skips or narrows: the Docker scan built the API image and uploaded 402 Trivy results, and Gitleaks scanned all 32 commits and found no leaks. That run's dependency, licence and geiger jobs failed; those failures are what the second commit fixed. The Docker and Gitleaks job definitions did not change afterwards.
+- On the Mac (Rust 1.95.0): `cargo test --locked --workspace` passed 103 unit tests with the updated lockfile, and `cargo clippy --workspace --all-targets --all-features -- -D warnings` was clean. The PostgreSQL integration tests were not run locally; CI ran them.
+
+Not verified: the Scorecard job. It can only run on `main`, so its first real run is the push that releases this change. The image it needs (`ghcr.io/ossf/scorecard-action:v2.5.0`) was confirmed to be publicly pullable. The weekly schedule has not fired with the new definition.
+
+Findings the scans produced are listed in pull request 7. Open at the time of writing: 174 distinct operating-system CVEs in the `debian:bookworm-slim` runtime image, none with a fixed package in that release; one CodeQL cleartext-logging alert in a test assertion; and the h2 advisory accepted as unreachable.
+
 ### November 11: brand kit, component library and branded UI (Mac)
 
 On branch `brand/ui-implementation`, above `25066cd`. Brand kit rebuilt end to end with `brand/tools/build_all.py` (Python 3 with numpy, scipy, scikit-image, Pillow, fontTools; headless Chrome): 49 icons, 72 token contrast pairings with 0 failing, a 29-page guide. Every guide page was rasterised from the PDF with `sips` and read; this caught and fixed prints, patterns and shadows that only rendered correctly in Chrome.

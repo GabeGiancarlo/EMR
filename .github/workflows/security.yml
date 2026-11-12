@@ -87,13 +87,16 @@ jobs:
         cargo audit --json > audit-results.json || status=$?
         # Same result in readable form, without fetching the database again.
         cargo audit --no-fetch --color never > audit-report.txt 2>&1 || true
-        cat audit-report.txt
         {
           echo '### cargo audit (all of Cargo.lock)'
           echo '```'
           cat audit-report.txt
           echo '```'
-        } >> "$GITHUB_STEP_SUMMARY"
+          echo 'Advisories ignored on purpose (reasons are in .cargo/audit.toml):'
+          echo '```'
+          grep -oE '^ *"RUSTSEC-[0-9]{4}-[0-9]{4}"' .cargo/audit.toml | tr -d ' "' || true
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
         exit "$status"
 
     - name: Upload audit results
