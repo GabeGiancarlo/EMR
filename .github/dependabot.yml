@@ -26,3 +26,7 @@ updates:
       interval: weekly
     target-branch: dev
     open-pull-requests-limit: 5
+    groups:
+      # init, analyze and upload-sarif must be the same version or CodeQL refuses to run.
+      codeql-action:
+        patterns: ["github/codeql-action*"]
