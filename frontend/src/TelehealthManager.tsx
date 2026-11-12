@@ -1,6 +1,7 @@
 import { useCallback,useEffect,useState } from "react";
 import type { Bootstrap,Row } from "./api";
 import { request,value,clientName } from "./api";
+import { authMode } from "./authSession";
 import { schedulingZone } from "./schedulingTime";
 import { Button,Modal,Badge } from "./ui";
 import { visitLink } from "./telehealthApi";
@@ -31,7 +32,7 @@ export default function TelehealthManager({data,encounter,kind,onClose}:{data:Bo
       {!loaded&&!error&&<p role="status">Loading visit history…</p>}{loaded&&!managed&&!error&&<p>No telehealth rooms were created for this encounter.</p>}{rooms.length>1&&<label>Visit room<select disabled={reviewDirty} value={managed?.room.id||""} onChange={e=>{setInvitation(null);void reload(e.target.value).catch(e=>setError(e.message));}}>{rooms.map(r=><option key={r.id} value={r.id}>{date(value(r,"created_at"))}{r.ended_at?" · ended":""}</option>)}</select></label>}
       {managed&&<>
         <p>Room access expires {date(value(managed.room,"expires_at"),true)}. Each invitation is for one participant. It does not verify their identity.</p>
-        <p className="visit-local-note">Local review · Use separate browser windows on this computer. Remote connectivity and identity are not configured.</p>
+        {authMode()==="local"&&<p className="visit-local-note">Local review · Use separate browser windows on this computer. Remote connectivity and identity are not configured.</p>}
         {ended?<p role="status">This room has ended. The participation history and saved recordings remain available below.</p>:<>
           <Button disabled={busy} onClick={()=>void issue()}>Prepare my clinician access</Button>
           <h3>Client invitations</h3>

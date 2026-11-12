@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { apiUrl, date, label, value } from "./api";
-import { authHeaders } from "./authSession";
+import { authorizedFetch, date, label, value } from "./api";
 import type { Bootstrap, Row } from "./api";
 import { facilityLocalToday } from "./adult.ts";
 import { Badge, Button, Icon } from "./ui";
@@ -44,14 +43,13 @@ export type ClientRegistrationProps = {
 };
 
 async function postMatches(body: MatchRequest, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(apiUrl("/api/intake/matches"), {
+  const response = await authorizedFetch("/api/intake/matches", {
     method: "POST",
     signal,
     cache: "no-store",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      ...(await authHeaders()),
     },
     body: JSON.stringify(body),
   });
