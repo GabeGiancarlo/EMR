@@ -16,7 +16,7 @@ This replaces the earlier "target `nexus/integrated-prototype`" rule below, whic
 4. Release: open a pull request from `dev` into `main`. Merge it only when CI on `dev` is green.
 5. A fix needed in production right away is still a `feature/` branch from `dev`; if `dev` holds work that is not ready, cut `hotfix/<name>` from `main`, merge it into `main`, then merge `main` back into `dev`.
 
-Use merge commits, not squash or rebase, for `dev` into `main`, so production history matches what was tested. Never force-push `main` or `dev`. CI runs on pushes to `main`, `dev` and `feature/**`, and on pull requests into `main` and `dev`. Branch protection on GitHub is not configured yet; until it is, the rules above are a convention.
+Use merge commits, not squash or rebase, for `dev` into `main`, so production history matches what was tested. Never force-push `main` or `dev`. CI runs on pushes to `main`, `dev` and `feature/**`, and on pull requests into `main` and `dev`. GitHub enforces this with the ruleset "Protect main and dev" (since November 12, 2026): changes to either branch need a pull request; Lint, Build, Test, Frontend build, Docker API Build Smoke, Secret Scanning and Dependency Vulnerability Scan must pass; force-pushes and deletion are blocked. No approving review is required, because there is one maintainer; add that requirement when there is a second.
 
 The separate `Security Analysis` workflow was repaired on November 11, 2026. What each of its jobs verifies, what it does not, and how to handle a failure are in [security-checks.md](security-checks.md).
 
