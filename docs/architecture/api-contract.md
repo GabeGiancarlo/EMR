@@ -48,6 +48,7 @@ Authentication is deliberately deferred. Local development uses `x-nexus-actor: 
 ## Setup and context
 
 - GET `/healthz`: database health.
+- GET `/api/auth/config`: public. `{mode:"local"}`, or in hosted mode `{mode:"oidc", issuer, client_id, scopes, authorization_endpoint, token_endpoint, end_session_endpoint}` for the browser's sign-in redirect. In hosted mode every other `/api` route except patient visit and recording-upload routes requires `Authorization: Bearer <JWT>`; `authentication` is then `"oidc"`, the pre-actor staff directory is never returned, and `/api/setup` is refused. See [identity](auth-rbac-audit.md).
 - GET `/api/bootstrap`: `{setup_required, authentication:"deferred-local-only", actor:null|staff, organizations:[], facilities:[], staff:[], clients:[], episodes:[], sessions:[], notes:[], tasks:[], policies:[], authorizations:[], claims:[], payments:[], templates:[], consents:[], exceptions:[], audit:[], metrics:{active_clients,open_tasks,scheduled_sessions,draft_notes,outstanding_cents}}`. Before selecting an actor only organization/facility and active staff directory are returned. After actor selection arrays are organization scoped and permission filtered. Billing cannot read note body; executive cannot read note body either. Only admin can manage staff and permission exceptions.
 - POST `/api/setup`: `{organization_name,facility_name,admin_name,admin_email}` creates first organization/facility/admin atomically. Returns `{organization,facility,actor}`; rejects repeat setup. Save actor.id for request header.
 

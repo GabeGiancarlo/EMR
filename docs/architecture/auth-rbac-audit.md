@@ -1,10 +1,16 @@
 # Identity, permissions and audit
 
-Authentication is deferred at the owner's request. `x-nexus-actor` selects an active staff row in local development. Anyone able to call the API can supply that header; it is not verified identity. The server requires `NEXUS_LOCAL_DEV=1` and refuses a public bind.
+The API has two identity modes, chosen by `NEXUS_AUTH_MODE` (updated November 11, 2026).
+
+**Local (`local`, the default).** `x-nexus-actor` selects an active staff row. Anyone able to call the API can supply that header; it is not verified identity. The server requires `NEXUS_LOCAL_DEV=1` and refuses a non-loopback bind.
+
+**Hosted (`oidc`).** Every `/api` route passes a gate (`api/src/auth.rs`) that requires `Authorization: Bearer <JWT>` from one configured OpenID Connect provider. The gate checks the signature against the provider's published keys, the issuer, audience, expiry and not-before, and requires a verified email. Keys are cached: a key already held never waits on the provider (an hourly refresh runs in the background), only an unknown key id waits for a download, and the provider is asked at most once per 30 seconds. It resolves the email to exactly one active `staff` row and stores that row on the request, so `access::actor` does not read it a second time; mutations still re-read the row inside their transaction (`lock_mutation`). `access::staff_id` is the only place identity is read. A refusal of a correctly signed token is logged with its cause, never with the token or email. `x-nexus-actor` is never read, the unauthenticated operator listing in `/api/bootstrap` is not served, and `/api/setup` is refused. Missing or invalid tokens get 401; unknown, inactive, ambiguous and unverified accounts get one identical 403. Only asymmetric signature algorithms are accepted. Three route groups carry their own single-purpose credential and are outside the staff gate: `/api/auth/config` (public sign-in description), `/api/telehealth/visit*` (patient invitation token) and `/api/recording-tracks/*` (per-track upload token).
+
+Hosted identity is the staff email. It is not multi-factor policy, session revocation, device trust or patient/proxy identity: a deactivated staff member loses access on the next request, but a token cannot otherwise be revoked before it expires. The hosted mode is intended for a synthetic-data demonstration; see [demo hosting](../deployment/demo-hosting.md).
 
 Implemented policies enforce organization scope, resource read/write access, primary-client assignment for clinicians, expiring/revocable exceptions, and signed-record/financial transition restrictions. Administrative grants and staff management require an administrator. Billing and executive roles do not ordinarily read clinical narrative. The frontend exposes actions from effective permissions; the backend remains authoritative.
 
-Facility references are operational context, not a complete facility ACL. Primary assignment is not a multi-member care-team policy. These require application work even after OAuth is installed.
+Facility references are operational context, not a complete facility ACL. Primary assignment is not a multi-member care-team policy. These require application work regardless of sign-in.
 
 Mutations and exports write audit events transactionally with actor, organization, action, resource, record identifier and time. Ordinary bootstrap/resource reads do not yet provide a complete sensitive-read audit trail. Events omit clinical text. Local audit storage is not an independently protected production audit system.
 

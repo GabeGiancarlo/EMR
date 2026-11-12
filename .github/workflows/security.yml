@@ -57,8 +57,11 @@ jobs:
   #   locked but never compiled. It fails on a vulnerability advisory that is
   #   not listed, with a reason, in .cargo/audit.toml.
   # - cargo deny reads the dependency graph that is actually built for the
-  #   targets in deny.toml and fails on advisories, licences outside the
-  #   allow list, banned crates and unknown sources.
+  #   targets in deny.toml. It fails on an advisory, on a licence outside the
+  #   allow list, and on a crate that does not come from crates.io.
+  #   The bans step cannot fail today: deny.toml bans no crate, allows
+  #   wildcard version requirements and only warns about duplicate versions.
+  #   It is kept so that a ban added to deny.toml takes effect.
   # Every step runs even when an earlier one fails, and the reports are
   # printed, added to the job summary and uploaded.
   dependency-scan:

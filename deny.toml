@@ -36,12 +36,7 @@ yanked = "warn"
 # Advisory IDs to ignore. Each entry needs a reason; an ignored advisory is
 # still printed as a note.
 ignore = [
-    # h2 0.3.27 is compiled through actix-web's default `http2` feature, but
-    # the server is started with `HttpServer::bind` (api/src/main.rs), which
-    # serves HTTP/1.x only. Revisit when the server terminates TLS itself,
-    # calls `bind_auto_h2c`, or actix-http moves to h2 0.4. The same entry,
-    # with the full reasoning, is in .cargo/audit.toml.
-    { id = "RUSTSEC-2026-0258", reason = "HTTP/2 is never served: HttpServer::bind is HTTP/1.x only, and h2 0.3 has no fixed release" },
+    #{ id = "RUSTSEC-0000-0000", reason = "why this does not apply" },
 ]
 
 [licenses]
@@ -101,14 +96,12 @@ skip-tree = [
 ]
 
 [sources]
-# Lint level for what to happen when a crate from a crate registry that is
-# not in the allow list is encountered
-unknown-registry = "warn"
-# Lint level for what to happen when a crate from a git repository that is not
-# in the allow list is encountered
-unknown-git = "warn"
+# Every crate must come from crates.io. A crate from another registry or from
+# a git repository fails the check until its source is added below on purpose.
+unknown-registry = "deny"
+unknown-git = "deny"
 # List of URLs for allowed crate registries. Defaults to the crates.io index
 # if not specified. If it is specified but empty, no registries are allowed.
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
-allow-git = [] 
+allow-git = []
