@@ -22,7 +22,7 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 | Operability | One error format; a request id on every response and in the log; an access log with no addresses, tokens, emails or record content; startup fails with one line naming a missing setting. | Tests and the local smoke run. |
 | Browser | Content security policy limited to the site and the identity provider; framing denied; strict transport security; an error boundary and plain messages for network failures; session renewal. | Frontend tests and build. The boundary and failure screens were not exercised in a browser. |
 | Build and repository | `main` and `dev` protected: pull request and seven required checks, no force-push. CI runs format, lint, build, unit and PostgreSQL tests, frontend build, container build, secret scanning, dependency advisories, CodeQL and licence checks. Actions pinned to commits. Dependabot, `SECURITY.md`, `CODEOWNERS`. | Running on every pull request. |
-| Deployment definition | `render.yaml` blueprint (API and PostgreSQL, deploys `main` after checks pass); `frontend/vercel.json` builds only `main` and refuses to build with placeholder addresses. | Files reviewed; never applied. |
+| Deployment definition | `render.yaml` blueprint (API and PostgreSQL on Render's free trial plans: the API sleeps when idle and the database is deleted after 30 days; deploys `main` after checks pass); `frontend/vercel.json` builds only `main` and refuses to build with placeholder addresses. | Files reviewed; never applied. |
 
 ## Before the demonstration is live
 
