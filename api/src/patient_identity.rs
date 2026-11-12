@@ -7,7 +7,6 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use chrono::NaiveDate;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Transaction};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -22,7 +21,7 @@ pub(crate) fn fingerprint(client: &Value) -> String {
         client["birth_date"],
         client["mrn"]
     ]);
-    format!("{:x}", Sha256::digest(input.to_string().as_bytes()))
+    crate::sha256_hex(input.to_string().as_bytes())
 }
 fn normalized(v: &Value, key: &str) -> String {
     v[key]

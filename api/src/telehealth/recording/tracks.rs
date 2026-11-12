@@ -1,5 +1,4 @@
 use super::*;
-use sha2::{Digest, Sha256};
 use sqlx::Row;
 const MAX_TRACK_BYTES: i64 = 256 * 1024 * 1024;
 const MAX_CHUNK_BYTES: usize = 8 * 1024 * 1024;
@@ -187,7 +186,7 @@ pub async fn upload(
             return Err(e);
         }
     };
-    let sha = format!("{:x}", Sha256::digest(&body));
+    let sha = crate::sha256_hex(&body);
     let previous: Option<String> = sqlx::query_scalar(
         "SELECT plain_sha256 FROM recording_chunks WHERE track_id=$1 AND sequence=$2",
     )
@@ -406,7 +405,7 @@ pub(super) async fn decrypt_track(
         )?;
         let length: i32 = chunk.try_get("plain_length")?;
         let hash: String = chunk.try_get("plain_sha256")?;
-        if plain.len() != length as usize || format!("{:x}", Sha256::digest(&plain)) != hash {
+        if plain.len() != length as usize || crate::sha256_hex(&plain) != hash {
             return Err(ApiError::conflict(
                 "The stored media failed its integrity check",
             ));

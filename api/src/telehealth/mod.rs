@@ -10,7 +10,6 @@ use crate::{
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -56,7 +55,7 @@ pub(super) fn fresh_token() -> (String, String) {
     (raw, hash)
 }
 pub(super) fn hash_token(raw: &str) -> String {
-    format!("{:x}", Sha256::digest(raw.as_bytes()))
+    crate::sha256_hex(raw.as_bytes())
 }
 pub(super) fn uid(row: &Value, key: &str) -> Result<Uuid> {
     records::uuid(row, key)

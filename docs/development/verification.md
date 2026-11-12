@@ -272,3 +272,15 @@ Independent review. A second reviewer read the whole change without the author's
 Manual: the debug binary was started in local mode on port 8097 against `nexus_test` and stopped. `/livez` answered `{"status":"alive"}`; `/healthz` reported the database connected and both workers `running`; a request sent with `X-Request-Id: chosen` and two `X-Forwarded-For` addresses came back with a generated 32-character id, `nosniff` and the JSON envelope, and its log line read `request_id=… method=GET path=/api/nowhere status=403 duration_ms=0 forwarded_hops=2`.
 
 Not verified: anything behind a real proxy, including how many addresses Render adds and whether a 429 reaches the browser intact through Vercel; hosted (`oidc`) mode with these changes outside the automated suites; migration 022 against the two local workspace databases (only the precondition was checked); behaviour under load or with a saturated pool beyond the single regression test; a real handler panic in the running server (only in the in-process test); Linux beyond CI; and the frontend's wording for 429, 408 and the new 503 codes, which was not looked at in a browser.
+
+### November 12: `dev` build repaired after the `sha2` 0.11 update (Mac)
+
+On branch `feature/sha2-hex-digest`, above `dev` at `4050c87`. Rust 1.95.0, PostgreSQL 17 on loopback 55432, `nexus_test` only.
+
+What happened: ten dependency updates were merged into `dev` in a row, among them `sha2` 0.10 to 0.11, whose own Lint check was failing. With `sha2` 0.11 a digest no longer formats with `{:x}`, so the API did not compile at seven places (visit tokens, patient identity, recording chunks and tracks, the transcription worker, knowledge sync). At `4050c87`, `cargo clippy` and every Rust test target failed to build locally; the frontend's 135 tests and build passed. The repository had been made private, and on GitHub's free plan the ruleset that requires passing checks on `main` and `dev` is not enforced for private repositories, so the merge was allowed.
+
+What changed: one helper, `sha256_hex`, writes the digest as 64 lower-case hexadecimal characters and replaces the seven `format!` calls. A unit test pins it to the published SHA-256 vectors for the empty string and `abc`, because stored hashes are compared as text.
+
+Automated, all passing on this branch: `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo test --locked --workspace` (159 passed); and the sixteen PostgreSQL steps as `ci.yml` runs them (40 passed), which include token lookup, patient identity matching and recording chunk verification on freshly written rows.
+
+Not verified: hashes written by the older `sha2` being read by this build. The published vectors establish that the text is the same; neither local workspace database was opened to compare a stored row. The other merged updates (`thiserror` 2, `uuid`, `vite`, four GitHub Actions) were exercised only by the suites above and by CI.
