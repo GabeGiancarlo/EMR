@@ -219,7 +219,7 @@ Expired, malformed and wrongly signed tokens are not logged; the browser signs i
 
 ## Things not yet known
 
-- **Request limits behind the real proxies.** The limiter and its address rule are tested in-process only. How many addresses Render puts in `X-Forwarded-For`, and whether that number is stable, is not known until step 9 is done.
+- **Request limits behind the real proxies.** On November 12, 2026 a direct call to the API logged `forwarded_hops=2`, and the blueprint sets `NEXUS_TRUSTED_PROXIES` to 2. Whether that number is stable over time, and that a caller over the limit actually receives a 429 through Render and Vercel, has not been tested.
 - **Not deployed.** The Dockerfile is built by CI only; Docker is not installed on the development Mac. Vercel, a container host, managed PostgreSQL and a real identity provider have not been exercised.
 - **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly, and add `API` as a second origin in `connect-src` in `frontend/vercel.json`; the API already allows `SITE` as an origin.
 - **Sign-out.** If the provider publishes an end-session address the browser is sent there; otherwise only the Nexus session ends and the provider may sign the person straight back in.
