@@ -13,6 +13,7 @@ import {
   randomToken, readCallback, readTokenResponse, refreshExchange,
   type AuthConfig, type OidcConfig, type PendingSignIn, type Session, type TokenOutcome,
 } from "./oidc";
+import { restoredMidRedirect, type SessionExpiry } from "./sessionRules.ts";
 
 export const actorStorageKey = "nexus.local-operator";
 const pendingKey = "nexus.oidc.pending";
@@ -51,6 +52,23 @@ export function subscribeAuth(listener: () => void): () => void {
 }
 export const authSnapshot = (): AuthSnapshot => snapshot;
 export const authMode = (): "local" | "oidc" | "unknown" => config?.mode ?? "unknown";
+/**
+ * Ask which mode the API runs in without starting or finishing a sign-in. For the patient
+ * visit page, which has no staff session and must never be sent to the identity provider.
+ */
+export async function peekAuthMode(): Promise<"local" | "oidc" | "unknown"> {
+  return (config ?? (await loadConfig()))?.mode ?? "unknown";
+}
+/**
+ * When the signed-in session ends and whether it can still be renewed quietly. Null in
+ * local mode or when signed out. A renewal the provider has just failed to complete counts
+ * as not renewable until one succeeds, so the person is warned rather than surprised.
+ */
+export function sessionExpiry(): SessionExpiry | null {
+  if (!session) return null;
+  const stalled = renewalFailedAt > 0 && Date.now() - renewalFailedAt < REFRESH_EARLY_MS;
+  return { expiresAt: session.expiresAt, renewable: session.renewable && session.refreshToken !== null && !stalled };
+}
 
 function stored(storage: "local" | "session", key: string): string | null {
   try {
@@ -173,8 +191,24 @@ async function begin(): Promise<void> {
   publish("signed-out");
 }
 
+/**
+ * Leaving for the identity provider publishes "redirecting". If the person then comes back
+ * with the browser's Back button, the browser can restore this page exactly as it was left:
+ * still saying "Opening sign-in…", with nothing left to wait for. Load the page afresh so
+ * sign-in starts over. Nothing is lost: the workspace is not on screen while redirecting.
+ */
+let watchingReturn = false;
+function watchReturn(): void {
+  if (watchingReturn || typeof window === "undefined") return;
+  watchingReturn = true;
+  window.addEventListener("pageshow", (event) => {
+    if (restoredMidRedirect(event.persisted, snapshot.status)) window.location.reload();
+  });
+}
+
 /** Find out how this workspace signs in, and finish a sign-in that is in flight. */
 export function startAuth(): Promise<void> {
+  watchReturn();
   return (starting ??= begin());
 }
 

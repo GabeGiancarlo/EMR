@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { label } from "./api";
 import { EmptyState, Logo, NxBadge, NxIcon, statusStyle, type NexusIconName, type NexusSceneName } from "./nexus-ui";
+import SessionNotice from "./SessionNotice";
 
 export type IconName =
   | "overview"
@@ -144,11 +145,20 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    ref.current?.showModal();
+    const dialog = ref.current;
+    // Whatever opened the dialog: focus goes back there when it closes.
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialog && !dialog.open) dialog.showModal();
     const old = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = old;
+      if (dialog?.open) dialog.close();
+      // By now the dialog may already be out of the page, which leaves focus on nothing.
+      // Put it back unless something else has deliberately taken it.
+      const active = document.activeElement;
+      const adrift = !active || active === document.body || Boolean(dialog?.contains(active));
+      if (adrift && opener?.isConnected) opener.focus();
     };
   }, []);
   return (
@@ -173,6 +183,7 @@ export function Modal({
           <Icon name="close" />
         </button>
       </div>
+      <SessionNotice inline />
       {children}
     </dialog>
   );
