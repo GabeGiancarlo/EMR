@@ -75,6 +75,7 @@ Detailed reviewed research now covers billing lifecycle/competitors, outpatient 
 - [Acceptance ledger](product/acceptance-ledger.md) and [November 13 plan](development/prototype-target-2026-11-13.md): scope and acceptance gates.
 - [Architecture](architecture/overview.md), [data model](architecture/data-model.md), [access policy](architecture/auth-rbac-audit.md): implemented contracts; verify against code/migrations.
 - [Demo hosting](deployment/demo-hosting.md): how the synthetic demonstration is hosted, and what only the owner can do.
+- [Production readiness](deployment/production-readiness.md): what is in place, what is left before the demonstration is live, and what is required before real patient data.
 - [Orchestration](development/orchestration.md), [Grok runners](development/xai-workers.md), [Git workflow](development/git-workflow.md): how recurring work is coordinated.
 
 At a handoff, record branch/revision, dirty files and their purpose, decisions changed, checks actually run, unresolved risks and the next concrete task. Update this page when durable facts change; keep detailed historical test results in verification/checkpoint documents. A new Codex task rooted in this repository can discover `AGENTS.md`; unrelated chats do not automatically gain this filesystem context.
