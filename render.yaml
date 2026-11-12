@@ -23,16 +23,21 @@ services:
         fromDatabase:
           name: nexus-db
           property: connectionString
-      # Render asks for these four once, when the blueprint is first created.
-      # None is a secret, but each depends on your identity provider and site address.
+      # The identity provider (Auth0 tenant and its "Nexus Demo" application) and the site
+      # that may call this API. None is a secret: the browser is sent all of them. Change
+      # them here if the tenant, the application or the site address changes.
       - key: NEXUS_OIDC_ISSUER
-        sync: false
+        value: https://dev-vulcan-01.us.auth0.com/
       - key: NEXUS_OIDC_CLIENT_ID
-        sync: false
+        value: hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt
       - key: NEXUS_OIDC_AUDIENCE
-        sync: false
+        value: hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt
+      # offline_access lets a session renew itself instead of ending when the identity
+      # token expires. The application has refresh token rotation on.
+      - key: NEXUS_OIDC_SCOPES
+        value: openid email profile offline_access
       - key: NEXUS_ALLOWED_ORIGINS
-        sync: false
+        value: https://nexus-demo-orcin.vercel.app
 
 databases:
   - name: nexus-db

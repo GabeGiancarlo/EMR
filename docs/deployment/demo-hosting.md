@@ -58,6 +58,8 @@ Auth0 names; other providers have equivalents.
    - Client ID.
    - There is no client secret to copy. Do not create one.
 
+**As set up on November 12, 2026.** Auth0 tenant `dev-vulcan-01` (US), issuer `https://dev-vulcan-01.us.auth0.com/`. Application "Nexus Demo" (single-page, no secret), client ID `hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt`, with the callback, logout and web-origin addresses set to `https://nexus-demo-orcin.vercel.app`. Refresh token rotation is on. The application signs in through one connection only, the database connection `Nexus-Staff`, which has sign-ups disabled; the tenant's shared `Username-Password-Authentication` and Google connections are switched off for this application, so accounts from other applications in the tenant cannot reach the sign-in. People are added under **User Management → Users → Create User**, connection `Nexus-Staff`, and must verify their email.
+
 Recommended: enable refresh token rotation for the application and set `NEXUS_OIDC_SCOPES` to `openid email profile offline_access`. Without it a session ends when the identity token expires (ten hours by default on Auth0) and anything unsaved at that moment is lost. The session then renews about a minute before each ID token expires, provided the provider returns a new ID token from the refresh (Auth0 does). If a provider answers a refresh without an ID token, which OpenID Connect allows, the session simply runs to the end of the current ID token and is not cut short. Without refresh, or with such a provider, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended"; signing in again is one click while the provider's own session is alive.
 
 ### 3. Create the database (you)
@@ -91,7 +93,7 @@ Then stop the API with Ctrl-C. Notes:
 
 ### 5. Deploy the API (you)
 
-**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and fill in the four values it asks for (the table below; `DATABASE_URL` is wired automatically). It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
+**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
 
 **By hand, on any container host:**
 
@@ -106,6 +108,7 @@ Then stop the API with Ctrl-C. Notes:
 | `NEXUS_OIDC_CLIENT_ID` | The client ID from step 2. |
 | `NEXUS_OIDC_AUDIENCE` | The same client ID. |
 | `NEXUS_ALLOWED_ORIGINS` | `SITE` |
+| `NEXUS_OIDC_SCOPES` | `openid email profile offline_access`, if refresh token rotation is on (step 2). Optional. |
 
 The image already sets `NEXUS_AUTH_MODE=oidc`, `HOST=0.0.0.0` and `RUST_LOG=info` (so refused sign-ins and provider problems appear in the host's log). Do not set `NEXUS_LOCAL_DEV`. If the host assigns `PORT`, leave it alone; otherwise the API listens on 8090.
 
@@ -113,13 +116,13 @@ If something is missing the service exits at once with one line naming it, for e
 
 ### 6. Point the frontend at the API and the identity provider (me, once you send the addresses)
 
-`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits:
+`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits (the third is done: `connect-src` names `https://dev-vulcan-01.us.auth0.com`):
 
 | Line to change | Replace | With |
 | --- | --- | --- |
 | `rewrites`, source `/api/:path*` | `REPLACE-WITH-API-HOST.example.invalid` | the host of `API`, for example `nexus-api.onrender.com` |
 | `rewrites`, source `/healthz` | `REPLACE-WITH-API-HOST.example.invalid` | the same host |
-| `Content-Security-Policy`, `connect-src` | `https://REPLACE-WITH-IDENTITY-PROVIDER-HOST.example.invalid` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
+| `Content-Security-Policy`, `connect-src` | the identity provider origin listed after `'self'` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
 
 `connect-src` lists the only places the page may send requests: its own origin and the identity provider, whose token endpoint finishes sign-in. Do not widen it to `https:`.
 
