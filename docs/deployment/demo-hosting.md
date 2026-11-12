@@ -68,7 +68,17 @@ Create a managed PostgreSQL 17 database. Copy its connection string and make sur
 
 ### 4. Seed synthetic data (you, on your Mac)
 
-Seeding runs through a local-mode API on your own machine that is pointed at the hosted database, because it acts as the workspace administrator before anyone can sign in. From the repository root:
+Seeding runs through a local-mode API on your own machine that is pointed at the hosted database, because it acts as the workspace administrator before anyone can sign in.
+
+**One command.** From the repository root, on an up-to-date `main` checkout:
+
+```bash
+tools/seed-hosted-demo.sh you@example.com
+```
+
+It asks you to paste the database's external connection string (nothing is shown as you paste, and it is never printed or saved), refuses a string that points at this machine, starts the local-mode API on port 8095, seeds, and stops the API. Add `role=email` arguments to give other roles a sign-in, for example `clinician=someone@example.com`.
+
+**By hand**, the same thing in two terminals. From the repository root:
 
 ```bash
 NEXUS_LOCAL_DEV=1 PORT=8095 DATABASE_URL='PASTE-THE-HOSTED-CONNECTION-STRING' cargo run -p emr-api
@@ -93,7 +103,7 @@ Then stop the API with Ctrl-C. Notes:
 
 ### 5. Deploy the API (you)
 
-**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
+**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. At Render's published prices on November 12, 2026 that is $7 a month for the API, $6 a month for the database and $1.50 a month for its 5 GB of storage, about $14.50 a month, billed by the second. It deploys a commit on `main` only after that commit's GitHub checks pass. Vercel's deployment counts as one of those checks, so a failed Vercel build of a commit also holds back the API's deploy of that commit; the first deploy, made when the blueprint is created, does not wait. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
 
 **By hand, on any container host:**
 

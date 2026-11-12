@@ -63,6 +63,9 @@ services:
 databases:
   - name: nexus-db
     plan: 0.1c-256mb
+    # Storage is billed per GB. The demonstration holds a few megabytes; the default for
+    # this plan is 15 GB. Disk size can be raised later but never lowered.
+    diskSizeGB: 5
     postgresMajorVersion: "17"
     region: oregon
     databaseName: nexus
