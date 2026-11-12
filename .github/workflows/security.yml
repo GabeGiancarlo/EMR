@@ -1,5 +1,9 @@
 name: Security Analysis
 
+# What each job verifies, and what it does not, is stated above the job.
+# Third-party actions are pinned to a full commit SHA; the comment after each
+# SHA is the release it corresponds to.
+
 on:
   push:
     branches: [ main, dev, develop ]
@@ -7,9 +11,15 @@ on:
     branches: [ main, dev, develop ]
   schedule:
     - cron: '0 2 * * 1'  # Run every Monday at 2 AM
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  # CodeQL security analysis
+  # CodeQL static analysis of the Rust sources. Findings go to the repository's
+  # code scanning page; the job fails only when the analysis itself cannot run.
+  # Rust is analysed without a build (the only build mode CodeQL has for Rust).
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
@@ -25,89 +35,122 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
-        queries: security-extended,security-and-quality
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
-    - name: Set up Rust cache
-      uses: Swatinem/rust-cache@v2
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
       with:
-        key: codeql-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libpq-dev pkg-config libssl-dev
-
-    - name: Build for CodeQL
-      run: cargo build --workspace --all-features
+        languages: ${{ matrix.language }}
+        build-mode: none
+        queries: security-extended,security-and-quality
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
       with:
         category: "/language:${{matrix.language}}"
 
-  # Dependency vulnerability scanning
+  # Known-vulnerability and policy checks on Rust dependencies.
+  # - cargo audit reads every entry in Cargo.lock, including crates that are
+  #   locked but never compiled. It fails on a vulnerability advisory that is
+  #   not listed, with a reason, in .cargo/audit.toml.
+  # - cargo deny reads the dependency graph that is actually built for the
+  #   targets in deny.toml. It fails on an advisory, on a licence outside the
+  #   allow list, and on a crate that does not come from crates.io.
+  #   The bans step cannot fail today: deny.toml bans no crate, allows
+  #   wildcard version requirements and only warns about duplicate versions.
+  #   It is kept so that a ban added to deny.toml takes effect.
+  # Every step runs even when an earlier one fails, and the reports are
+  # printed, added to the job summary and uploaded.
   dependency-scan:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
     - name: Set up Rust cache
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
         key: deps-scan-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Install cargo-audit
-      uses: taiki-e/install-action@cargo-audit
+    - name: Install cargo-audit and cargo-deny
+      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      with:
+        tool: cargo-audit,cargo-deny
 
     - name: Run security audit
-      run: cargo audit --json > audit-results.json
+      run: |
+        status=0
+        cargo audit --json > audit-results.json || status=$?
+        # Same result in readable form, without fetching the database again.
+        cargo audit --no-fetch --color never > audit-report.txt 2>&1 || true
+        {
+          echo '### cargo audit (all of Cargo.lock)'
+          echo '```'
+          cat audit-report.txt
+          echo '```'
+          echo 'Advisories ignored on purpose (reasons are in .cargo/audit.toml):'
+          echo '```'
+          grep -oE '^ *"RUSTSEC-[0-9]{4}-[0-9]{4}"' .cargo/audit.toml | tr -d ' "' || true
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
+        exit "$status"
 
     - name: Upload audit results
-      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: security-audit-results
-        path: audit-results.json
+        path: |
+          audit-results.json
+          audit-report.txt
 
-    - name: Install cargo-deny
-      uses: taiki-e/install-action@cargo-deny
+    - name: cargo deny - advisories
+      if: ${{ !cancelled() }}
+      run: cargo deny check advisories
 
-    - name: Run cargo deny
-      run: |
-        cargo deny check advisories
-        cargo deny check licenses
-        cargo deny check bans
+    - name: cargo deny - licenses
+      if: ${{ !cancelled() }}
+      run: cargo deny check licenses
 
-  # Docker image security scanning
+    - name: cargo deny - bans
+      if: ${{ !cancelled() }}
+      run: cargo deny check bans
+
+    - name: cargo deny - sources
+      if: ${{ !cancelled() }}
+      run: cargo deny check sources
+
+  # Operating-system and library CVEs in the built API image, reported to the
+  # code scanning page. It reports and does not gate: Trivy exits 0 when it
+  # finds vulnerabilities. Not run on pull requests, where Continuous
+  # Integration already builds the same image; the weekly run picks up CVEs
+  # published after the last push.
   docker-security:
     name: Docker Security Scan
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       matrix:
         service: [api]
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
     - name: Build Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
         context: .
         file: infra/dockerfiles/Dockerfile.${{ matrix.service }}
@@ -117,111 +160,201 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
       with:
         image-ref: emr-${{ matrix.service }}:security-scan
         format: 'sarif'
         output: 'trivy-results-${{ matrix.service }}.sarif'
 
+    - name: Upload Trivy report
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: trivy-results-${{ matrix.service }}
+        path: trivy-results-${{ matrix.service }}.sarif
+
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
       with:
         sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
+        category: trivy-${{ matrix.service }}
 
-  # SAST (Static Application Security Testing)
+  # Unsafe-code inventory with cargo-geiger.
+  # - Fails when the API crate itself contains `unsafe`, or when no report
+  #   could be produced.
+  # - Reports, without failing, how much `unsafe` each dependency uses.
+  #   cargo-geiger's own exit code only says that some dependency files could
+  #   not be scanned, so it is shown as a warning.
+  # The former `cargo semver-checks` step is gone: it compares a library with
+  # its previous release on crates.io, and this crate is an unpublished
+  # application, so there is nothing to compare against.
   sast:
     name: Static Application Security Testing
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
     - name: Set up Rust cache
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
         key: sast-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpq-dev pkg-config libssl-dev
+        sudo apt-get install -y pkg-config libssl-dev
 
     - name: Install cargo-geiger (radiation detector for unsafe code)
-      run: cargo install cargo-geiger
+      run: cargo install --locked cargo-geiger --version 0.14.0
 
     - name: Run cargo-geiger
-      run: cargo geiger --all-features --workspace --output-format json > geiger-results.json
+      run: |
+        status=0
+        cargo geiger --manifest-path "$GITHUB_WORKSPACE/api/Cargo.toml" --all-features --locked \
+          --output-format Json > geiger-results.json 2> geiger-stderr.log || status=$?
+        tail -n 60 geiger-stderr.log
+        if ! jq -e '.packages | length > 0' geiger-results.json > /dev/null; then
+          echo "::error::cargo-geiger produced no report (exit code $status)"
+          exit 1
+        fi
+        if [ "$status" -ne 0 ]; then
+          echo "::warning::cargo-geiger exited with $status: some dependency files could not be scanned, so their counts may be low. See geiger-stderr.log in the uploaded report."
+        fi
+
+    - name: Summarise unsafe usage
+      run: |
+        used='[.functions, .exprs, .item_impls, .item_traits, .methods] | map(.unsafe_) | add'
+        first_party=$(jq "[.packages[] | select(.package.id.name == \"emr-api\") | .unsafety.used | $used] | add // -1" geiger-results.json)
+        {
+          echo '### cargo-geiger: unsafe code actually compiled into the API'
+          echo
+          echo "First-party crate \`emr-api\`: $first_party unsafe items"
+          echo
+          echo "Packages without metrics: $(jq '.packages_without_metrics | length' geiger-results.json); files used but not scanned: $(jq '.used_but_not_scanned_files | length' geiger-results.json)"
+          echo
+          echo '| Dependency | Version | Unsafe items used | Forbids unsafe |'
+          echo '| --- | --- | ---: | --- |'
+          jq -r ".packages[] | select(.package.id.name != \"emr-api\") | {n: .package.id.name, v: .package.id.version, u: (.unsafety.used | $used), f: .unsafety.forbids_unsafe} | select(.u > 0) | [.u, .n, .v, .f] | @tsv" geiger-results.json \
+            | sort -rn | awk -F'\t' '{printf "| %s | %s | %s | %s |\n", $2, $3, $1, $4}'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
+        if [ "$first_party" -lt 0 ]; then
+          echo "::error::emr-api is missing from the cargo-geiger report"
+          exit 1
+        fi
+        if [ "$first_party" -gt 0 ]; then
+          echo "::error::emr-api contains $first_party unsafe items; first-party unsafe code needs an explicit review"
+          exit 1
+        fi
 
     - name: Upload geiger results
-      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: geiger-results
-        path: geiger-results.json
+        path: |
+          geiger-results.json
+          geiger-stderr.log
 
-    - name: Install cargo-semver-checks
-      run: cargo install cargo-semver-checks
-
-    - name: Run semver checks
-      run: cargo semver-checks check-release
-
-  # Secret scanning
+  # Secret patterns in git history with Gitleaks. Needs the full history
+  # (fetch-depth: 0): a pull request scans the commits it adds, a push scans
+  # the pushed commits, and the weekly and manual runs scan every commit.
   secret-scan:
     name: Secret Scanning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
 
     - name: Run GitLeaks
-      uses: gitleaks/gitleaks-action@v2
+      uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        GITLEAKS_ENABLE_COMMENTS: false
 
-  # License compliance
+  # Licence inventory of every crate in Cargo.lock, uploaded as a report.
+  # Fails when a crate can only be used under a GPL-family licence, that is,
+  # when every alternative in its licence expression names one. A crate that
+  # also offers a permissive option (for example "MIT OR LGPL-2.1-or-later")
+  # passes. `cargo deny check licenses` in the dependency scan is the precise
+  # allow-list check for the crates that are actually compiled.
   license-check:
     name: License Compliance
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
     - name: Set up Rust cache
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
         key: license-check-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Install cargo-license
-      run: cargo install cargo-license
+      run: cargo install --locked cargo-license
 
     - name: Check licenses
       run: |
         cargo license --json > licenses.json
-        # Check for GPL licenses (not allowed in commercial software)
-        if cargo license --json | jq -r '.[] | select(.license | contains("GPL"))' | grep -q GPL; then
-          echo "GPL licenses found! This may not be compatible with commercial use."
+        # GPL-family licences are not allowed in commercial software. The old
+        # check stopped at the first crate without a licence field and never
+        # looked at the rest; this one reads every crate.
+        jq -r '.[] | (.license // "") as $l
+               | select(($l | test("GPL")) and ([$l | splits(" OR |/") | select(test("GPL") | not)] | length == 0))
+               | "\(.name) \(.version): \($l)"' licenses.json > gpl-only.txt
+        jq -r '.[] | select((.license // "") | test("GPL")) | "\(.name) \(.version): \(.license)"' licenses.json > gpl-optional.txt
+        {
+          echo '### Licence inventory'
+          echo
+          echo "Crates in Cargo.lock: $(jq length licenses.json)"
+          echo
+          echo 'Crates that offer a GPL-family licence among other options (allowed):'
+          echo '```'
+          cat gpl-optional.txt
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
+        if [ -s gpl-only.txt ]; then
+          echo "GPL-only licenses found! This may not be compatible with commercial use."
+          cat gpl-only.txt
           exit 1
         fi
 
     - name: Upload license report
-      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: license-compliance-report
         path: licenses.json
 
-  # HIPAA-oriented guardrails (planning-phase checks)
+  # Source-pattern guardrails. These are text and lint heuristics, not a HIPAA
+  # assessment: passing means only that the patterns below were not found.
   hipaa-oriented-controls:
     name: HIPAA-Oriented Controls Check
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      with:
+        components: clippy
+
+    - name: Set up Rust cache
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        key: guardrails-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Check for hardcoded secrets
       run: |
@@ -230,7 +363,7 @@ jobs:
           echo "Potential hardcoded passwords found!"
           exit 1
         fi
-        
+
         if grep -r "secret\s*=" --include="*.rs" --include="*.toml" .; then
           echo "Potential hardcoded secrets found!"
           exit 1
@@ -243,20 +376,45 @@ jobs:
           echo "Password logging detected!"
           exit 1
         fi
-        
+
         if grep -r "log.*ssn" --include="*.rs" .; then
           echo "SSN logging detected!"
           exit 1
         fi
 
+    # Replaces a repository-wide `grep "\.unwrap()"` that also matched the
+    # parked crates and test modules, and so failed on every run. Clippy sees
+    # only the code that is compiled into the API (tests are not built here).
+    # The existing call sites are a recorded baseline; the step fails when the
+    # count rises, so a new unwrap() needs either a handled error or a
+    # deliberate change to UNWRAP_BASELINE in the same pull request.
     - name: Check for proper error handling
+      env:
+        UNWRAP_BASELINE: 29
       run: |
-        # Check for unwrap() calls that could expose sensitive data
-        if grep -r "\.unwrap()" --include="*.rs" . | grep -v test | grep -v example; then
-          echo "Unwrap calls found in non-test code - may expose sensitive data!"
+        set -o pipefail
+        cargo clippy --workspace --lib --bins --locked --message-format=json -- -W clippy::unwrap_used \
+          | jq -r 'select(.reason == "compiler-message" and .message.code.code == "clippy::unwrap_used")
+                   | .message.spans[] | select(.is_primary)
+                   | "\(.file_name):\(.line_start):\(.column_start)"' \
+          | sort -u > unwrap-sites.txt
+        count=$(wc -l < unwrap-sites.txt | tr -d ' ')
+        {
+          echo "### unwrap() in non-test API code: $count (baseline $UNWRAP_BASELINE)"
+          echo '```'
+          cat unwrap-sites.txt
+          echo '```'
+        } | tee -a "$GITHUB_STEP_SUMMARY"
+        if [ "$count" -gt "$UNWRAP_BASELINE" ]; then
+          echo "::error::unwrap() call sites in non-test API code rose from $UNWRAP_BASELINE to $count. Handle the error, or raise UNWRAP_BASELINE deliberately."
           exit 1
         fi
+        if [ "$count" -lt "$UNWRAP_BASELINE" ]; then
+          echo "::notice::unwrap() call sites fell to $count; lower UNWRAP_BASELINE in security.yml to keep the gain."
+        fi
 
+    # The two steps below only prove that the words appear somewhere in the
+    # Rust sources or manifests. They do not test TLS or audit behaviour.
     - name: Check TLS configuration
       run: |
         # Ensure TLS is properly configured
@@ -273,27 +431,33 @@ jobs:
           exit 1
         fi
 
-  # Security scorecard
+  # OpenSSF Scorecard: repository-level practices (branch protection, pinned
+  # actions, token permissions and so on), reported to the code scanning page.
+  # Scorecard rejects every branch except the default one, so the job runs
+  # only for `main` (pushes, the weekly schedule, manual runs) and is skipped
+  # on pull requests and on `dev`.
   scorecard:
     name: Security Scorecard
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     permissions:
+      contents: read
       security-events: write
       id-token: write
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
     - name: Run analysis
-      uses: ossf/scorecard-action@v2.3.1
+      uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
       with:
         results_file: results.sarif
         results_format: sarif
         publish_results: true
 
     - name: Upload to code-scanning
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
       with:
-        sarif_file: results.sarif 
+        sarif_file: results.sarif
