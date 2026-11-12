@@ -42,6 +42,14 @@ fi
 printf "Paste the hosted database's EXTERNAL connection string, then press Return (it is not shown): "
 IFS= read -r -s database_url
 echo
+# A terminal with bracketed paste wraps pasted text in ESC[200~ ... ESC[201~. A hidden
+# read receives those markers as part of the text, so remove them, and any stray
+# carriage return or surrounding spaces, before looking at what was pasted.
+database_url="${database_url#$'\e[200~'}"
+database_url="${database_url%$'\e[201~'}"
+database_url="${database_url//$'\r'/}"
+database_url="${database_url#"${database_url%%[![:space:]]*}"}"
+database_url="${database_url%"${database_url##*[![:space:]]}"}"
 if [ -z "$database_url" ]; then
   echo "Nothing was pasted. Nothing was changed." >&2
   exit 1
