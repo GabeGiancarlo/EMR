@@ -98,7 +98,7 @@ Then stop the API with Ctrl-C. Notes:
 **By hand, on any container host:**
 
 1. Create a web service from the GitHub repository `GabeGiancarlo/EMR`, runtime Docker, Dockerfile path `infra/dockerfiles/Dockerfile.api`, build context the repository root.
-2. Health check path: `/healthz`.
+2. Health check path: `/livez` (the process is serving; it never touches the database, so a database blip does not get a working process restarted). `/healthz` is readiness: it answers 503 when the database does not respond within two seconds, and lists the background workers.
 3. Environment variables (see `.env.example` for all of them):
 
 | Variable | Value |
@@ -108,6 +108,7 @@ Then stop the API with Ctrl-C. Notes:
 | `NEXUS_OIDC_CLIENT_ID` | The client ID from step 2. |
 | `NEXUS_OIDC_AUDIENCE` | The same client ID. |
 | `NEXUS_ALLOWED_ORIGINS` | `SITE` |
+| `NEXUS_TRUSTED_PROXIES` | The number of the host's own proxies in front of the API. See "Request limits" below. |
 | `NEXUS_OIDC_SCOPES` | `openid email profile offline_access`, if refresh token rotation is on (step 2). Optional. |
 
 The image already sets `NEXUS_AUTH_MODE=oidc`, `HOST=0.0.0.0` and `RUST_LOG=info` (so refused sign-ins and provider problems appear in the host's log). Do not set `NEXUS_LOCAL_DEV`. If the host assigns `PORT`, leave it alone; otherwise the API listens on 8090.
@@ -158,7 +159,18 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 1. Open `SITE`. You should see "Sign in to Nexus." and be sent to the provider.
 2. Sign in as the administrator email you seeded. You should land in the workspace, with "Demonstration workspace · Synthetic data only" in the sidebar.
 3. Sign in with an account that was not seeded. You should see "This account is not set up here."
-4. `SITE/healthz` should answer through the rewrite.
+4. `SITE/healthz` should answer through the rewrite, with `"database":"connected"` and both workers listed.
+5. Set the request limits' proxy count (next section). Until then every caller shares one limit.
+
+### 9. Request limits (you, once, after the first deploy)
+
+The API refuses a client that sends too many requests (HTTP 429, "Too many requests. Wait a moment and try again."). It counts per client address, and behind proxies it has to be told how many of the addresses in `X-Forwarded-For` were written by proxies it can trust.
+
+1. From a terminal, call the API **directly**, not through the site: `curl -s https://YOUR-API-HOST/api/auth/config > /dev/null`.
+2. In the API's log on the host, find that request's line. It ends with `forwarded_hops=N`.
+3. Set `NEXUS_TRUSTED_PROXIES` to that `N` (in `render.yaml`, by pull request, or in the host's environment) and redeploy.
+
+Use the number from a direct call, not from a request that came through the site. The API's own address is public, so anyone can call it without passing through Vercel; counting Vercel as a trusted proxy would let such a caller put any address they like in the header and be counted under it. The cost of the safe setting is that people who come through the site are counted together, per Vercel address, which is why the blueprint raises the limits above the defaults. A deployment for real use should close the API's public address to everything but the site (a private network, or a secret header checked at the API) and then count per person.
 
 ## Before every later deploy
 
@@ -180,6 +192,9 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 | Sign-in or saving fails on a preview deployment | Preview addresses are not the production address (step 7). |
 | Saving fails with HTTP 400 while reading works | The site's origin is not in `NEXUS_ALLOWED_ORIGINS`. |
 | "The Nexus service is not responding" | The API is down, or `vercel.json` still has the placeholder address. |
+| "Too many requests. Wait a moment and try again." for everyone at once | `NEXUS_TRUSTED_PROXIES` is still 0, so all callers share one limit (step 9), or the limits are too low for the number of people in visits. |
+| "The workspace is busy. Nothing was changed; try again in a moment." | A request waited 15 seconds for a lock another request held. Retrying is safe. If it persists, the API log shows which requests are slow (`duration_ms`). |
+| A person reports an error and you need the matching log line | Every response carries an `X-Request-Id` header; the API log has the same `request_id`. |
 
 ## What the API logs when it refuses a sign-in
 
@@ -194,6 +209,7 @@ Expired, malformed and wrongly signed tokens are not logged; the browser signs i
 
 ## Things not yet known
 
+- **Request limits behind the real proxies.** The limiter and its address rule are tested in-process only. How many addresses Render puts in `X-Forwarded-For`, and whether that number is stable, is not known until step 9 is done.
 - **Not deployed.** The Dockerfile is built by CI only; Docker is not installed on the development Mac. Vercel, a container host, managed PostgreSQL and a real identity provider have not been exercised.
 - **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly, and add `API` as a second origin in `connect-src` in `frontend/vercel.json`; the API already allows `SITE` as an origin.
 - **Sign-out.** If the provider publishes an end-session address the browser is sent there; otherwise only the Nexus session ends and the provider may sign the person straight back in.

@@ -259,8 +259,10 @@ pub async fn client_requirements(
     access::require(&state.pool, &actor, "form_responses", false).await?;
     let mut tx = state.pool.begin().await?;
     crate::scheduling::lock_org(&mut tx, actor.org).await?;
-    let actor = access::actor(&req, &state.pool).await?;
-    access::require(&state.pool, &actor, "form_responses", false).await?;
+    // Recheck after the lock on this transaction. The pool must not be asked for a
+    // second connection while this one is held.
+    let actor = access::actor(&req, &mut *tx).await?;
+    access::require(&mut *tx, &actor, "form_responses", false).await?;
     let client = records::get(&mut tx, "clients", client_id, actor.org, false).await?;
     records::scope(&mut tx, &actor, "clients", &client).await?;
     let client_status = client

@@ -4,7 +4,7 @@
 #[path = "support/oidc.rs"]
 mod oidc;
 
-use emr_api::auth::{Oidc, Rejection};
+use emr_api::auth::{Oidc, OidcSettings, Rejection, RetryPolicy};
 use jsonwebtoken::{encode, get_current_timestamp, Algorithm, EncodingKey, Header};
 use oidc::{Provider, SigningKey, AUDIENCE};
 use serde_json::json;
@@ -368,4 +368,112 @@ async fn startup_fails_clearly_when_the_provider_does_not_match() {
     unreachable.issuer = "http://127.0.0.1:9".into();
     let error = Oidc::connect(unreachable).await.err().unwrap();
     assert!(error.contains("could not be reached"), "{error}");
+}
+
+/// A loopback port that nothing is listening on, so connections are refused.
+fn closed_port() -> u16 {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.local_addr().unwrap().port()
+}
+
+fn quick_retries(patience: Duration) -> RetryPolicy {
+    RetryPolicy {
+        patience,
+        first_pause: Duration::from_millis(100),
+        longest_pause: Duration::from_millis(200),
+    }
+}
+
+#[actix_web::test]
+async fn startup_waits_for_a_provider_that_is_briefly_unreachable() {
+    let key = SigningKey::generate("key-1");
+    let port = closed_port();
+    let settings = OidcSettings {
+        issuer: format!("http://127.0.0.1:{port}"),
+        audience: AUDIENCE.into(),
+        client_id: AUDIENCE.into(),
+        jwks_url: None,
+        scopes: "openid email profile".into(),
+    };
+    // One attempt, as before, fails at once.
+    let error = Oidc::connect(settings.clone()).await.err().unwrap();
+    assert!(error.contains("could not be reached"), "{error}");
+
+    // With retries, startup is still waiting when the provider comes up, and connects.
+    let waiting = actix_web::rt::spawn(Oidc::connect_with_retry(
+        settings,
+        quick_retries(Duration::from_secs(20)),
+    ));
+    actix_web::rt::time::sleep(Duration::from_millis(350)).await;
+    assert!(!waiting.is_finished(), "startup gave up or connected early");
+    let provider = Provider::start_on(port, &[&key]).await;
+    let oidc = waiting.await.unwrap().expect("connects once it answers");
+    assert_eq!(
+        oidc.verify(&key.sign(&provider.claims(EMAIL))).await,
+        Ok(EMAIL.to_string())
+    );
+}
+
+#[actix_web::test]
+async fn startup_retries_a_failing_key_endpoint_and_then_gives_up_plainly() {
+    let key = SigningKey::generate("key-1");
+    let provider = Provider::start(&[&key]).await;
+    provider.fail_keys(true);
+    let began = Instant::now();
+    let error = Oidc::connect_with_retry(
+        provider.settings(),
+        quick_retries(Duration::from_millis(300)),
+    )
+    .await
+    .err()
+    .unwrap();
+    // Pauses of 100 ms and 200 ms fit the patience: three attempts in all, then the
+    // same plain message a single attempt gives.
+    assert!(error.contains("signing keys"), "{error}");
+    assert!(error.contains("answered HTTP 500"), "{error}");
+    assert!(began.elapsed() >= Duration::from_millis(300));
+    assert_eq!(provider.key_downloads(), 3);
+
+    // The fault clears while startup is waiting.
+    let before = provider.key_downloads();
+    let waiting = actix_web::rt::spawn(Oidc::connect_with_retry(
+        provider.settings(),
+        quick_retries(Duration::from_secs(20)),
+    ));
+    actix_web::rt::time::sleep(Duration::from_millis(250)).await;
+    provider.fail_keys(false);
+    assert!(waiting.await.unwrap().is_ok());
+    assert!(provider.key_downloads() > before + 1);
+}
+
+#[actix_web::test]
+async fn startup_does_not_retry_a_fault_that_waiting_cannot_cure() {
+    let key = SigningKey::generate("key-1");
+    let provider = Provider::start(&[&key]).await;
+    provider.report_issuer("https://real-tenant.example.com/");
+    // Pauses this long would make a retry obvious.
+    let slow = RetryPolicy {
+        patience: Duration::from_secs(120),
+        first_pause: Duration::from_secs(30),
+        longest_pause: Duration::from_secs(30),
+    };
+    let began = Instant::now();
+    let error = Oidc::connect_with_retry(provider.settings(), slow)
+        .await
+        .err()
+        .unwrap();
+    assert!(error.contains("NEXUS_OIDC_ISSUER"), "{error}");
+    assert!(began.elapsed() < Duration::from_secs(10));
+
+    let empty = Provider::start(&[]).await;
+    let began = Instant::now();
+    let error = Oidc::connect_with_retry(empty.settings(), slow)
+        .await
+        .err()
+        .unwrap();
+    assert!(
+        error.contains("no RSA or elliptic-curve signing key"),
+        "{error}"
+    );
+    assert!(began.elapsed() < Duration::from_secs(10));
 }

@@ -4,13 +4,31 @@
 //! keeps its guard: it needs `NEXUS_LOCAL_DEV=1` and a loopback `HOST`.
 //! `NEXUS_AUTH_MODE=oidc` is the hosted mode. It may bind a public address, and it
 //! refuses to start until every variable it needs is present and well formed.
-use crate::auth::{provider_url, OidcSettings};
+use crate::{
+    auth::{provider_url, OidcSettings},
+    db::PoolSettings,
+    limits,
+};
 use actix_cors::Cors;
 use actix_web::middleware::DefaultHeaders;
+use std::time::Duration;
 
 pub const LOCAL_DATABASE_URL: &str = "postgres://nexus:nexus_local@127.0.0.1:55432/nexus";
 const LOCAL_ORIGINS: [&str; 2] = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const DEFAULT_SCOPES: &str = "openid email profile";
+
+/// A client must send its complete request head within this time, or the connection
+/// is closed. Bodies are bounded separately (`observe::REQUEST_DEADLINE`).
+pub const CLIENT_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a connection being closed may take to finish closing.
+pub const CLIENT_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// An idle kept-alive connection is closed after this long. It is longer than the
+/// idle timeout of the proxies in front of a hosted API, so the proxy, not the API,
+/// is the side that retires a connection and no request is sent into a closing one.
+pub const KEEP_ALIVE: Duration = Duration::from_secs(75);
+/// On a stop signal, requests in flight get this long to finish. Hosts allow about
+/// thirty seconds before they kill the process.
+pub const SHUTDOWN_TIMEOUT_SECONDS: u64 = 25;
 
 #[derive(Clone, Debug)]
 pub enum Mode {
@@ -26,6 +44,95 @@ pub struct ServerConfig {
     pub database_url: String,
     /// Browser origins allowed to call the API across origins.
     pub allowed_origins: Vec<String>,
+    /// Request connection pool size and session timeouts.
+    pub pool: PoolSettings,
+    /// Per-client request limits and the trusted-proxy count.
+    pub limits: limits::Settings,
+}
+
+/// Read an optional whole number within `range`. The error names the variable and
+/// the accepted range, never the value.
+fn number(
+    get: &impl Fn(&str) -> Option<String>,
+    name: &str,
+    default: u32,
+    range: std::ops::RangeInclusive<u32>,
+) -> Result<u32, String> {
+    match get(name) {
+        None => Ok(default),
+        Some(raw) => raw
+            .parse::<u32>()
+            .ok()
+            .filter(|value| range.contains(value))
+            .ok_or_else(|| {
+                format!(
+                    "{name} must be a whole number from {} to {}",
+                    range.start(),
+                    range.end()
+                )
+            }),
+    }
+}
+
+/// Pool and rate-limit settings, shared by both modes. Every problem is reported,
+/// not just the first.
+fn tuning(
+    get: &impl Fn(&str) -> Option<String>,
+    hosted: bool,
+) -> Result<(PoolSettings, limits::Settings), Vec<String>> {
+    let mut invalid = Vec::new();
+    let mut read = |name: &str, default: u32, range: std::ops::RangeInclusive<u32>| {
+        number(get, name, default, range).unwrap_or_else(|why| {
+            invalid.push(why);
+            default
+        })
+    };
+    let defaults = limits::Settings::default();
+    // Zero leaves the database server's own timeout in place.
+    let seconds = |value: u32| (value > 0).then(|| Duration::from_secs(u64::from(value)));
+    let pool = PoolSettings {
+        max_connections: read("NEXUS_DB_MAX_CONNECTIONS", 10, 1..=200),
+        statement_timeout: seconds(read("NEXUS_DB_STATEMENT_TIMEOUT_SECONDS", 30, 0..=3600)),
+        lock_timeout: seconds(read("NEXUS_DB_LOCK_TIMEOUT_SECONDS", 15, 0..=3600)),
+    };
+    let mut limits = limits::Settings {
+        enabled: true,
+        trusted_proxies: read("NEXUS_TRUSTED_PROXIES", 0, 0..=8) as usize,
+        open: limits::Rate {
+            per_minute: read(
+                "NEXUS_RATE_LIMIT_OPEN_PER_MINUTE",
+                defaults.open.per_minute,
+                1..=1_000_000,
+            ),
+            burst: read(
+                "NEXUS_RATE_LIMIT_OPEN_BURST",
+                defaults.open.burst,
+                1..=1_000_000,
+            ),
+        },
+        all: limits::Rate {
+            per_minute: read(
+                "NEXUS_RATE_LIMIT_PER_MINUTE",
+                defaults.all.per_minute,
+                1..=1_000_000,
+            ),
+            burst: read("NEXUS_RATE_LIMIT_BURST", defaults.all.burst, 1..=1_000_000),
+        },
+    };
+    match get("NEXUS_RATE_LIMIT").as_deref() {
+        None | Some("on") => {}
+        // A public listener is never left without request limits; raise them instead.
+        Some("off") if hosted => invalid.push(
+            "NEXUS_RATE_LIMIT=off is accepted only in local mode; raise the limits instead".into(),
+        ),
+        Some("off") => limits.enabled = false,
+        Some(_) => invalid.push("NEXUS_RATE_LIMIT must be on or off".into()),
+    }
+    if invalid.is_empty() {
+        Ok((pool, limits))
+    } else {
+        Err(invalid)
+    }
 }
 
 fn loopback(host: &str) -> bool {
@@ -86,6 +193,7 @@ impl ServerConfig {
                 })
                 .collect::<Result<Vec<_>, _>>()
         });
+        let tuning = tuning(&get, mode == "oidc");
         match mode.as_str() {
             "local" => {
                 if get("NEXUS_LOCAL_DEV").as_deref() != Some("1") {
@@ -94,6 +202,9 @@ impl ServerConfig {
                 if !loopback(&host) {
                     return Err("Local actor mode requires a loopback HOST. Only NEXUS_AUTH_MODE=oidc may listen on a public address.".into());
                 }
+                let (pool, limits) = tuning.map_err(|invalid| {
+                    format!("Local mode cannot start. Invalid: {}.", invalid.join("; "))
+                })?;
                 Ok(Self {
                     mode: Mode::Local,
                     host,
@@ -103,6 +214,8 @@ impl ServerConfig {
                         Some(list) => list?,
                         None => LOCAL_ORIGINS.iter().map(|item| item.to_string()).collect(),
                     },
+                    pool,
+                    limits,
                 })
             }
             "oidc" => {
@@ -153,6 +266,10 @@ impl ServerConfig {
                 if let Err(why) = port {
                     invalid.push(why.into());
                 }
+                let (pool, limits) = tuning.unwrap_or_else(|problems| {
+                    invalid.extend(problems);
+                    (PoolSettings::default(), limits::Settings::default())
+                });
                 if !missing.is_empty() || !invalid.is_empty() {
                     let mut message =
                         String::from("Hosted mode (NEXUS_AUTH_MODE=oidc) cannot start.");
@@ -177,6 +294,8 @@ impl ServerConfig {
                     port: port.unwrap_or(8090),
                     database_url,
                     allowed_origins,
+                    pool,
+                    limits,
                 })
             }
             _ => Err("NEXUS_AUTH_MODE must be local or oidc.".into()),
@@ -247,7 +366,9 @@ pub fn database_failure(error: &sqlx::Error) -> String {
         sqlx::Error::Database(_) => {
             "the database rejected the connection (check user, password and database name)"
         }
-        sqlx::Error::PoolTimedOut => "the database did not answer in time",
+        sqlx::Error::PoolTimedOut => {
+            "the database did not accept a connection in time (check that it is running and reachable)"
+        }
         _ => "the connection failed",
     };
     format!("PostgreSQL is unavailable: {reason}.")
@@ -373,6 +494,86 @@ mod tests {
         assert_eq!(two.allowed_origins.len(), 2);
         assert!(config(&hosted_with("NEXUS_OIDC_SCOPES", "openid profile")).is_err());
         assert!(config(&hosted_with("PORT", "0")).is_err());
+    }
+
+    #[test]
+    fn pool_and_limit_settings_have_safe_defaults_in_both_modes() {
+        for settings in [
+            config(&[("NEXUS_LOCAL_DEV", "1")]).unwrap(),
+            config(&HOSTED).unwrap(),
+        ] {
+            assert_eq!(settings.pool, PoolSettings::default());
+            assert_eq!(settings.pool.max_connections, 10);
+            assert_eq!(
+                settings.pool.statement_timeout,
+                Some(Duration::from_secs(30))
+            );
+            assert_eq!(settings.pool.lock_timeout, Some(Duration::from_secs(15)));
+            assert_eq!(settings.limits, limits::Settings::default());
+            assert!(settings.limits.enabled);
+            // No forwarding header is believed unless the operator says how many
+            // proxies stand in front of the API.
+            assert_eq!(settings.limits.trusted_proxies, 0);
+        }
+    }
+
+    #[test]
+    fn pool_and_limit_settings_are_read_and_validated() {
+        let mut pairs = HOSTED.to_vec();
+        pairs.extend([
+            ("NEXUS_DB_MAX_CONNECTIONS", "25"),
+            ("NEXUS_DB_STATEMENT_TIMEOUT_SECONDS", "0"),
+            ("NEXUS_DB_LOCK_TIMEOUT_SECONDS", "5"),
+            ("NEXUS_TRUSTED_PROXIES", "2"),
+            ("NEXUS_RATE_LIMIT_OPEN_PER_MINUTE", "90"),
+            ("NEXUS_RATE_LIMIT_OPEN_BURST", "30"),
+            ("NEXUS_RATE_LIMIT_PER_MINUTE", "900"),
+            ("NEXUS_RATE_LIMIT_BURST", "120"),
+        ]);
+        let hosted = config(&pairs).unwrap();
+        assert_eq!(hosted.pool.max_connections, 25);
+        assert_eq!(hosted.pool.statement_timeout, None);
+        assert_eq!(hosted.pool.lock_timeout, Some(Duration::from_secs(5)));
+        assert_eq!(hosted.limits.trusted_proxies, 2);
+        assert_eq!(
+            (hosted.limits.open.per_minute, hosted.limits.open.burst),
+            (90, 30)
+        );
+        assert_eq!(
+            (hosted.limits.all.per_minute, hosted.limits.all.burst),
+            (900, 120)
+        );
+
+        // Every bad value is named, and no value is echoed.
+        let mut bad = HOSTED.to_vec();
+        bad.extend([
+            ("NEXUS_DB_MAX_CONNECTIONS", "0"),
+            ("NEXUS_TRUSTED_PROXIES", "many-9431"),
+            ("NEXUS_RATE_LIMIT_BURST", "-7"),
+        ]);
+        let error = config(&bad).unwrap_err();
+        for name in [
+            "NEXUS_DB_MAX_CONNECTIONS",
+            "NEXUS_TRUSTED_PROXIES",
+            "NEXUS_RATE_LIMIT_BURST",
+        ] {
+            assert!(error.contains(name), "{name} missing from: {error}");
+        }
+        assert!(!error.contains("many-9431"));
+        let local = config(&[("NEXUS_LOCAL_DEV", "1"), ("NEXUS_DB_MAX_CONNECTIONS", "x")]);
+        assert!(local.unwrap_err().contains("NEXUS_DB_MAX_CONNECTIONS"));
+    }
+
+    #[test]
+    fn rate_limiting_can_be_turned_off_only_in_local_mode() {
+        let local = config(&[("NEXUS_LOCAL_DEV", "1"), ("NEXUS_RATE_LIMIT", "off")]).unwrap();
+        assert!(!local.limits.enabled);
+        let local = config(&[("NEXUS_LOCAL_DEV", "1"), ("NEXUS_RATE_LIMIT", "on")]).unwrap();
+        assert!(local.limits.enabled);
+        let hosted = config(&hosted_with("NEXUS_RATE_LIMIT", "off")).unwrap_err();
+        assert!(hosted.contains("accepted only in local mode"), "{hosted}");
+        assert!(config(&hosted_with("NEXUS_RATE_LIMIT", "on")).is_ok());
+        assert!(config(&hosted_with("NEXUS_RATE_LIMIT", "maybe")).is_err());
     }
 
     #[test]

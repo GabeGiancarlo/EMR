@@ -69,6 +69,25 @@ pub fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
         .filter(|s| !s.trim().is_empty())
         .ok_or_else(|| ApiError::invalid(format!("{key} is required")))
 }
+/// A staff email in the one form it is stored in: trimmed and lower case. Hosted
+/// sign-in matches the identity provider's verified email against `lower(email)`,
+/// and a unique index on that expression makes an address name one active person,
+/// so every write goes through here.
+pub fn staff_email(raw: &str) -> Result<String> {
+    let email = raw.trim().to_lowercase();
+    let well_formed = email.len() <= 254
+        && !email.chars().any(|c| c.is_whitespace() || c.is_control())
+        && email.split_once('@').is_some_and(|(local, domain)| {
+            !local.is_empty() && !domain.is_empty() && !domain.contains('@')
+        });
+    if well_formed {
+        Ok(email)
+    } else {
+        Err(ApiError::invalid(
+            "Enter a valid email address: one @, no spaces, at most 254 characters",
+        ))
+    }
+}
 pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
     let allowed = fields(resource)?;
     if resource == "clients" {
@@ -169,6 +188,12 @@ pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
             return Err(ApiError::invalid(format!(
                 "{key} must be a positive whole number within the supported range"
             )));
+        }
+        if resource == "staff" && key == "email" {
+            // Not optional for staff, and stored only in its normalized form.
+            let email = staff_email(value.as_str().unwrap_or_default())?;
+            result.insert(key.clone(), Value::String(email));
+            continue;
         }
         if key == "email"
             && value
@@ -443,6 +468,41 @@ mod tests {
         assert!(fields("clients;DROP TABLE staff").is_err());
         assert!(clean("clients", &json!({"organization_id":Uuid::new_v4()})).is_err());
         assert!(clean("notes", &json!({"status":"signed"})).is_err());
+    }
+    #[test]
+    fn staff_email_is_stored_trimmed_and_lower_case() {
+        assert_eq!(
+            staff_email("  Ana.Lopez@Example.INVALID ").unwrap(),
+            "ana.lopez@example.invalid"
+        );
+        let cleaned = clean("staff", &json!({"email": " Lead@Example.Invalid"})).unwrap();
+        assert_eq!(cleaned["email"], "lead@example.invalid");
+        for bad in [
+            "",
+            "   ",
+            "no-at-sign",
+            "@example.invalid",
+            "lead@",
+            "two@signs@example.invalid",
+            "has space@example.invalid",
+            "tab\t@example.invalid",
+            "line\nbreak@example.invalid",
+        ] {
+            assert!(staff_email(bad).is_err(), "{bad:?}");
+            assert!(clean("staff", &json!({ "email": bad })).is_err(), "{bad:?}");
+        }
+        assert!(staff_email(&format!("{}@example.invalid", "a".repeat(250))).is_err());
+        assert!(clean("staff", &json!({"email": 7})).is_err());
+        assert!(clean("staff", &json!({"email": null})).is_err());
+        // A client record may still have no email, and its case is left alone.
+        assert_eq!(
+            clean("clients", &json!({"email": ""})).unwrap()["email"],
+            ""
+        );
+        assert_eq!(
+            clean("clients", &json!({"email": "Ana@Example.invalid"})).unwrap()["email"],
+            "Ana@Example.invalid"
+        );
     }
     #[test]
     fn rejects_invalid_calendar_dates_and_fractional_money() {

@@ -15,7 +15,9 @@ services:
     plan: 0.5c-512mb
     region: oregon
     branch: main
-    healthCheckPath: /healthz
+    # Liveness, which never touches the database: a busy or briefly unreachable database
+    # must not make Render restart a working process. /healthz reports readiness.
+    healthCheckPath: /livez
     # Deploy a commit on main only after its GitHub checks pass.
     autoDeployTrigger: checksPass
     envVars:
@@ -38,6 +40,25 @@ services:
         value: openid email profile offline_access
       - key: NEXUS_ALLOWED_ORIGINS
         value: https://nexus-demo-orcin.vercel.app
+      # Request limits are counted per client address. Set this to the number of Render's
+      # own proxies only, read from the API log after the first deploy (see "Request
+      # limits" in docs/deployment/demo-hosting.md). Do not count Vercel: this service's
+      # onrender.com address is public, so a count that includes Vercel would let a
+      # direct caller choose the address it is counted under. Until it is set, every
+      # caller shares one limit.
+      - key: NEXUS_TRUSTED_PROXIES
+        value: "0"
+      # With the setting above done correctly, people who come through the site are still
+      # counted together, per Vercel address, so the limits are higher than the defaults
+      # (1200 and 3000 a minute): about 50 visit participants polling at once.
+      - key: NEXUS_RATE_LIMIT_OPEN_PER_MINUTE
+        value: "3000"
+      - key: NEXUS_RATE_LIMIT_OPEN_BURST
+        value: "600"
+      - key: NEXUS_RATE_LIMIT_PER_MINUTE
+        value: "6000"
+      - key: NEXUS_RATE_LIMIT_BURST
+        value: "1200"
 
 databases:
   - name: nexus-db
