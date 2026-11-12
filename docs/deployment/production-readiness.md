@@ -4,8 +4,8 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 
 ## Where it stands
 
-- **The code is ready to host a synthetic-data demonstration behind real sign-in.** The API, the frontend, the sign-in path, the build pipeline and the repository controls below are in place and tested on the development Mac and in CI.
-- **Nothing is live.** The API and database have no host yet, so the site does not build. No part of the hosted configuration has run on real infrastructure.
+- **A synthetic-data demonstration is live behind real sign-in** since November 12, 2026: the site at `https://nexus-demo-orcin.vercel.app` (Vercel), the API and PostgreSQL on Render, sign-in through Auth0. The owner has signed in and reached the seeded workspace.
+- **Only the first steps have been exercised on the real infrastructure**: health, the sign-in redirect, one sign-in, seeding. The list under "Before the demonstration is live" shows what is still open.
 - **It is not ready for real patient data.** The reasons are listed under "Before real patient data". Some are engineering; several are contracts, policies and independent testing that code cannot supply.
 - **Product scope is separate.** The [acceptance ledger](../product/acceptance-ledger.md) lists 50 capabilities, none accepted as complete. This page is about operating the system safely, not about whether the product is finished.
 
@@ -28,15 +28,17 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 
 | Step | Who | State |
 | --- | --- | --- |
-| Create a login in Auth0 (connection `Nexus-Staff`) and verify the email | Owner | Open |
-| Create a Render account and apply the blueprint | Owner | Open. Wait until `render.yaml` with the written-in values is on `main`. |
-| Put the API's address into `frontend/vercel.json` | Developer | Open. Needs the address from the step above. |
-| Seed synthetic data ([demo hosting](demo-hosting.md), step 4) | Owner | Open |
-| Deploy the frontend and check sign-in ([demo hosting](demo-hosting.md), steps 7 and 8) | Owner | Open |
-| Set `NEXUS_TRUSTED_PROXIES` from the API log ([demo hosting](demo-hosting.md), step 9) | Owner and developer | Open. Until then every caller shares one request limit. |
+| A way to sign in | Owner | Done November 12: Google sign-in is on for the application. No `Nexus-Staff` password account exists yet. |
+| Create the API and database on Render | Owner | Done November 12, on the paid plans (about $17.50 a month). |
+| Put the API's address into `frontend/vercel.json` | Developer | Done November 12 (release 31). |
+| Seed synthetic data ([demo hosting](demo-hosting.md), step 4) | Owner and developer | Done November 12. One request failed with a temporary database error and the run was resumed; the cause is not known. |
+| Deploy the frontend and check sign-in ([demo hosting](demo-hosting.md), steps 7 and 8) | Owner | Done November 12: the owner signed in with Google and reached the workspace. |
+| Set `NEXUS_TRUSTED_PROXIES` from the API log ([demo hosting](demo-hosting.md), step 9) | Developer | Done November 12: 2, measured from a direct call. |
+| Replace the database credential | Owner | Open. The connection string was pasted into a development chat during seeding. |
+| Exercise the rest on the live system: staying signed in, signing out, a second role, a visit, an over-limit caller | Owner and developer | Open |
 | Review the ten open Dependabot updates, three of them major versions (`sqlx`, `thiserror`, `sha2`) | Developer | Open. Not needed for the demonstration. |
 
-First-deploy unknowns, each to be confirmed when the steps above are done: the container image starting on Render; TLS to the managed database; Auth0's token exchange under the narrowed content security policy; refresh-token renewal; sign-out; recording chunks of up to 8 MB through the Vercel rewrite; and how many proxy addresses Render adds to a request.
+Confirmed on the first deploy: the container image starts on Render and reaches its database; Auth0's sign-in and token exchange work under the narrowed content security policy (the owner signed in); Render adds two proxy addresses to a direct request. Still unknown: refresh-token renewal; sign-out; recording chunks of up to 8 MB through the Vercel rewrite.
 
 ## Before real patient data
 
