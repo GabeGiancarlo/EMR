@@ -135,8 +135,10 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
         .collect::<Vec<_>>());
     let mut tx = state.pool.begin().await?;
     for resource in RESOURCES.iter().copied().chain(std::iter::once("audit")) {
-        let read = access::allowed(&state.pool, &actor, resource, false).await?;
-        let write = access::allowed(&state.pool, &actor, resource, true).await?;
+        // On the transaction, never the pool: this request already holds a connection,
+        // and waiting for a second one deadlocks the pool under concurrent bootstraps.
+        let read = access::allowed(&mut *tx, &actor, resource, false).await?;
+        let write = access::allowed(&mut *tx, &actor, resource, true).await?;
         data["permissions"][resource] = json!({"read":read,"write":write});
         if read {
             data[resource] = json!(rows(&mut tx, resource, &actor).await?);
