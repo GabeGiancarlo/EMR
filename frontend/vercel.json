@@ -8,11 +8,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE-WITH-API-HOST.example.invalid/api/:path*"
+      "destination": "https://nexus-api-j435.onrender.com/api/:path*"
     },
     {
       "source": "/healthz",
-      "destination": "https://REPLACE-WITH-API-HOST.example.invalid/healthz"
+      "destination": "https://nexus-api-j435.onrender.com/healthz"
     },
     {
       "source": "/visit",

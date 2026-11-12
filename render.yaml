@@ -4,19 +4,17 @@
 #
 # Synthetic demonstration data only. Not for real patient data.
 #
-# TRIAL: both are on Render's free plans (owner direction, November 12, 2026), to see the
-# demonstration live before paying. On free plans the API sleeps after 15 minutes
-# without a request and takes about a minute to wake, and the database is deleted 30
-# days after it is created and has no backups. To keep the demonstration, change the
-# two `plan` lines to the paid values in the comments beside them (about $14.50 a
-# month in total, with `diskSizeGB: 5` on the database) before the 30 days are up.
+# Both plans are paid on purpose: a free web service sleeps when idle and a free
+# database is deleted after a trial period, and neither has backups. Created by the
+# owner on November 12, 2026 as blueprint "Nexus"; the API is at
+# https://nexus-api-j435.onrender.com.
 services:
   - type: web
     name: nexus-api
     runtime: docker
     dockerfilePath: ./infra/dockerfiles/Dockerfile.api
     dockerContext: .
-    plan: free # paid: 0.5c-512mb
+    plan: 0.5c-512mb
     region: oregon
     branch: main
     # Liveness, which never touches the database: a busy or briefly unreachable database
@@ -66,8 +64,10 @@ services:
 
 databases:
   - name: nexus-db
-    plan: free # paid: 0.1c-256mb, and add `diskSizeGB: 5` (the paid default is 15 GB,
-    # storage is billed per GB, and a disk can be raised later but never lowered)
+    plan: 0.1c-256mb
+    # Created with this plan's default disk. Storage is billed per GB, and a disk can be
+    # raised later but never lowered, so this must not be set below what exists.
+    diskSizeGB: 15
     postgresMajorVersion: "17"
     region: oregon
     databaseName: nexus
