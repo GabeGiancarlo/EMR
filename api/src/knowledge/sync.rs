@@ -9,7 +9,7 @@ pub(super) fn stable_id(value: &str) -> Uuid {
     Uuid::from_bytes(bytes)
 }
 pub(super) fn hash(value: &str) -> String {
-    format!("{:x}", Sha256::digest(value.as_bytes()))
+    crate::sha256_hex(value.as_bytes())
 }
 pub(super) fn split(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();

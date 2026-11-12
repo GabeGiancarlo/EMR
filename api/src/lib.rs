@@ -36,6 +36,20 @@ use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
 
+/// SHA-256 as 64 lower-case hexadecimal characters: the form stored for token,
+/// identity, media and knowledge hashes. Stored values are compared with this text,
+/// so the format must never change.
+pub(crate) fn sha256_hex(bytes: impl AsRef<[u8]>) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write;
+    let digest = Sha256::digest(bytes.as_ref());
+    let mut text = String::with_capacity(digest.len() * 2);
+    for byte in digest.iter() {
+        let _ = write!(text, "{byte:02x}");
+    }
+    text
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
@@ -343,4 +357,30 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/{resource}", web::post().to(routes::create))
                 .route("/{resource}/{id}", web::patch().to(routes::update)),
         );
+}
+
+#[cfg(test)]
+mod digest_tests {
+    use super::sha256_hex;
+
+    /// Stored hashes were written by `format!("{:x}", …)` on an older `sha2`. These
+    /// published vectors pin the text, so an update to the hashing crate cannot
+    /// silently change what is compared with the database.
+    #[test]
+    fn sha256_hex_matches_the_published_vectors_in_lower_case() {
+        assert_eq!(
+            sha256_hex(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        // A leading zero byte keeps its two characters.
+        let text = sha256_hex(vec![0x62_u8, 0x66, 0x65]);
+        assert_eq!(text.len(), 64);
+        assert!(text
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+    }
 }

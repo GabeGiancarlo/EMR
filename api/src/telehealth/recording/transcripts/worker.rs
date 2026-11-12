@@ -1,7 +1,6 @@
 use super::*;
 use crate::media_transcription::Recognition;
 use crate::workers::{Exit, Status};
-use sha2::{Digest, Sha256};
 use sqlx::{Connection, PgConnection, PgPool};
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -216,7 +215,7 @@ async fn process(pool: &PgPool, owner: &mut sqlx::PgConnection, id: Uuid) -> Res
     )
     .await?;
     tx.commit().await?;
-    let hash = format!("{:x}", Sha256::digest(&bytes));
+    let hash = crate::sha256_hex(&bytes);
     let recognized = guarded(pool, owner, id, &bytes).await?;
     publish(pool, id, recognized, hash).await
 }
