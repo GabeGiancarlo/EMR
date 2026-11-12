@@ -13,8 +13,8 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 
 | Area | What exists | Evidence |
 | --- | --- | --- |
-| Sign-in | Hosted mode verifies an identity-provider token (signature, issuer, audience, expiry, verified email) and maps the email to exactly one active staff member. Local operator headers are ignored when hosted. | Unit and PostgreSQL tests; a browser pass against a mock provider. Not yet run against Auth0. |
-| Identity provider | Auth0 application "Nexus Demo": single-page, no secret, refresh token rotation on; sign-in through Google (on Auth0's shared development keys) and a staff-only password connection with sign-up disabled. | Configured November 12. No one has signed in through it yet. |
+| Sign-in | Hosted mode verifies an identity-provider token (signature, issuer, audience, expiry, verified email) and maps the email to exactly one active staff member. Local operator headers are ignored when hosted. | Unit and PostgreSQL tests; a browser pass against a mock provider. Against Auth0: one sign-in by the owner on November 12, reported by the owner and matched by a 200 from `/api/bootstrap` in the API log. |
+| Identity provider | Auth0 application "Nexus Demo": single-page, no secret, refresh token rotation on; sign-in through Google (on Auth0's shared development keys) and a staff-only password connection with sign-up disabled. | Configured November 12. The owner has signed in through Google; no one has used the password connection, which has no accounts. |
 | Access control | Organization and patient scope, role policies, primary-clinician scope and time-limited exceptions, checked on every route behind one gate. | Two code audits found no sign-in bypass and no cross-organization access. These were reviews, not a penetration test. |
 | Records | Immutable signatures and source versions, integer-cent money, audit rows written in the same transaction as the change, explicit corrections. | PostgreSQL integration suites in CI. |
 | Availability | Bounded database pool; statement and lock timeouts answered as retryable errors; liveness and readiness probes; supervised background workers; sign-in provider retried at startup; a handler crash answered instead of dropping the connection. | Unit and PostgreSQL tests; a short local smoke run. Not exercised under load. |
@@ -22,7 +22,7 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 | Operability | One error format; a request id on every response and in the log; an access log with no addresses, tokens, emails or record content; startup fails with one line naming a missing setting. | Tests and the local smoke run. |
 | Browser | Content security policy limited to the site and the identity provider; framing denied; strict transport security; an error boundary and plain messages for network failures; session renewal. | Frontend tests and build. The boundary and failure screens were not exercised in a browser. |
 | Build and repository | `main` and `dev` protected: pull request and seven required checks, no force-push. CI runs format, lint, build, unit and PostgreSQL tests, frontend build, container build, secret scanning, dependency advisories, CodeQL and licence checks. Actions pinned to commits. Dependabot, `SECURITY.md`, `CODEOWNERS`. | Running on every pull request. |
-| Deployment definition | `render.yaml` blueprint (API and PostgreSQL on Render's smallest paid plans, deploys `main` after checks pass); `frontend/vercel.json` builds only `main` and refuses to build with placeholder addresses. | Files reviewed; never applied. |
+| Deployment definition | `render.yaml` blueprint (API and PostgreSQL on Render's smallest paid plans, deploys `main` after checks pass); `frontend/vercel.json` builds only `main` and refuses to build with placeholder addresses. | Applied November 12: the blueprint created the API and the database, a later manual sync applied a changed setting, and Vercel built `main`. |
 
 ## Before the demonstration is live
 
@@ -34,7 +34,7 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 | Seed synthetic data ([demo hosting](demo-hosting.md), step 4) | Owner and developer | Done November 12. One request failed with a temporary database error and the run was resumed; the cause is not known. |
 | Deploy the frontend and check sign-in ([demo hosting](demo-hosting.md), steps 7 and 8) | Owner | Done November 12: the owner signed in with Google and reached the workspace. |
 | Set `NEXUS_TRUSTED_PROXIES` from the API log ([demo hosting](demo-hosting.md), step 9) | Developer | Done November 12: 2, measured from a direct call. |
-| Replace the database credential | Owner | Open. The connection string was pasted into a development chat during seeding. |
+| Replace the database credential | Owner and developer | Done November 12. The connection string had been pasted into a development chat during seeding; a new credential was created, the API moved to it, and the old one deleted. Reads were checked afterwards; a write and table ownership were not ([demo hosting](demo-hosting.md), "Replacing the database password"). |
 | Exercise the rest on the live system: staying signed in, signing out, a second role, a visit, an over-limit caller | Owner and developer | Open |
 | Review the ten open Dependabot updates, three of them major versions (`sqlx`, `thiserror`, `sha2`) | Developer | Open. Not needed for the demonstration. |
 
