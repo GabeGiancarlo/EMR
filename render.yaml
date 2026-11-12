@@ -5,7 +5,9 @@
 # Synthetic demonstration data only. Not for real patient data.
 #
 # Both plans are paid on purpose: a free web service sleeps when idle and a free
-# database is deleted after a trial period, and neither has backups.
+# database is deleted after a trial period, and neither has backups. Created by the
+# owner on November 12, 2026 as blueprint "Nexus"; the API is at
+# https://nexus-api-j435.onrender.com.
 services:
   - type: web
     name: nexus-api
@@ -40,14 +42,14 @@ services:
         value: openid email profile offline_access
       - key: NEXUS_ALLOWED_ORIGINS
         value: https://nexus-demo-orcin.vercel.app
-      # Request limits are counted per client address. Set this to the number of Render's
-      # own proxies only, read from the API log after the first deploy (see "Request
-      # limits" in docs/deployment/demo-hosting.md). Do not count Vercel: this service's
-      # onrender.com address is public, so a count that includes Vercel would let a
-      # direct caller choose the address it is counted under. Until it is set, every
-      # caller shares one limit.
+      # Request limits are counted per client address. This is the number of Render's own
+      # proxies: a request made straight to the onrender.com address on November 12, 2026
+      # logged forwarded_hops=2. Do not add one for Vercel: this service's address is
+      # public, so counting Vercel would let a direct caller choose the address it is
+      # counted under. Measure again if Render's network changes (see "Request limits"
+      # in docs/deployment/demo-hosting.md).
       - key: NEXUS_TRUSTED_PROXIES
-        value: "0"
+        value: "2"
       # With the setting above done correctly, people who come through the site are still
       # counted together, per Vercel address, so the limits are higher than the defaults
       # (1200 and 3000 a minute): about 50 visit participants polling at once.
@@ -63,6 +65,9 @@ services:
 databases:
   - name: nexus-db
     plan: 0.1c-256mb
+    # Created with this plan's default disk. Storage is billed per GB, and a disk can be
+    # raised later but never lowered, so this must not be set below what exists.
+    diskSizeGB: 15
     postgresMajorVersion: "17"
     region: oregon
     databaseName: nexus
