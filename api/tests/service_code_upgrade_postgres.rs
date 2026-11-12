@@ -133,7 +133,7 @@ async fn populated_upgrade_preserves_rows_and_repeat_is_noop() {
     for key in ["claims", "sessions", "audit", "catalog", "revisions"] {
         assert_eq!(before[key], after[key]);
     }
-    assert_eq!(after["migrations"].as_array().unwrap().len(), 22);
+    assert_eq!(after["migrations"].as_array().unwrap().len(), 23);
     tokio::time::timeout(Duration::from_secs(10), migrate(&pool))
         .await
         .unwrap()
@@ -219,7 +219,7 @@ async fn populated_pre_program_schema_upgrades_without_new_columns() {
             .as_array()
             .unwrap()
             .len(),
-        22
+        23
     );
     cleanup(control, pool, schema).await;
 }
@@ -320,7 +320,7 @@ async fn shared_active_staff_email_blocks_migration_022_and_changes_no_row() {
             .as_array()
             .unwrap()
             .len(),
-        22
+        23
     );
     // From here on the database refuses a second active holder in any spelling or
     // tenant, and still allows inactive ones and distinct addresses.

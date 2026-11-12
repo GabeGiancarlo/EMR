@@ -27,6 +27,7 @@ pub async fn create(
     let mut tx = state.pool.begin().await?;
     let (room, p) = authorize(&req, &mut tx).await?;
     super::super::visitor::connection(&p, body.connection_id)?;
+    event_budget(&mut tx, &room, uid(&p, "id")?).await?;
     let r: Value = sqlx::query_scalar(
         "SELECT to_jsonb(r) FROM recordings r WHERE id=$1 AND room_id=$2 FOR UPDATE",
     )

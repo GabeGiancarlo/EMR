@@ -14,6 +14,12 @@ use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+/// Events one participant may cause in ten minutes. Joining, leaving, clearing the
+/// board and each recording step write an append-only event, so without a ceiling an
+/// invitation holder could grow that history for as long as the room is open. An
+/// ordinary visit causes a handful.
+const PARTICIPANT_EVENT_LIMIT: i64 = 60;
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.configure(recording::configure);
     cfg.route("/telehealth/rooms", web::post().to(manager::create))
@@ -176,6 +182,28 @@ pub(super) async fn known_invitation(req: &HttpRequest, pool: &PgPool) -> Result
     } else {
         Err(denied())
     }
+}
+/// Refuse a participant who has already caused [`PARTICIPANT_EVENT_LIMIT`] events in
+/// the last ten minutes. Call it before writing an event on a participant's behalf.
+pub(super) async fn event_budget(
+    tx: &mut Transaction<'_, Postgres>,
+    room: &Value,
+    participant: Uuid,
+) -> Result<()> {
+    let recent: i64 = sqlx::query_scalar("SELECT count(*) FROM telehealth_events WHERE participant_id=$1 AND room_id=$2 AND occurred_at>clock_timestamp()-interval '10 minutes'")
+        .bind(participant)
+        .bind(uid(room, "id")?)
+        .fetch_one(&mut **tx)
+        .await?;
+    if recent >= PARTICIPANT_EVENT_LIMIT {
+        return Err(ApiError {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            code: "visit_rate",
+            message: "Too many visit actions in a short time. Wait a few minutes, then try again."
+                .into(),
+        });
+    }
+    Ok(())
 }
 pub(super) async fn authorize(
     req: &HttpRequest,

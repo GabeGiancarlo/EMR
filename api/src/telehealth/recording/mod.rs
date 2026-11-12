@@ -300,6 +300,12 @@ pub async fn action(
     }
     let staff = p["staff_id"].as_str().and_then(|v| Uuid::parse_str(v).ok());
     let pid = uid(&p, "id")?;
+    // Requesting, starting and resuming can be repeated without end, and each writes
+    // rows that are kept. Pausing, stopping, declining and withdrawing are never
+    // refused: a participant must always be able to stop a recording.
+    if matches!(action.as_str(), "request" | "start" | "resume") {
+        event_budget(&mut tx, &room, pid).await?;
+    }
     if !matches!(action.as_str(), "accept" | "decline" | "withdraw") && staff.is_none() {
         return Err(ApiError::denied());
     }
