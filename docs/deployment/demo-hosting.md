@@ -146,6 +146,8 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 4. Production Branch: `main`. The work reaches `main` by a pull request from `dev`; until then, set the production branch to `dev` if you want to try it before releasing.
 5. Check the project's address equals `SITE`. If it differs, update the provider's URLs (step 2) and `NEXUS_ALLOWED_ORIGINS` (step 5).
 
+**Only `main` is built.** `frontend/vercel.json` tells Vercel to skip every other branch (`ignoreCommand`), so pull requests and `dev` do not produce a failed or half-working preview. If you ever want previews, remove that line and read the next paragraph first.
+
 **Preview deployments do not work for sign-in or saving.** Every Vercel preview gets its own address, such as `https://nexus-demo-git-some-branch-you.vercel.app`. That address is not in the provider's callback list, so sign-in is refused there, and it is not in `NEXUS_ALLOWED_ORIGINS`, so the API answers HTTP 400 to anything that saves. Use the production address. If you need one preview to work, add its exact origin to the provider's four URL fields and to `NEXUS_ALLOWED_ORIGINS` (comma-separated), and remove it afterwards.
 
 ### 8. Check it
