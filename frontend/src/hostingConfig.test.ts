@@ -6,16 +6,19 @@ import { hostingConfigProblems } from "../scripts/check-hosting-config.mjs";
 
 type Config = { rewrites: { source: string; destination: string }[]; headers: { source: string; headers: { key: string; value: string }[] }[] };
 const tracked = await readFile(new URL("../vercel.json", import.meta.url), "utf8");
-/** The tracked file as it reads once the two addresses are written in. */
-const filled = (): Config =>
-  JSON.parse(
-    tracked
-      .replaceAll("REPLACE-WITH-API-HOST.example.invalid", "nexus-api.onrender.com")
-      .replaceAll("REPLACE-WITH-IDENTITY-PROVIDER-HOST.example.invalid", "nexus-demo.us.auth0.com"),
-  );
 const policy = (config: Config) => config.headers.flatMap((entry) => entry.headers).find((header) => header.key === "Content-Security-Policy")!;
+/**
+ * The tracked file with example addresses in place of whatever it holds, placeholder or
+ * real, so these tests keep their meaning before and after the file is filled in.
+ */
+const filled = (): Config => {
+  const config: Config = JSON.parse(tracked);
+  for (const rewrite of config.rewrites) rewrite.destination = rewrite.destination.replace(/^https:\/\/[^/]+/, "https://nexus-api.onrender.com");
+  policy(config).value = policy(config).value.replace(/connect-src [^;]*/, "connect-src 'self' https://nexus-demo.us.auth0.com");
+  return config;
+};
 
-test("the tracked vercel.json is ready once its two addresses are written in", () => {
+test("the tracked vercel.json is ready once its addresses are written in", () => {
   assert.deepEqual(hostingConfigProblems(filled()), []);
 });
 
