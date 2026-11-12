@@ -8,7 +8,7 @@ use emr_api::auth::{Oidc, Rejection};
 use jsonwebtoken::{encode, get_current_timestamp, Algorithm, EncodingKey, Header};
 use oidc::{Provider, SigningKey, AUDIENCE};
 use serde_json::json;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const EMAIL: &str = "clinician@example.invalid";
 
@@ -249,6 +249,95 @@ async fn unknown_key_ids_cannot_force_repeated_downloads() {
     }
     assert_eq!(provider.key_downloads(), 1);
     assert!(verifier.verify(&key.sign(&claims)).await.is_ok());
+}
+
+/// Review finding: with old keys and a provider that does not answer, requests whose
+/// key was already held used to queue behind one download for its whole timeout.
+#[actix_web::test]
+async fn held_keys_never_wait_for_a_slow_provider() {
+    let key = SigningKey::generate("key-1");
+    let provider = Provider::start(&[&key]).await;
+    // Every request sees the held keys as old and a refresh as allowed.
+    let verifier = provider
+        .connect()
+        .await
+        .with_key_max_age(Duration::ZERO)
+        .with_refresh_cooldown(Duration::ZERO);
+    let token = key.sign(&provider.claims(EMAIL));
+    provider.delay_keys(Duration::from_secs(5));
+
+    let started = Instant::now();
+    for _ in 0..40 {
+        assert_eq!(verifier.verify(&token).await, Ok(EMAIL.to_string()));
+        // Let the background refresh start and reach the provider.
+        actix_web::rt::time::sleep(Duration::from_millis(5)).await;
+    }
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "40 verifications took {elapsed:?} while one key download was stalled for 5 s"
+    );
+    // One at startup, and exactly one refresh in flight however many requests arrived.
+    assert_eq!(provider.key_downloads(), 2);
+}
+
+#[actix_web::test]
+async fn held_keys_outlive_a_failing_or_unreachable_provider() {
+    let key = SigningKey::generate("key-1");
+    let rotated = SigningKey::generate("key-2");
+    let provider = Provider::start(&[&key]).await;
+    let verifier = provider
+        .connect()
+        .await
+        .with_key_max_age(Duration::ZERO)
+        .with_refresh_cooldown(Duration::from_millis(100));
+    let token = key.sign(&provider.claims(EMAIL));
+
+    // The provider answers with errors: sign-in keeps working on the held keys, and
+    // the provider is asked no more than once per cooldown.
+    provider.fail_keys(true);
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_millis(450) {
+        assert_eq!(verifier.verify(&token).await, Ok(EMAIL.to_string()));
+        actix_web::rt::time::sleep(Duration::from_millis(10)).await;
+    }
+    let attempts = provider.key_downloads() - 1;
+    assert!(
+        (1..=6).contains(&attempts),
+        "{attempts} downloads in 450 ms with a 100 ms cooldown"
+    );
+
+    // It recovers with rotated keys: the next refresh picks them up.
+    provider.fail_keys(false);
+    provider.publish(&[&key, &rotated]);
+    actix_web::rt::time::sleep(Duration::from_millis(150)).await;
+    assert!(verifier.verify(&token).await.is_ok());
+    actix_web::rt::time::sleep(Duration::from_millis(100)).await;
+    assert!(verifier
+        .verify(&rotated.sign(&provider.claims(EMAIL)))
+        .await
+        .is_ok());
+
+    // The provider disappears entirely: held keys still verify, promptly, and a key
+    // id that is not held is refused instead of hanging.
+    provider.stop().await;
+    actix_web::rt::time::sleep(Duration::from_millis(150)).await;
+    let started = Instant::now();
+    for _ in 0..20 {
+        assert_eq!(verifier.verify(&token).await, Ok(EMAIL.to_string()));
+    }
+    let stranger = SigningKey::generate("never-published");
+    assert_eq!(
+        verifier
+            .verify(&stranger.sign(&provider.claims(EMAIL)))
+            .await,
+        Err(Rejection::Unauthenticated)
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
 }
 
 #[actix_web::test]

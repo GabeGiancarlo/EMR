@@ -17,6 +17,7 @@ struct Call<'a> {
     token: Option<&'a str>,
     actor_header: Option<Uuid>,
     body: Option<Value>,
+    scheme: &'a str,
 }
 impl<'a> Call<'a> {
     fn get(path: &'a str) -> Self {
@@ -26,6 +27,7 @@ impl<'a> Call<'a> {
             token: None,
             actor_header: None,
             body: None,
+            scheme: "Bearer",
         }
     }
     fn post(path: &'a str, body: Value) -> Self {
@@ -37,6 +39,10 @@ impl<'a> Call<'a> {
     }
     fn token(mut self, token: &'a str) -> Self {
         self.token = Some(token);
+        self
+    }
+    fn scheme(mut self, scheme: &'a str) -> Self {
+        self.scheme = scheme;
         self
     }
     fn claiming(mut self, staff: Uuid) -> Self {
@@ -51,7 +57,7 @@ async fn send(state: &web::Data<AppState>, call: Call<'_>) -> (StatusCode, Value
         .method(call.method.parse().unwrap())
         .uri(call.path);
     if let Some(token) = call.token {
-        req = req.insert_header(("authorization", format!("Bearer {token}")));
+        req = req.insert_header(("authorization", format!("{} {token}", call.scheme)));
     }
     if let Some(staff) = call.actor_header {
         req = req.insert_header(("x-nexus-actor", staff.to_string()));
@@ -157,6 +163,20 @@ async fn hosted_requests_act_only_as_the_signed_in_staff_member() {
     // Role policy still applies to the resolved staff member.
     assert_eq!(body["permissions"]["staff"]["write"], false);
     assert_eq!(body["permissions"]["claims"]["read"], false);
+
+    // The authorization scheme name is case-insensitive; another scheme is not a sign-in.
+    for scheme in ["bearer", "BEARER", "BeArEr"] {
+        let call = Call::get("/api/bootstrap")
+            .token(&clinician_token)
+            .scheme(scheme);
+        let (status, body, _) = send(&state, call).await;
+        assert_eq!(status, StatusCode::OK, "{scheme}");
+        assert_eq!(body["actor"]["id"], clinician.to_string());
+    }
+    let call = Call::get("/api/bootstrap")
+        .token(&clinician_token)
+        .scheme("Basic");
+    assert_eq!(send(&state, call).await.0, StatusCode::UNAUTHORIZED);
 
     // Unknown, inactive, ambiguous and unverified accounts get one identical refusal.
     let mut unverified = provider.claims("admin@example.invalid");

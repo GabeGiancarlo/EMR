@@ -196,15 +196,24 @@ pub fn cors(origins: &[String], hosted: bool) -> Cors {
         .iter()
         .fold(Cors::default(), |cors, origin| cors.allowed_origin(origin))
         .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "OPTIONS"])
-        .allowed_headers(vec![
-            "content-type",
-            "authorization",
-            "x-nexus-actor",
-            "x-nexus-client",
-            "x-nexus-consent",
-        ])
+        .allowed_headers(allowed_request_headers(hosted))
         .block_on_origin_mismatch(hosted)
         .max_age(600)
+}
+
+/// Request headers a browser may send across origins. The development actor header
+/// is offered only in local mode, the one mode that reads it.
+pub fn allowed_request_headers(hosted: bool) -> Vec<&'static str> {
+    let mut headers = vec![
+        "content-type",
+        "authorization",
+        "x-nexus-client",
+        "x-nexus-consent",
+    ];
+    if !hosted {
+        headers.push("x-nexus-actor");
+    }
+    headers
 }
 
 /// Headers for every response that does not set its own. The API serves data, never
@@ -364,6 +373,21 @@ mod tests {
         assert_eq!(two.allowed_origins.len(), 2);
         assert!(config(&hosted_with("NEXUS_OIDC_SCOPES", "openid profile")).is_err());
         assert!(config(&hosted_with("PORT", "0")).is_err());
+    }
+
+    #[test]
+    fn the_development_actor_header_is_offered_only_in_local_mode() {
+        assert!(allowed_request_headers(false).contains(&"x-nexus-actor"));
+        assert!(!allowed_request_headers(true).contains(&"x-nexus-actor"));
+        for header in [
+            "content-type",
+            "authorization",
+            "x-nexus-client",
+            "x-nexus-consent",
+        ] {
+            assert!(allowed_request_headers(true).contains(&header));
+            assert!(allowed_request_headers(false).contains(&header));
+        }
     }
 
     #[test]

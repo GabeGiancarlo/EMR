@@ -20,7 +20,10 @@ use jsonwebtoken::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 use tokio::sync::{Mutex, RwLock};
@@ -65,9 +68,13 @@ impl Auth {
     }
 }
 
-/// The staff row the OIDC gate verified for this request.
-#[derive(Clone, Copy)]
-pub(crate) struct Identity(pub Uuid);
+/// The staff member the OIDC gate verified for this request, with the row it read,
+/// so the handler does not read the same row again.
+#[derive(Clone)]
+pub(crate) struct Identity {
+    pub id: Uuid,
+    pub staff: Value,
+}
 
 #[derive(Clone, Debug)]
 pub struct OidcSettings {
@@ -95,14 +102,22 @@ struct KeyCache {
     attempted: Instant,
 }
 
+/// The provider's signing keys. Shared behind an `Arc` so a refresh can run in the
+/// background while requests keep verifying against the keys already held.
+struct KeyStore {
+    url: String,
+    http: reqwest::Client,
+    cache: RwLock<KeyCache>,
+    /// Held for the length of one download, so there is never more than one.
+    downloading: Mutex<()>,
+    cooldown_ms: AtomicU64,
+    max_age_ms: AtomicU64,
+}
+
 pub struct Oidc {
     settings: OidcSettings,
     endpoints: Endpoints,
-    jwks_url: String,
-    http: reqwest::Client,
-    cache: RwLock<KeyCache>,
-    refreshing: Mutex<()>,
-    cooldown: Duration,
+    keys: Arc<KeyStore>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -214,6 +229,59 @@ fn key_fits(key: &Jwk, algorithm: Algorithm) -> bool {
     }
 }
 
+impl KeyStore {
+    async fn held(&self, kid: Option<&str>, algorithm: Algorithm) -> Option<Jwk> {
+        let cache = self.cache.read().await;
+        let mut fitting = cache.keys.iter().filter(|key| key_fits(key, algorithm));
+        match kid {
+            Some(kid) => fitting
+                .find(|key| key.common.key_id.as_deref() == Some(kid))
+                .cloned(),
+            // Without a key id the choice must be unambiguous.
+            None => match (fitting.next(), fitting.next()) {
+                (Some(only), None) => Some(only.clone()),
+                _ => None,
+            },
+        }
+    }
+
+    /// Whether a download may start now. Every attempt, successful or not, starts the
+    /// cooldown, so an unreachable provider is asked at most once per cooldown.
+    /// `only_if_old` adds the age test used for routine refreshes.
+    async fn refresh_due(&self, only_if_old: bool) -> bool {
+        let cache = self.cache.read().await;
+        let cooldown = Duration::from_millis(self.cooldown_ms.load(Ordering::Relaxed));
+        let max_age = Duration::from_millis(self.max_age_ms.load(Ordering::Relaxed));
+        cache.attempted.elapsed() >= cooldown && (!only_if_old || cache.fetched.elapsed() > max_age)
+    }
+
+    /// Download the key set if one is due. The caller holds `downloading`. A failed
+    /// download keeps the keys already held, so a provider outage does not sign
+    /// everyone out.
+    async fn download(&self, only_if_old: bool) {
+        if !self.refresh_due(only_if_old).await {
+            return;
+        }
+        // Start the cooldown before the request, so nothing else queues another
+        // download while this one is waiting on a slow provider.
+        self.cache.write().await.attempted = Instant::now();
+        let fetched = fetch_json::<JwkSet>(&self.http, &self.url).await;
+        let mut cache = self.cache.write().await;
+        match fetched.map(signing_keys) {
+            Ok(keys) if !keys.is_empty() => {
+                cache.keys = keys;
+                cache.fetched = Instant::now();
+            }
+            Ok(_) => log::warn!(
+                "Identity provider returned no usable signing keys; keeping the previous set"
+            ),
+            Err(why) => {
+                log::warn!("Identity provider signing keys {why}; keeping the previous set")
+            }
+        }
+    }
+}
+
 impl Oidc {
     /// Read the provider's discovery document and signing keys. Startup fails here,
     /// with a message naming the variable to fix, instead of rejecting every sign-in later.
@@ -273,22 +341,35 @@ impl Oidc {
                 token: discovery.token_endpoint,
                 end_session,
             },
-            jwks_url,
-            http,
-            cache: RwLock::new(KeyCache {
-                keys,
-                fetched: now,
-                attempted: now,
+            keys: Arc::new(KeyStore {
+                url: jwks_url,
+                http,
+                cache: RwLock::new(KeyCache {
+                    keys,
+                    fetched: now,
+                    attempted: now,
+                }),
+                downloading: Mutex::new(()),
+                cooldown_ms: AtomicU64::new(KEY_REFRESH_COOLDOWN.as_millis() as u64),
+                max_age_ms: AtomicU64::new(KEY_MAX_AGE.as_millis() as u64),
             }),
-            refreshing: Mutex::new(()),
-            cooldown: KEY_REFRESH_COOLDOWN,
         })
     }
 
     /// Minimum spacing between key downloads. An unknown `kid` triggers a download,
     /// so the spacing stops forged tokens from making the API hammer the provider.
-    pub fn with_refresh_cooldown(mut self, cooldown: Duration) -> Self {
-        self.cooldown = cooldown;
+    pub fn with_refresh_cooldown(self, cooldown: Duration) -> Self {
+        self.keys
+            .cooldown_ms
+            .store(cooldown.as_millis() as u64, Ordering::Relaxed);
+        self
+    }
+
+    /// How old the held keys may get before a background refresh is started.
+    pub fn with_key_max_age(self, max_age: Duration) -> Self {
+        self.keys
+            .max_age_ms
+            .store(max_age.as_millis() as u64, Ordering::Relaxed);
         self
     }
 
@@ -305,55 +386,28 @@ impl Oidc {
         })
     }
 
-    async fn cached_key(&self, kid: Option<&str>, algorithm: Algorithm) -> Option<Jwk> {
-        let cache = self.cache.read().await;
-        let mut fitting = cache.keys.iter().filter(|key| key_fits(key, algorithm));
-        match kid {
-            Some(kid) => fitting
-                .find(|key| key.common.key_id.as_deref() == Some(kid))
-                .cloned(),
-            // Without a key id the choice must be unambiguous.
-            None => match (fitting.next(), fitting.next()) {
-                (Some(only), None) => Some(only.clone()),
-                _ => None,
-            },
-        }
-    }
-
-    /// Download the key set again, at most once per cooldown. A failed download keeps
-    /// the keys already held, so a provider outage does not sign everyone out.
-    async fn refresh_keys(&self) {
-        let _one_at_a_time = self.refreshing.lock().await;
-        if self.cache.read().await.attempted.elapsed() < self.cooldown {
-            return;
-        }
-        let fetched = fetch_json::<JwkSet>(&self.http, &self.jwks_url).await;
-        let mut cache = self.cache.write().await;
-        cache.attempted = Instant::now();
-        match fetched.map(signing_keys) {
-            Ok(keys) if !keys.is_empty() => {
-                cache.keys = keys;
-                cache.fetched = cache.attempted;
-            }
-            Ok(_) => log::warn!(
-                "Identity provider returned no usable signing keys; keeping the previous set"
-            ),
-            Err(why) => {
-                log::warn!("Identity provider signing keys {why}; keeping the previous set")
-            }
-        }
-    }
-
+    /// The key a token names. A key already held is returned at once and never waits
+    /// on the provider: if the held set is old, a refresh starts in the background.
+    /// Only a key id that is not held waits for a download, because the provider may
+    /// have rotated its keys and nothing else can verify that token.
     async fn key(&self, kid: Option<&str>, algorithm: Algorithm) -> Option<Jwk> {
-        if self.cache.read().await.fetched.elapsed() > KEY_MAX_AGE {
-            self.refresh_keys().await;
-        }
-        if let Some(key) = self.cached_key(kid, algorithm).await {
+        if let Some(key) = self.keys.held(kid, algorithm).await {
+            if self.keys.refresh_due(true).await {
+                let keys = self.keys.clone();
+                tokio::spawn(async move {
+                    // Another request may already be downloading; one is enough.
+                    if let Ok(_only_one) = keys.downloading.try_lock() {
+                        keys.download(true).await;
+                    }
+                });
+            }
             return Some(key);
         }
-        // The provider may have rotated its keys since the last download.
-        self.refresh_keys().await;
-        self.cached_key(kid, algorithm).await
+        {
+            let _only_one = self.keys.downloading.lock().await;
+            self.keys.download(false).await;
+        }
+        self.keys.held(kid, algorithm).await
     }
 
     /// Check signature, issuer, audience, expiry and not-before, then return the
@@ -381,17 +435,26 @@ impl Oidc {
             .map_err(|_| Rejection::Unauthenticated)?
             .claims;
         // Some providers send the flag as the string "true".
-        let verified = match claims.email_verified {
-            Some(Value::Bool(flag)) => flag,
+        let verified = match &claims.email_verified {
+            Some(Value::Bool(flag)) => *flag,
             Some(Value::String(text)) => text == "true",
             _ => false,
         };
         let email = claims.email.unwrap_or_default().trim().to_lowercase();
         if verified && !email.is_empty() {
-            Ok(email)
-        } else {
-            Err(Rejection::Forbidden)
+            return Ok(email);
         }
+        // The person sees one generic refusal. The operator needs the cause, which is
+        // usually provider configuration. Neither the token nor the email is logged.
+        let cause = if email.is_empty() {
+            "it has no email claim; the provider must be asked for the email scope"
+        } else if claims.email_verified.is_none() {
+            "it has no email_verified claim; this provider does not state that the email is verified, which Nexus requires"
+        } else {
+            "its email_verified claim is not true; the account's email is unverified at the provider"
+        };
+        log::warn!("Sign-in refused for a correctly signed identity token: {cause}");
+        Err(Rejection::Forbidden)
     }
 }
 
@@ -405,14 +468,22 @@ fn carries_own_credential(path: &str) -> bool {
         || path.starts_with("/api/recording-tracks/")
 }
 
+/// The credential from an `Authorization: Bearer <token>` header. The scheme name
+/// is case-insensitive (RFC 9110).
+fn bearer_token(header: &str) -> Option<&str> {
+    let (scheme, token) = header.trim_start().split_once(' ')?;
+    let token = token.trim();
+    (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty() && !token.contains(' '))
+        .then_some(token)
+}
+
 fn bearer(req: &ServiceRequest) -> Option<&str> {
-    req.headers()
-        .get(actix_web::http::header::AUTHORIZATION)?
-        .to_str()
-        .ok()?
-        .strip_prefix("Bearer ")
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
+    bearer_token(
+        req.headers()
+            .get(actix_web::http::header::AUTHORIZATION)?
+            .to_str()
+            .ok()?,
+    )
 }
 
 async fn identify(
@@ -430,14 +501,22 @@ async fn identify(
         })?;
     // One answer for unknown, inactive and ambiguous accounts: none of them reveals
     // which staff exist.
-    let matches: Vec<Uuid> =
-        sqlx::query_scalar("SELECT id FROM staff WHERE lower(email)=$1 AND active LIMIT 2")
-            .bind(&email)
-            .fetch_all(&state.pool)
-            .await?;
-    match matches.as_slice() {
-        [id] => Ok(Identity(*id)),
-        _ => Err(ApiError::no_access()),
+    let mut matches: Vec<Value> = sqlx::query_scalar(
+        "SELECT to_jsonb(s) FROM staff s WHERE lower(email)=$1 AND active LIMIT 2",
+    )
+    .bind(&email)
+    .fetch_all(&state.pool)
+    .await?;
+    let id = match matches.as_slice() {
+        [staff] => staff["id"].as_str().and_then(|id| Uuid::parse_str(id).ok()),
+        _ => None,
+    };
+    match (id, matches.pop()) {
+        (Some(id), Some(staff)) => Ok(Identity { id, staff }),
+        _ => {
+            log::info!("Sign-in refused: the verified email matches no single active staff member");
+            Err(ApiError::no_access())
+        }
     }
 }
 
@@ -514,6 +593,24 @@ mod tests {
             "/api/recording-policies",
         ] {
             assert!(!carries_own_credential(guarded), "{guarded}");
+        }
+    }
+
+    #[test]
+    fn the_bearer_scheme_is_case_insensitive_and_needs_one_token() {
+        for header in ["Bearer abc", "bearer abc", "BEARER abc", "BeArEr   abc  "] {
+            assert_eq!(bearer_token(header), Some("abc"), "{header}");
+        }
+        for header in [
+            "",
+            "Bearer",
+            "Bearer ",
+            "Basic abc",
+            "abc",
+            "Bearerabc",
+            "Bearer a b",
+        ] {
+            assert_eq!(bearer_token(header), None, "{header}");
         }
     }
 

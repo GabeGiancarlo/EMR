@@ -31,17 +31,26 @@ pub(crate) fn staff_id(req: &HttpRequest) -> Result<Uuid> {
         Auth::Oidc(_) => req
             .extensions()
             .get::<Identity>()
-            .map(|identity| identity.0)
+            .map(|identity| identity.id)
             .ok_or_else(ApiError::unauthenticated),
     }
 }
 pub async fn actor(req: &HttpRequest, pool: &PgPool) -> Result<Actor> {
     let id = staff_id(req)?;
-    let value: Value = sqlx::query_scalar("SELECT to_jsonb(s) FROM staff s WHERE id=$1 AND active")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?
-        .ok_or_else(ApiError::denied)?;
+    // Hosted mode: the gate read this active staff row moments ago, in this same
+    // request. Mutations still re-read it inside their transaction (`lock_mutation`).
+    let verified = req
+        .extensions()
+        .get::<Identity>()
+        .map(|identity| identity.staff.clone());
+    let value: Value = match verified {
+        Some(staff) => staff,
+        None => sqlx::query_scalar("SELECT to_jsonb(s) FROM staff s WHERE id=$1 AND active")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?
+            .ok_or_else(ApiError::denied)?,
+    };
     Ok(Actor {
         id,
         org: Uuid::parse_str(value["organization_id"].as_str().unwrap_or_default())

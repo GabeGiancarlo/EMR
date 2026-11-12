@@ -10,7 +10,10 @@ use aws_lc_rs::{
 use emr_api::auth::{Oidc, OidcSettings};
 use jsonwebtoken::{encode, get_current_timestamp, jwk::Jwk, Algorithm, EncodingKey, Header};
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 pub const AUDIENCE: &str = "nexus-test-client";
 
@@ -48,11 +51,14 @@ struct Published {
     keys: Vec<Value>,
     key_downloads: usize,
     reported_issuer: Option<String>,
+    key_delay: Duration,
+    keys_fail: bool,
 }
 
 pub struct Provider {
     pub issuer: String,
     published: Arc<Mutex<Published>>,
+    server: actix_web::dev::ServerHandle,
 }
 impl Provider {
     /// Start the provider on a free loopback port, publishing `keys`.
@@ -90,7 +96,15 @@ impl Provider {
                         let mut published = keys.lock().unwrap();
                         published.key_downloads += 1;
                         let body = json!({"keys": published.keys});
-                        async move { HttpResponse::Ok().json(body) }
+                        let (delay, fail) = (published.key_delay, published.keys_fail);
+                        async move {
+                            actix_web::rt::time::sleep(delay).await;
+                            if fail {
+                                HttpResponse::InternalServerError().finish()
+                            } else {
+                                HttpResponse::Ok().json(body)
+                            }
+                        }
                     }),
                 )
         })
@@ -98,8 +112,25 @@ impl Provider {
         .listen(listener)
         .unwrap()
         .run();
+        let handle = server.handle();
         actix_web::rt::spawn(server);
-        Self { issuer, published }
+        Self {
+            issuer,
+            published,
+            server: handle,
+        }
+    }
+    /// Make every key download take this long before it answers.
+    pub fn delay_keys(&self, delay: Duration) {
+        self.published.lock().unwrap().key_delay = delay;
+    }
+    /// Make key downloads answer HTTP 500.
+    pub fn fail_keys(&self, fail: bool) {
+        self.published.lock().unwrap().keys_fail = fail;
+    }
+    /// Shut the provider down, so connections to it are refused.
+    pub async fn stop(&self) {
+        self.server.stop(false).await;
     }
     pub fn settings(&self) -> OidcSettings {
         OidcSettings {

@@ -25,7 +25,12 @@ How sign-in works: the browser sends the person to the provider's own login page
 
 ## Recommendations (your decision)
 
-- **Identity provider: Auth0.** It is plain OpenID Connect, has a free tier, supports a single-page application with PKCE and no secret, and lets you turn public sign-up off. Any provider works if it offers: a public client with PKCE, a discovery document, browser (CORS) access to its token endpoint for your site, and `email` plus `email_verified` in the ID token. Clerk, Okta, Microsoft Entra, Google and Keycloak are candidates; only the mock provider has been tested.
+- **Identity provider: Auth0.** It is plain OpenID Connect, has a free tier, supports a single-page application with PKCE and no secret, and lets you turn public sign-up off. Any provider works if it offers all of these:
+  - a public client with PKCE and a discovery document;
+  - browser (CORS) access to its token endpoint for your site;
+  - an ID token that carries `email` **and** `email_verified: true`. Nexus refuses a token without a verified-email statement, and this is not configurable. Microsoft Entra ID does not send `email_verified`, so every sign-in through it is refused; do not choose it for this version.
+
+  Okta, Google, Keycloak and Clerk are candidates. Only the mock provider has been tested.
 - **Container host and database: Render** (a Docker web service plus Render PostgreSQL in the same region). It builds from a Dockerfile in a GitHub repository, holds secrets, and health-checks a path. Fly.io and Railway are equivalent choices. The API's workers check the database every two seconds, so it needs an always-on instance, and a database billed by active time will never go idle.
 
 Tell me which you choose and I will adjust the files; I have not created any account.
@@ -53,7 +58,7 @@ Auth0 names; other providers have equivalents.
    - Client ID.
    - There is no client secret to copy. Do not create one.
 
-Optional: to let long sessions renew without a redirect, enable refresh token rotation for the application and add `offline_access` to `NEXUS_OIDC_SCOPES`. Without it, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended".
+Optional: to let long sessions renew without a redirect, enable refresh token rotation for the application and add `offline_access` to `NEXUS_OIDC_SCOPES`. The session then renews about a minute before each ID token expires, provided the provider returns a new ID token from the refresh (Auth0 does). If a provider answers a refresh without an ID token, which OpenID Connect allows, the session simply runs to the end of the current ID token and is not cut short. Without refresh, or with such a provider, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended"; signing in again is one click while the provider's own session is alive.
 
 ### 3. Create the database (you)
 
@@ -98,9 +103,32 @@ The image already sets `NEXUS_AUTH_MODE=oidc` and `HOST=0.0.0.0`. Do not set `NE
 
 If something is missing the service exits at once with one line naming it, for example `Nexus API did not start: Hosted mode (NEXUS_AUTH_MODE=oidc) cannot start. Missing: NEXUS_OIDC_ISSUER.` Note the service's public address, for example `https://nexus-api.onrender.com`. Call it `API`. Opening `API/healthz` should show `"authentication":"oidc"`.
 
-### 6. Point the frontend at the API (me, once you send the address)
+### 6. Point the frontend at the API and the identity provider (me, once you send the addresses)
 
-`frontend/vercel.json` contains the placeholder `https://REPLACE-WITH-API-HOST.example.invalid` twice. Replace both with `API`. This is a normal change: a `feature/` branch and a pull request into `dev`. Send me the address and I will make it.
+`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits:
+
+| Line to change | Replace | With |
+| --- | --- | --- |
+| `rewrites`, source `/api/:path*` | `REPLACE-WITH-API-HOST.example.invalid` | the host of `API`, for example `nexus-api.onrender.com` |
+| `rewrites`, source `/healthz` | `REPLACE-WITH-API-HOST.example.invalid` | the same host |
+| `Content-Security-Policy`, `connect-src` | `https://REPLACE-WITH-IDENTITY-PROVIDER-HOST.example.invalid` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
+
+`connect-src` lists the only places the page may send requests: its own origin and the identity provider, whose token endpoint finishes sign-in. Do not widen it to `https:`.
+
+Until all three are filled in, Vercel refuses to build. The build command runs `node scripts/check-hosting-config.mjs` first, and the deployment log shows:
+
+```
+Nexus cannot be deployed yet: frontend/vercel.json is not filled in.
+  - rewrites: the destination for /api/:path* is "https://REPLACE-WITH-API-HOST.example.invalid/api/:path*". Replace its host with the API's public HTTPS address.
+```
+
+To check before pushing, run this in `frontend/`:
+
+```bash
+VERCEL=1 node scripts/check-hosting-config.mjs
+```
+
+This is a normal change: a `feature/` branch and a pull request into `dev`. Send me the two addresses and I will make it.
 
 ### 7. Deploy the frontend (you)
 
@@ -110,7 +138,7 @@ If something is missing the service exits at once with one line naming it, for e
 4. Production Branch: `main`. The work reaches `main` by a pull request from `dev`; until then, set the production branch to `dev` if you want to try it before releasing.
 5. Check the project's address equals `SITE`. If it differs, update the provider's URLs (step 2) and `NEXUS_ALLOWED_ORIGINS` (step 5).
 
-Preview deployments get a different address each time, so sign-in only works on the production address unless you add each preview origin to both places.
+**Preview deployments do not work for sign-in or saving.** Every Vercel preview gets its own address, such as `https://nexus-demo-git-some-branch-you.vercel.app`. That address is not in the provider's callback list, so sign-in is refused there, and it is not in `NEXUS_ALLOWED_ORIGINS`, so the API answers HTTP 400 to anything that saves. Use the production address. If you need one preview to work, add its exact origin to the provider's four URL fields and to `NEXUS_ALLOWED_ORIGINS` (comma-separated), and remove it afterwards.
 
 ### 8. Check it
 
@@ -127,14 +155,28 @@ Preview deployments get a different address each time, so sign-in only works on 
 | "The identity provider reports its issuer as …" | `NEXUS_OIDC_ISSUER` differs from the provider's value, often by a trailing slash. |
 | The provider shows a callback or redirect error | `SITE/` is not in Allowed Callback URLs, or the address differs (preview deployment, custom domain). |
 | "The identity provider did not complete sign-in" | The provider refused the code exchange. Check Allowed Web Origins / CORS, and that the application is a single-page (public) application. |
-| "This account is not set up here" for someone who should get in | Their email is not a staff member, the staff member is inactive, the provider has not verified their email, or the same email exists twice. |
+| Vercel build fails with "Nexus cannot be deployed yet" | `frontend/vercel.json` still has a placeholder address, or `connect-src` is too wide. The log names each line (step 6). |
+| "This account is not set up here" for someone who should get in | Their email is not a staff member, the staff member is inactive, the provider has not verified their email, or the same email exists twice. The page never says which; the API log does (below). |
+| Everyone gets "This account is not set up here" | The provider is not sending `email_verified: true`, or the `email` scope is missing. The API log says so on every attempt. |
+| Sign-in or saving fails on a preview deployment | Preview addresses are not the production address (step 7). |
 | Saving fails with HTTP 400 while reading works | The site's origin is not in `NEXUS_ALLOWED_ORIGINS`. |
 | "The Nexus service is not responding" | The API is down, or `vercel.json` still has the placeholder address. |
+
+## What the API logs when it refuses a sign-in
+
+The person always sees the same generic message. The API log, on the container host, gives the cause, without the token or the email:
+
+- `Sign-in refused for a correctly signed identity token: it has no email_verified claim; …`: the provider does not state that emails are verified. Choose a provider that does.
+- `… its email_verified claim is not true; …`: that account has not verified its email at the provider.
+- `… it has no email claim; …`: the `email` scope is missing from `NEXUS_OIDC_SCOPES`, or the provider does not release it.
+- `Sign-in refused: the verified email matches no single active staff member`: add the person under **Team & access**, reactivate them, or remove a duplicate email.
+
+Expired, malformed and wrongly signed tokens are not logged; the browser signs in again.
 
 ## Things not yet known
 
 - **Not deployed.** The Dockerfile is built by CI only; Docker is not installed on the development Mac. Vercel, a container host, managed PostgreSQL and a real identity provider have not been exercised.
-- **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly; the API already allows `SITE` as an origin.
+- **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly, and add `API` as a second origin in `connect-src` in `frontend/vercel.json`; the API already allows `SITE` as an origin.
 - **Sign-out.** If the provider publishes an end-session address the browser is sent there; otherwise only the Nexus session ends and the provider may sign the person straight back in.
 - **Abuse limits.** There is no request rate limiting. The API refuses unauthenticated requests cheaply, but the address is public.
 - **Local tooling.** `tools/mock-oidc-provider.mjs` signs a token for any email typed into it. It listens on loopback only and exists to try hosted mode on your own machine. Never configure a hosted API to trust it.

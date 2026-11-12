@@ -9,15 +9,17 @@
  */
 import { apiUrl } from "./apiBase";
 import {
-  authorizeUrl, codeChallenge, codeExchange, idTokenProblem, judgeCallback, logoutUrl, parseAuthConfig,
-  randomToken, readCallback, readClaims, refreshExchange,
-  type AuthConfig, type OidcConfig, type PendingSignIn,
+  authorizeUrl, codeChallenge, codeExchange, judgeCallback, logoutUrl, parseAuthConfig,
+  randomToken, readCallback, readTokenResponse, refreshExchange,
+  type AuthConfig, type OidcConfig, type PendingSignIn, type Session, type TokenOutcome,
 } from "./oidc";
 
 export const actorStorageKey = "nexus.local-operator";
 const pendingKey = "nexus.oidc.pending";
 const resumeKey = "nexus.oidc.resume";
 const REFRESH_EARLY_MS = 60_000;
+/** After a refresh the provider did not complete, how long before asking again. */
+const REFRESH_RETRY_MS = 15_000;
 
 export type AuthStatus =
   | "loading"
@@ -30,13 +32,12 @@ export type AuthStatus =
   | "expired";
 export type AuthSnapshot = { status: AuthStatus; problem: string; email: string };
 
-type Session = { idToken: string; refreshToken: string | null; expiresAt: number; email: string };
-
 let config: AuthConfig | null = null;
 let session: Session | null = null;
 let snapshot: AuthSnapshot = { status: "loading", problem: "", email: "" };
 let starting: Promise<void> | null = null;
-let refreshing: Promise<boolean> | null = null;
+let renewing: Promise<Renewal> | null = null;
+let renewalFailedAt = 0;
 let expiryTimer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 
@@ -92,14 +93,18 @@ async function loadConfig(): Promise<AuthConfig | null> {
   }
 }
 
-function watchExpiry(): void {
+/**
+ * Wake up shortly before the identity token expires if a newer one can be fetched,
+ * otherwise exactly when it expires.
+ */
+function watchExpiry(early = true): void {
   clearTimeout(expiryTimer);
   if (!session) return;
-  const wait = session.expiresAt - Date.now() - (session.refreshToken ? REFRESH_EARLY_MS : 0);
-  expiryTimer = setTimeout(() => void recoverSession(), Math.max(wait, 0));
+  const lead = early && session.renewable ? REFRESH_EARLY_MS : 0;
+  expiryTimer = setTimeout(() => void onExpiryTimer(), Math.max(session.expiresAt - Date.now() - lead, 0));
 }
 
-async function exchange(provider: OidcConfig, body: URLSearchParams, nonce: string | null, previousRefresh: string | null): Promise<Session> {
+async function exchange(provider: OidcConfig, body: URLSearchParams, nonce: string | null, previous: Session | null): Promise<TokenOutcome> {
   const response = await fetch(provider.token_endpoint, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
@@ -108,17 +113,8 @@ async function exchange(provider: OidcConfig, body: URLSearchParams, nonce: stri
     signal: AbortSignal.timeout(15_000),
   });
   const data: unknown = await response.json().catch(() => null);
-  if (!response.ok || typeof data !== "object" || data === null) throw new Error("The identity provider did not complete sign-in. Try again.");
-  const tokens = data as Record<string, unknown>;
-  const claims = readClaims(tokens.id_token);
-  const problem = idTokenProblem(claims, { issuer: provider.issuer, clientId: provider.client_id, nonce, now: Date.now() });
-  if (problem || !claims) throw new Error(problem ?? "Sign-in could not be completed.");
-  return {
-    idToken: tokens.id_token as string,
-    refreshToken: typeof tokens.refresh_token === "string" ? tokens.refresh_token : previousRefresh,
-    expiresAt: (claims.exp as number) * 1000,
-    email: typeof claims.email === "string" ? claims.email : "",
-  };
+  if (!response.ok) return { kind: "invalid", problem: "The identity provider did not complete sign-in. Try again." };
+  return readTokenResponse(data, { issuer: provider.issuer, clientId: provider.client_id, nonce, now: Date.now() }, previous);
 }
 
 async function redirectToProvider(provider: OidcConfig, silent: boolean): Promise<void> {
@@ -147,13 +143,15 @@ async function begin(): Promise<void> {
     window.history.replaceState(null, "", window.location.pathname);
     const verdict = judgeCallback(callback, pending, Date.now());
     if (verdict.ok && pending) {
-      try {
-        session = await exchange(config, codeExchange(config, { code: verdict.code, verifier: pending.verifier, redirectUri: redirectUri() }), pending.nonce, null);
+      const outcome = await exchange(config, codeExchange(config, { code: verdict.code, verifier: pending.verifier, redirectUri: redirectUri() }), pending.nonce, null)
+        .catch((): TokenOutcome => ({ kind: "invalid", problem: "The identity provider could not be reached. Try again." }));
+      if (outcome.kind === "session") {
+        session = outcome.session;
         storeSession(resumeKey, "1");
         watchExpiry();
         publish("signed-in");
-      } catch (error) {
-        publish("signed-out", error instanceof Error ? error.message : "Sign-in could not be completed.");
+      } else {
+        publish("signed-out", outcome.kind === "invalid" ? outcome.problem : "Sign-in could not be completed.");
       }
       return;
     }
@@ -180,35 +178,66 @@ export function startAuth(): Promise<void> {
   return (starting ??= begin());
 }
 
-async function refresh(): Promise<boolean> {
-  if (config?.mode !== "oidc" || !session?.refreshToken) return false;
+/**
+ * "renewed": a newer identity token is in hand. "kept": the provider accepted the
+ * refresh but sent no identity token, so the current one stays until it expires and
+ * the provider is not asked again. "failed": no answer or a refusal; the current token
+ * is untouched.
+ */
+type Renewal = "renewed" | "kept" | "failed";
+
+async function renew(): Promise<Renewal> {
+  if (config?.mode !== "oidc" || !session?.renewable || !session.refreshToken) return "failed";
   const provider = config;
   const current = session;
-  refreshing ??= exchange(provider, refreshExchange(provider, current.refreshToken!), null, current.refreshToken)
-    .then((next) => {
-      session = next;
+  renewing ??= exchange(provider, refreshExchange(provider, current.refreshToken!), null, current)
+    .then((outcome): Renewal => {
+      // Signed out, or replaced, while the provider was answering.
+      if (session !== current) return "failed";
+      if (outcome.kind === "invalid") {
+        renewalFailedAt = Date.now();
+        return "failed";
+      }
+      session = outcome.session;
+      if (outcome.kind === "unchanged") {
+        watchExpiry();
+        return "kept";
+      }
       watchExpiry();
       publish("signed-in");
-      return true;
+      return "renewed";
     })
-    .catch(() => false)
-    .finally(() => { refreshing = null; });
-  return refreshing;
+    .catch((): Renewal => {
+      renewalFailedAt = Date.now();
+      return "failed";
+    })
+    .finally(() => { renewing = null; });
+  return renewing;
+}
+
+function endSession(): void {
+  session = null;
+  clearTimeout(expiryTimer);
+  storeSession(resumeKey, null);
+  publish("expired");
+}
+
+async function onExpiryTimer(): Promise<void> {
+  if (!session) return;
+  if ((await renew()) === "renewed" || !session) return;
+  // Not renewed: the current token is still good until its own expiry.
+  if (session.expiresAt <= Date.now()) endSession();
+  else watchExpiry(false);
 }
 
 /**
- * Called when the API answers 401 or the token's lifetime ends. True means a new token
- * is in hand and the request can be repeated; false means the person must sign in again.
+ * Called when the API answers 401. True means a newer token is in hand and the request
+ * can be repeated; false means the person must sign in again.
  */
 export async function recoverSession(): Promise<boolean> {
   if (config?.mode !== "oidc") return false;
-  if (await refresh()) return true;
-  if (session) {
-    session = null;
-    clearTimeout(expiryTimer);
-    storeSession(resumeKey, null);
-    publish("expired");
-  }
+  if ((await renew()) === "renewed") return true;
+  if (session) endSession();
   return false;
 }
 
@@ -216,7 +245,8 @@ export async function recoverSession(): Promise<boolean> {
 export async function authHeaders(): Promise<Record<string, string>> {
   if (!config) await startAuth();
   if (config?.mode === "oidc") {
-    if (session?.refreshToken && session.expiresAt - Date.now() < REFRESH_EARLY_MS) await refresh();
+    const closeToExpiry = session ? session.expiresAt - Date.now() < REFRESH_EARLY_MS : false;
+    if (session?.renewable && closeToExpiry && Date.now() - renewalFailedAt > REFRESH_RETRY_MS) await renew();
     return session ? { Authorization: `Bearer ${session.idToken}` } : {};
   }
   const actor = stored("local", actorStorageKey);

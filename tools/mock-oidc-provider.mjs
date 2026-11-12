@@ -8,6 +8,11 @@
  * new signing key every time it starts. Never point a hosted Nexus at it.
  *
  *   node tools/mock-oidc-provider.mjs [--port 9400] [--client-id nexus-local-demo] [--token-seconds 3600]
+ *                                     [--refresh-without-id-token]
+ *
+ * When the sign-in request asks for the offline_access scope it also issues a rotating
+ * refresh token. --refresh-without-id-token makes the refresh answer omit the identity
+ * token, which OpenID Connect allows and some providers do.
  *
  * Then start the API with NEXUS_AUTH_MODE=oidc, NEXUS_OIDC_ISSUER=http://127.0.0.1:9400,
  * NEXUS_OIDC_AUDIENCE and NEXUS_OIDC_CLIENT_ID set to the client id.
@@ -22,6 +27,7 @@ const option = (name, fallback) => {
 const port = Number(option("port", "9400"));
 const clientId = option("client-id", "nexus-local-demo");
 const tokenSeconds = Number(option("token-seconds", "3600"));
+const refreshOmitsIdToken = process.argv.includes("--refresh-without-id-token");
 const issuer = `http://127.0.0.1:${port}`;
 
 const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -35,6 +41,20 @@ function sign(claims) {
 
 /** One-time codes waiting to be exchanged: code -> what was asked for. */
 const codes = new Map();
+/** Refresh tokens in force: token -> who it was issued to. Each is single-use. */
+const refreshTokens = new Map();
+function issueRefreshToken(grant) {
+  const token = randomBytes(24).toString("base64url");
+  refreshTokens.set(token, { email: grant.email, verified: grant.verified });
+  return token;
+}
+function idToken(grant, nonce) {
+  const now = Math.floor(Date.now() / 1000);
+  return sign({
+    iss: issuer, aud: clientId, sub: `mock|${grant.email}`, iat: now, exp: now + tokenSeconds, ...(nonce ? { nonce } : {}),
+    email: grant.email, email_verified: grant.verified, name: grant.email.split("@")[0],
+  });
+}
 const loopback = (value) => {
   try {
     const url = new URL(value);
@@ -110,18 +130,26 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname === "/token" && req.method === "POST") {
       const request = await form(req);
+      if (request.grant_type === "refresh_token") {
+        const holder = refreshTokens.get(request.refresh_token);
+        refreshTokens.delete(request.refresh_token);
+        if (!holder || request.client_id !== clientId) return send(res, 400, { error: "invalid_grant" }, cors);
+        return send(res, 200, {
+          token_type: "Bearer", expires_in: tokenSeconds, access_token: randomBytes(16).toString("hex"),
+          refresh_token: issueRefreshToken(holder), ...(refreshOmitsIdToken ? {} : { id_token: idToken(holder, null) }),
+        }, cors);
+      }
       const grant = codes.get(request.code);
       codes.delete(request.code);
       const challenge = createHash("sha256").update(String(request.code_verifier || "")).digest("base64url");
       if (request.grant_type !== "authorization_code" || !grant || grant.expires < Date.now() || request.client_id !== clientId ||
           request.redirect_uri !== grant.redirect_uri || challenge !== grant.code_challenge)
         return send(res, 400, { error: "invalid_grant" }, cors);
-      const now = Math.floor(Date.now() / 1000);
-      const id_token = sign({
-        iss: issuer, aud: clientId, sub: `mock|${grant.email}`, iat: now, exp: now + tokenSeconds, nonce: grant.nonce,
-        email: grant.email, email_verified: grant.verified, name: grant.email.split("@")[0],
-      });
-      return send(res, 200, { token_type: "Bearer", expires_in: tokenSeconds, id_token, access_token: randomBytes(16).toString("hex") }, cors);
+      const offline = String(grant.scope || "").split(/\s+/).includes("offline_access");
+      return send(res, 200, {
+        token_type: "Bearer", expires_in: tokenSeconds, id_token: idToken(grant, grant.nonce), access_token: randomBytes(16).toString("hex"),
+        ...(offline ? { refresh_token: issueRefreshToken(grant) } : {}),
+      }, cors);
     }
 
     if (url.pathname === "/logout") {
@@ -135,5 +163,5 @@ const server = createServer(async (req, res) => {
   }
 });
 server.listen(port, "127.0.0.1", () => {
-  console.log(`Mock identity provider (local testing only): ${issuer}  client id: ${clientId}  token lifetime: ${tokenSeconds}s`);
+  console.log(`Mock identity provider (local testing only): ${issuer}  client id: ${clientId}  token lifetime: ${tokenSeconds}s${refreshOmitsIdToken ? "  refresh answers carry no identity token" : ""}`);
 });

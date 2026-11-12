@@ -183,6 +183,54 @@ export function idTokenProblem(
   return null;
 }
 
+/** A signed-in person, as held in memory. */
+export type Session = {
+  idToken: string;
+  refreshToken: string | null;
+  /** When the identity token stops being accepted, in epoch milliseconds. */
+  expiresAt: number;
+  email: string;
+  /** Whether asking the provider again can produce a newer identity token. */
+  renewable: boolean;
+};
+
+export type TokenOutcome =
+  /** A new identity token: after sign-in, or after a refresh that returned one. */
+  | { kind: "session"; session: Session }
+  /** A refresh the provider accepted without sending a new identity token. */
+  | { kind: "unchanged"; session: Session }
+  | { kind: "invalid"; problem: string };
+
+/**
+ * Turn the provider's token response into a session.
+ *
+ * `previous` is null after the sign-in redirect and the current session on a refresh.
+ * OpenID Connect lets a provider answer a refresh without a new identity token. The API
+ * accepts only identity tokens, so in that case the session carries on with the token
+ * it has until that token expires, and is marked as not renewable so the provider is
+ * not asked again. It is not treated as an error and does not sign the person out early.
+ */
+export function readTokenResponse(
+  data: unknown,
+  expected: { issuer: string; clientId: string; nonce: string | null; now: number },
+  previous: Session | null,
+): TokenOutcome {
+  if (typeof data !== "object" || data === null) return { kind: "invalid", problem: "The identity provider did not complete sign-in. Try again." };
+  const tokens = data as Record<string, unknown>;
+  const refreshToken = typeof tokens.refresh_token === "string" && tokens.refresh_token ? tokens.refresh_token : (previous?.refreshToken ?? null);
+  if (previous && (tokens.id_token === undefined || tokens.id_token === null))
+    return { kind: "unchanged", session: { ...previous, refreshToken, renewable: false } };
+  const claims = readClaims(tokens.id_token);
+  const problem = idTokenProblem(claims, expected);
+  if (problem || !claims) return { kind: "invalid", problem: problem ?? "Sign-in could not be completed." };
+  const email = typeof claims.email === "string" ? claims.email : "";
+  if (previous && email !== previous.email) return { kind: "invalid", problem: "The identity provider returned a token for a different account." };
+  return {
+    kind: "session",
+    session: { idToken: tokens.id_token as string, refreshToken, expiresAt: (claims.exp as number) * 1000, email, renewable: refreshToken !== null },
+  };
+}
+
 /** Where to send the browser to end the provider's session too, when it offers that. */
 export function logoutUrl(config: OidcConfig, request: { idToken: string | null; returnTo: string }): string | null {
   if (!config.end_session_endpoint) return null;

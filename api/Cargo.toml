@@ -6,7 +6,10 @@ rust-version = "1.95"
 
 [dependencies]
 # Web framework
-actix-web = "4.9"
+# Default features without http2: the server binds plain HTTP/1.1 (a host's proxy
+# terminates TLS), and the h2 0.3 line actix-http uses has no fix for RUSTSEC-2026-0258.
+# 4.18.2 is the first release with the request-decompression fixes.
+actix-web = { version = "4.18.2", default-features = false, features = ["macros", "compress-brotli", "compress-gzip", "compress-zstd", "cookies", "unicode"] }
 actix-cors = "0.7"
 
 # Serialization

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   authorizeUrl, base64url, codeChallenge, codeExchange, idTokenProblem, judgeCallback, logoutUrl,
-  parseAuthConfig, randomToken, readCallback, readClaims, refreshExchange,
-  type OidcConfig, type PendingSignIn,
+  parseAuthConfig, randomToken, readCallback, readClaims, readTokenResponse, refreshExchange,
+  type OidcConfig, type PendingSignIn, type Session,
 } from "./oidc.ts";
 
 const config: OidcConfig = {
@@ -99,4 +99,48 @@ test("sign-out ends the provider session when the provider offers it", () => {
   const url = new URL(logoutUrl(config, { idToken: "id-token", returnTo: "https://demo.example.com/" })!);
   assert.deepEqual(Object.fromEntries(url.searchParams), { client_id: "client-123", post_logout_redirect_uri: "https://demo.example.com/", id_token_hint: "id-token" });
   assert.equal(logoutUrl({ ...config, end_session_endpoint: null }, { idToken: "id-token", returnTo: "https://demo.example.com/" }), null);
+});
+
+const signInExpectation = { issuer: config.issuer, clientId: "client-123", nonce: "nonce-1", now: 1_000_000 };
+const refreshExpectation = { ...signInExpectation, nonce: null };
+const claims = { iss: config.issuer, aud: "client-123", nonce: "nonce-1", exp: 5_000, email: "clinician@example.invalid" };
+const current: Session = { idToken: token(claims), refreshToken: "refresh-1", expiresAt: 5_000_000, email: "clinician@example.invalid", renewable: true };
+
+test("a sign-in response becomes a session; without an identity token it is refused", () => {
+  const outcome = readTokenResponse({ id_token: token(claims), refresh_token: "refresh-1", access_token: "ignored" }, signInExpectation, null);
+  assert.deepEqual(outcome, { kind: "session", session: current });
+  const noRefresh = readTokenResponse({ id_token: token(claims) }, signInExpectation, null);
+  assert.equal(noRefresh.kind === "session" && noRefresh.session.renewable, false, "nothing to renew with");
+  assert.equal(readTokenResponse({ access_token: "only" }, signInExpectation, null).kind, "invalid");
+  assert.equal(readTokenResponse(null, signInExpectation, null).kind, "invalid");
+  assert.equal(readTokenResponse({ id_token: token({ ...claims, nonce: "other" }) }, signInExpectation, null).kind, "invalid");
+});
+
+test("a refresh that returns a new identity token replaces the session", () => {
+  const later = { ...claims, nonce: undefined, exp: 9_000 };
+  const outcome = readTokenResponse({ id_token: token(later), refresh_token: "refresh-2" }, refreshExpectation, current);
+  assert.deepEqual(outcome, { kind: "session", session: { ...current, idToken: token(later), refreshToken: "refresh-2", expiresAt: 9_000_000 } });
+  const sameRefresh = readTokenResponse({ id_token: token(later) }, refreshExpectation, current);
+  assert.equal(sameRefresh.kind === "session" && sameRefresh.session.refreshToken, "refresh-1", "the refresh token is kept when not rotated");
+});
+
+test("a refresh without an identity token keeps the session to its expiry and stops asking", () => {
+  for (const response of [{ access_token: "new", refresh_token: "refresh-2" }, { access_token: "new", id_token: null }]) {
+    const outcome = readTokenResponse(response, refreshExpectation, current);
+    assert.equal(outcome.kind, "unchanged");
+    if (outcome.kind !== "unchanged") return;
+    assert.equal(outcome.session.idToken, current.idToken);
+    assert.equal(outcome.session.expiresAt, current.expiresAt, "the session is not cut short");
+    assert.equal(outcome.session.renewable, false, "the provider is not asked again");
+  }
+  const rotated = readTokenResponse({ refresh_token: "refresh-2" }, refreshExpectation, current);
+  assert.equal(rotated.kind === "unchanged" && rotated.session.refreshToken, "refresh-2");
+});
+
+test("a refresh is refused if its identity token is wrong or for someone else", () => {
+  const later = { ...claims, nonce: undefined, exp: 9_000 };
+  assert.equal(readTokenResponse({ id_token: token({ ...later, email: "someone-else@example.invalid" }) }, refreshExpectation, current).kind, "invalid");
+  assert.equal(readTokenResponse({ id_token: token({ ...later, aud: "other" }) }, refreshExpectation, current).kind, "invalid");
+  assert.equal(readTokenResponse({ id_token: token({ ...later, exp: 1 }) }, refreshExpectation, current).kind, "invalid");
+  assert.equal(readTokenResponse({ id_token: "garbage" }, refreshExpectation, current).kind, "invalid");
 });
