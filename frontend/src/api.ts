@@ -1,3 +1,5 @@
+import { apiUrl } from "./apiBase";
+import { authHeaders, recoverSession } from "./authSession";
 export type Row = { id: string; [key: string]: unknown };
 export type FormField = {
   key: string;
@@ -49,33 +51,44 @@ export type Bootstrap = Record<Resource, Row[]> & {
     adjustments_cents: number | null;
   };
 };
-const base =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "";
-export const actorStorageKey = "nexus.local-operator";
-export const apiUrl = (path: string): string => `${base}${path}`;
+export { apiUrl } from "./apiBase";
+export { actorStorageKey } from "./authSession";
+/** A refused request. `status` and `code` let a screen tell "sign in again" from "not allowed". */
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code: string;
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
 export async function request<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const actor = localStorage.getItem(actorStorageKey);
-  const response = await fetch(`${base}${path}`, {
-    method,
-    headers: {
-      Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...(actor ? { "x-nexus-actor": actor } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  const send = async () =>
+    fetch(apiUrl(path), {
+      method,
+      headers: {
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(await authHeaders()),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  let response = await send();
+  // 401 comes from the sign-in gate, before any handler ran, so repeating is safe.
+  if (response.status === 401 && (await recoverSession())) response = await send();
   const data = await response.json().catch(() => null);
   if (!response.ok)
-    throw new Error(
+    throw new ApiRequestError(
       data?.error?.message ||
         `Request could not be completed (${response.status}).`,
+      response.status,
+      typeof data?.error?.code === "string" ? data.error.code : "",
     );
   return data as T;
 }

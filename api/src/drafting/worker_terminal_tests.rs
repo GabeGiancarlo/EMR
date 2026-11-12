@@ -114,7 +114,7 @@ impl Harness {
 async fn call(pool: &PgPool, actor: Option<&str>, method: Method, path: &str, body: Value) -> (actix_web::http::StatusCode, Value) {
     let app = test::init_service(
         App::new()
-            .app_data(web::Data::new(crate::AppState { pool: pool.clone() }))
+            .app_data(web::Data::new(crate::AppState::local(pool.clone())))
             .configure(crate::configure),
     )
     .await;

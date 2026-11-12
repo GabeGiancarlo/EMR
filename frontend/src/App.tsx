@@ -24,6 +24,8 @@ import {
 import ClaimReadiness from "./ClaimReadiness";
 import ThemeControl from "./ThemeControl";
 import ProfileMenu from "./ProfileMenu";
+import { NoAccessScreen, useAuth } from "./SignIn";
+import { signOut } from "./authSession";
 import WorkspaceSearch from "./WorkspaceSearch";
 import { visibleViews } from "./search";
 import type { SearchResult } from "./search";
@@ -31,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   actorStorageKey,
+  ApiRequestError,
   clientName,
   date,
   initials,
@@ -269,10 +272,14 @@ export default function App() {
   const [actor, setActor] = useState(
     localStorage.getItem(actorStorageKey) || "",
   );
+  const auth = useAuth();
+  const hosted = auth.status === "signed-in";
+  const [noAccess, setNoAccess] = useState(false);
   const requestVersion = useRef(0);
   const reload = useCallback(async () => {
     const version = ++requestVersion.current;
     setError("");
+    setNoAccess(false);
     try {
       const result = await request<Bootstrap>("/api/bootstrap");
       const catalog=result.program_configuration && result.actor ? await request<{programs:Row[];services:Row[]}>("/api/program-catalog") : {programs:[],services:[]};
@@ -291,6 +298,7 @@ export default function App() {
       return true;
     } catch (e) {
       if (version !== requestVersion.current) return false;
+      setNoAccess(e instanceof ApiRequestError && e.status === 403 && e.code === "no_access");
       setError(
         e instanceof Error
           ? e.message
@@ -323,6 +331,11 @@ export default function App() {
   }, [toast]);
   const changeActor = (id: string): boolean => {
     if (!canLeaveDraftReview()) return false;
+    if (hosted) {
+      // Signed-in identity comes from the provider; the only way to leave is to sign out.
+      if (!id) signOut();
+      return !id;
+    }
     ++requestVersion.current;
     if (id) localStorage.setItem(actorStorageKey, id);
     else localStorage.removeItem(actorStorageKey);
@@ -637,6 +650,16 @@ export default function App() {
         <p>Connecting your workspace…</p>
       </div>
     );
+  if (!data && noAccess)
+    return (
+      <NoAccessScreen
+        email={auth.email}
+        onRetry={() => {
+          setLoading(true);
+          void reload();
+        }}
+      />
+    );
   if (!data)
     return (
       <div className="loading-page">
@@ -648,8 +671,9 @@ export default function App() {
           <Icon name="link" size={32} />
           <h1>Let’s get connected.</h1>
           <p>
-            The Nexus local service is not available yet. Start the database and
-            API, then reconnect.
+            {hosted
+              ? "The Nexus service is not responding right now. Wait a moment, then reconnect."
+              : "The Nexus local service is not available yet. Start the database and API, then reconnect."}
           </p>
           <div className="error-banner" role="alert">
             {error}
@@ -2047,7 +2071,7 @@ export default function App() {
         {teamTab === "permissions" && (
           <Panel
             title="Access follows responsibility"
-            subtitle="The API enforces resource policies. Local operator selection is for development; sign-in is deferred."
+            subtitle={hosted ? "The API enforces resource policies for the staff member you signed in as." : "The API enforces resource policies. Local operator selection is for development; sign-in is deferred."}
           >
             <div className="role-cards">
               {[
@@ -2415,8 +2439,8 @@ export default function App() {
           <div className="local-notice">
             <span className="status-dot" />
             <div>
-              <strong>Local development</strong>
-              <span>Authentication deferred</span>
+              <strong>{hosted ? "Demonstration workspace" : "Local development"}</strong>
+              <span>{hosted ? "Synthetic data only" : "Authentication deferred"}</span>
             </div>
           </div>
           <ProfileMenu
@@ -2430,6 +2454,7 @@ export default function App() {
               return true;
             }}
             onLeaveLocalOperator={() => changeActor("")}
+            signedIn={hosted}
           />
         </div>
       </aside>
@@ -2537,7 +2562,7 @@ export default function App() {
             <span>
               <span className="footer-dot" /> Connected care, considered.
             </span>
-            <span>Nexus · Local workspace</span>
+            <span>{hosted ? "Nexus · Demonstration workspace · Synthetic data only" : "Nexus · Local workspace"}</span>
           </footer>
         </main>
       </div>

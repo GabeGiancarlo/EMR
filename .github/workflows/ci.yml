@@ -89,6 +89,8 @@ jobs:
 
       - name: Run tests
         run: cargo test --locked --workspace
+      - name: PostgreSQL hosted sign-in integration
+        run: cargo test --locked --test oidc_postgres -- --ignored
       - name: PostgreSQL workflow integration
         run: cargo test --locked --test postgres -- --ignored
       - name: PostgreSQL CSV export integration

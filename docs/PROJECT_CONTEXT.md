@@ -25,7 +25,7 @@ The expanded pass authorized later on November 4 has a separate **$500 spending 
 | Video | Native WebRTC peers with local signaling, invitations, waiting/admission, moderation and screen sharing | Prior local three-participant evidence; remote-network/TURN, production identity, scale and current Mac device acceptance remain open |
 | Recording | Consented own-device tracks, AES-GCM ciphertext in PostgreSQL, playback and transcript review | Not automatic complete capture of every call participant; production key recovery/rotation/storage/lifecycle remain open |
 | Billing | Readiness checks and local transitions; one service per current claim, recorded external reference, payments/reversals and exports | Not live payer submission/adjudication, ERA ingestion or bank reconciliation |
-| Identity/access | Local staff selection, organization scope, resource policies, primary-assigned clinician scope and exceptions | Actor headers are not authentication. Facility/care-team/patient/proxy authorization remains incomplete |
+| Identity/access | Local staff selection (default) or, in hosted mode, OpenID Connect sign-in mapped to a staff email; organization scope, resource policies, primary-assigned clinician scope and exceptions | Local actor headers are not authentication. Hosted sign-in is built and tested locally against a mock provider but not deployed. Facility/care-team/patient/proxy authorization remains incomplete |
 
 Open-source/self-hosted means control over hosting and a replaceable adapter; it does not remove upstream software/model licensing, maintenance or evaluation obligations. Development Grok calls are separate from application runtime AI and receive no patient data.
 
@@ -44,6 +44,10 @@ Mac checkout: `/Users/gabrielgiancarlo/Documents/ChatGPT/Nexus`.
 PostgreSQL listens on loopback port 55432; this Mac's cluster is in ignored `.local/postgres`. Local runtime helpers/logs/process registry, model files and media keys are under `.local/`. The machine-specific launcher is `.local/start-dev.py`; inspect it before using it, and do not assume it exists in a fresh clone. The tracked [local setup](development/local-setup.md) and root README describe the earlier Windows setup; a portable Mac bootstrap remains to be formalized. Do not reset the owner walkthrough or ordinary database for tests.
 
 Optional local model service: loopback port 8093, alias `nexus-qwen3-4b`; models are not committed. Media keys are separate from database backups. Recovery needs both the restored ciphertext and the correct separately protected key.
+
+## Hosted demonstration (prepared, not deployed)
+
+As of November 11, 2026 the owner's direction is a first hosted version that is a **synthetic-data demonstration behind real sign-in**, not a system for real patient data: frontend on the owner's personal Vercel, API and PostgreSQL on a container host, sign-in through a hosted identity provider. `NEXUS_AUTH_MODE=oidc` enables it; `local` remains the default and keeps the loopback guard. Nothing has been deployed and no provider or hosting account exists yet. The provider and container host are the owner's choice (recommended: Auth0 and Render). Steps, variables and open questions are in [demo hosting](deployment/demo-hosting.md); `.env.example` lists every variable.
 
 ## Evidence and remaining readiness work
 
@@ -70,6 +74,7 @@ Detailed reviewed research now covers billing lifecycle/competitors, outpatient 
 - [Current research/planning/review](research/research-planning-review-2026-11-04.md): conclusions, evidence, billing/executive/brand research and next decisions.
 - [Acceptance ledger](product/acceptance-ledger.md) and [November 13 plan](development/prototype-target-2026-11-13.md): scope and acceptance gates.
 - [Architecture](architecture/overview.md), [data model](architecture/data-model.md), [access policy](architecture/auth-rbac-audit.md): implemented contracts; verify against code/migrations.
+- [Demo hosting](deployment/demo-hosting.md): how the synthetic demonstration is hosted, and what only the owner can do.
 - [Orchestration](development/orchestration.md), [Grok runners](development/xai-workers.md), [Git workflow](development/git-workflow.md): how recurring work is coordinated.
 
 At a handoff, record branch/revision, dirty files and their purpose, decisions changed, checks actually run, unresolved risks and the next concrete task. Update this page when durable facts change; keep detailed historical test results in verification/checkpoint documents. A new Codex task rooted in this repository can discover `AGENTS.md`; unrelated chats do not automatically gain this filesystem context.

@@ -64,7 +64,7 @@ async fn request(
     let body = attach_loaded_updated_at(pool, &method, path, body).await;
     let app = test::init_service(
         App::new()
-            .app_data(web::Data::new(AppState { pool: pool.clone() }))
+            .app_data(web::Data::new(AppState::local(pool.clone())))
             .configure(configure),
     )
     .await;
