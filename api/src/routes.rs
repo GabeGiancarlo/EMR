@@ -58,9 +58,8 @@ pub async fn setup(state: web::Data<AppState>, body: web::Json<Setup>) -> Result
             return Err(ApiError::invalid("Organization, facility and administrator names are required (up to 200 characters)"));
         }
     }
-    if !body.admin_email.contains('@') || body.admin_email.contains(' ') {
-        return Err(ApiError::invalid("A valid administrator email is required"));
-    }
+    let admin_email = records::staff_email(&body.admin_email)
+        .map_err(|_| ApiError::invalid("A valid administrator email is required"))?;
     let mut tx = state.pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(9182401)")
         .execute(&mut *tx)
@@ -82,7 +81,7 @@ pub async fn setup(state: web::Data<AppState>, body: web::Json<Setup>) -> Result
     .fetch_one(&mut *tx)
     .await?;
     let facility:Value=sqlx::query_scalar("INSERT INTO facilities(id,organization_id,name) VALUES($1,$2,$3) RETURNING to_jsonb(facilities)").bind(facility_id).bind(org_id).bind(body.facility_name.trim()).fetch_one(&mut *tx).await?;
-    let value:Value=sqlx::query_scalar("INSERT INTO staff(id,organization_id,facility_id,name,email,role) VALUES($1,$2,$3,$4,$5,'admin') RETURNING to_jsonb(staff)").bind(actor_id).bind(org_id).bind(facility_id).bind(body.admin_name.trim()).bind(body.admin_email.trim().to_lowercase()).fetch_one(&mut *tx).await?;
+    let value:Value=sqlx::query_scalar("INSERT INTO staff(id,organization_id,facility_id,name,email,role) VALUES($1,$2,$3,$4,$5,'admin') RETURNING to_jsonb(staff)").bind(actor_id).bind(org_id).bind(facility_id).bind(body.admin_name.trim()).bind(&admin_email).fetch_one(&mut *tx).await?;
     let actor = Actor {
         id: actor_id,
         org: org_id,
