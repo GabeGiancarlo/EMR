@@ -1,9 +1,10 @@
 //! The outermost request wrapper: a request id, the access log, a deadline, and the
 //! guarantee that every error body is the API's JSON envelope.
 //!
-//! The access log records method, path, status, duration and the request id, and
-//! nothing else. It never contains a header, a query string, a body, an email or any
-//! record content, and identifiers in the path are replaced by `{id}`.
+//! The access log records method, path, status, duration, the request id and how many
+//! addresses `X-Forwarded-For` listed, and nothing else. It never contains an address,
+//! a header value, a query string, a body, an email or any record content, and
+//! identifiers in the path are replaced by `{id}`.
 use crate::ApiError;
 use actix_web::{
     body::{BoxBody, MessageBody},
@@ -15,7 +16,13 @@ use actix_web::{
     middleware::Next,
     HttpMessage, HttpRequest, HttpResponse,
 };
-use std::time::{Duration, Instant};
+use std::{
+    future::Future,
+    panic::AssertUnwindSafe,
+    pin::Pin,
+    task::{Context, Poll},
+    time::{Duration, Instant},
+};
 use uuid::Uuid;
 
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
@@ -154,6 +161,73 @@ fn enveloped<B: MessageBody + 'static>(
     ServiceResponse::new(request, replacement)
 }
 
+/// An error this wrapper answers itself: the deadline passed, a handler panicked, or
+/// an inner wrapper failed without a response. Returning an error is the only choice
+/// then (the request was consumed), and the server renders an error after every
+/// wrapper has finished, so this type carries the request id and the headers
+/// `hosting::security_headers` would have added. Cross-origin headers are not added.
+#[derive(Debug)]
+struct Unanswered {
+    error: ApiError,
+    id: String,
+}
+impl std::fmt::Display for Unanswered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
+}
+impl actix_web::ResponseError for Unanswered {
+    fn status_code(&self) -> StatusCode {
+        self.error.status
+    }
+    fn error_response(&self) -> HttpResponse {
+        let mut response = actix_web::ResponseError::error_response(&self.error);
+        let headers = response.headers_mut();
+        if let Ok(value) = HeaderValue::from_str(&self.id) {
+            headers.insert(REQUEST_ID_HEADER, value);
+        }
+        for (name, value) in [
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            (header::X_FRAME_OPTIONS, "DENY"),
+            (header::REFERRER_POLICY, "no-referrer"),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; frame-ancestors 'none'",
+            ),
+            (header::CACHE_CONTROL, "no-store"),
+        ] {
+            headers.insert(name, HeaderValue::from_static(value));
+        }
+        response
+    }
+}
+
+/// Polls a future and reports a panic inside it instead of unwinding through the
+/// server, which would close the connection with no response and no log line.
+struct Contained<F>(Pin<Box<F>>);
+impl<F: Future> Future for Contained<F> {
+    type Output = Result<F::Output, ()>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let inner = self.0.as_mut();
+        match std::panic::catch_unwind(AssertUnwindSafe(|| inner.poll(cx))) {
+            Ok(Poll::Ready(output)) => Poll::Ready(Ok(output)),
+            Ok(Poll::Pending) => Poll::Pending,
+            Err(_) => Poll::Ready(Err(())),
+        }
+    }
+}
+
+/// How many addresses the request's `X-Forwarded-For` lists. An operator reads this
+/// from the access log to set `NEXUS_TRUSTED_PROXIES`; the addresses are not logged.
+fn forwarded_hops(req: &ServiceRequest) -> usize {
+    req.headers()
+        .get_all("x-forwarded-for")
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .filter(|hop| !hop.trim().is_empty())
+        .count()
+}
+
 /// Wrap the whole application with this, outermost, so it sees every request.
 pub async fn track<B: MessageBody + 'static>(
     req: ServiceRequest,
@@ -162,9 +236,10 @@ pub async fn track<B: MessageBody + 'static>(
     let id = Uuid::new_v4().simple().to_string();
     let method = req.method().clone();
     let path = logged_path(req.path());
+    let hops = forwarded_hops(&req);
     req.extensions_mut().insert(RequestId(id.clone()));
     let started = Instant::now();
-    let outcome = tokio::time::timeout(REQUEST_DEADLINE, next.call(req)).await;
+    let outcome = tokio::time::timeout(REQUEST_DEADLINE, Contained(Box::pin(next.call(req)))).await;
     let elapsed = started.elapsed().as_millis();
     let line = |status: StatusCode| {
         // Probes arrive every few seconds; keep them out of the default log.
@@ -176,12 +251,19 @@ pub async fn track<B: MessageBody + 'static>(
         log::log!(
             target: "nexus::access",
             level,
-            "request_id={id} method={method} path={path} status={} duration_ms={elapsed}",
+            "request_id={id} method={method} path={path} status={} duration_ms={elapsed} forwarded_hops={hops}",
             status.as_u16()
         );
     };
+    let unanswered = |error: ApiError| -> actix_web::Error {
+        Unanswered {
+            error,
+            id: id.clone(),
+        }
+        .into()
+    };
     match outcome {
-        Ok(Ok(response)) => {
+        Ok(Ok(Ok(response))) => {
             let (request, response) = response.into_parts();
             let mut response = enveloped(request, response);
             if let Ok(value) = HeaderValue::from_str(&id) {
@@ -191,19 +273,23 @@ pub async fn track<B: MessageBody + 'static>(
             Ok(response)
         }
         // An error raised by a wrapper rather than a handler. Its own text is not sent.
-        Ok(Err(error)) => {
+        Ok(Ok(Err(error))) => {
             let status = error.as_response_error().status_code();
             line(status);
-            Err(envelope_for(status).into())
+            Err(unanswered(envelope_for(status)))
+        }
+        Ok(Err(_panic)) => {
+            log::error!("A request handler panicked (request_id={id})");
+            line(StatusCode::INTERNAL_SERVER_ERROR);
+            Err(unanswered(envelope_for(StatusCode::INTERNAL_SERVER_ERROR)))
         }
         Err(_deadline) => {
             line(StatusCode::SERVICE_UNAVAILABLE);
-            Err(ApiError {
+            Err(unanswered(ApiError {
                 status: StatusCode::SERVICE_UNAVAILABLE,
                 code: "timeout",
                 message: "The request took too long and was stopped.".into(),
-            }
-            .into())
+            }))
         }
     }
 }
@@ -334,5 +420,83 @@ mod tests {
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
         let body: serde_json::Value = http_test::read_body_json(missing).await;
         assert_eq!(body["error"]["code"], "not_found");
+    }
+
+    #[actix_web::test]
+    async fn a_panic_or_a_wrapper_error_is_still_answered_with_an_id_and_the_envelope() {
+        async fn failing_wrapper(
+            req: ServiceRequest,
+            next: Next<BoxBody>,
+        ) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
+            if req.path() == "/wrapper-error" {
+                return Err(actix_web::error::ErrorBadGateway(
+                    "upstream detail at 10.0.0.7",
+                ));
+            }
+            next.call(req).await
+        }
+        let app = http_test::init_service(
+            App::new()
+                .wrap(from_fn(failing_wrapper))
+                .wrap(from_fn(track))
+                .route(
+                    "/panic",
+                    web::get().to(|| async {
+                        if true {
+                            panic!("handler detail that must not be sent");
+                        }
+                        "unreachable"
+                    }),
+                )
+                .route("/wrapper-error", web::get().to(|| async { "unreachable" }))
+                .route("/ok", web::get().to(|| async { "fine" })),
+        )
+        .await;
+        for (path, status, code) in [
+            ("/panic", StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
+            ("/wrapper-error", StatusCode::BAD_GATEWAY, "server_error"),
+        ] {
+            let request = http_test::TestRequest::get().uri(path).to_request();
+            let error = http_test::try_call_service(&app, request)
+                .await
+                .expect_err("answered as an error, after every wrapper");
+            let response = error.error_response();
+            assert_eq!(response.status(), status, "{path}");
+            assert_eq!(
+                response.headers().get(&REQUEST_ID_HEADER).unwrap().len(),
+                32,
+                "{path}"
+            );
+            assert_eq!(
+                response.headers().get("x-content-type-options").unwrap(),
+                "nosniff"
+            );
+            assert_eq!(response.headers().get("cache-control").unwrap(), "no-store");
+            let bytes = actix_web::body::to_bytes(response.into_body())
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["error"]["code"], code, "{path}");
+            assert!(!body.to_string().contains("detail"), "{path}");
+        }
+        // The worker that caught the panic keeps serving.
+        let ok =
+            http_test::call_service(&app, http_test::TestRequest::get().uri("/ok").to_request())
+                .await;
+        assert_eq!(ok.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn the_forwarded_hop_count_counts_addresses_across_headers() {
+        let count = |values: &[&'static str]| {
+            let mut request = http_test::TestRequest::get().uri("/");
+            for value in values {
+                request = request.append_header(("x-forwarded-for", *value));
+            }
+            forwarded_hops(&request.to_srv_request())
+        };
+        assert_eq!(count(&[]), 0);
+        assert_eq!(count(&["198.51.100.1"]), 1);
+        assert_eq!(count(&["198.51.100.1, 203.0.113.9", " 192.0.2.4 ,"]), 3);
     }
 }

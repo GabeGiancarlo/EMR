@@ -555,8 +555,9 @@ mod tests {
         // Another client is unaffected.
         let response = call("/api/auth/config", "198.51.100.2").await;
         assert_eq!(response.status(), StatusCode::OK);
-        // Liveness is outside `/api` and is never limited.
-        for _ in 0..20 {
+        // Liveness is outside `/api` and is never limited: more calls than the looser
+        // bucket's burst of 50, so this fails if the limiter ever wraps the whole app.
+        for _ in 0..80 {
             let response = call("/livez", "198.51.100.1").await;
             assert_eq!(response.status(), StatusCode::OK);
         }
