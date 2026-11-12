@@ -6,7 +6,7 @@ Written November 11, 2026. Nothing described here has been deployed. The steps w
 
 This hosts Nexus as a **demonstration that contains synthetic records only, behind real sign-in**.
 
-- **Do not enter information about real people.** No real patient, staff, payer or clinical data. The hosted configuration has not had a security review, penetration test, HIPAA risk analysis or business associate agreements, and it has no rate limiting, intrusion detection, backup policy or key-recovery plan.
+- **Do not enter information about real people.** No real patient, staff, payer or clinical data. The hosted configuration has not had a penetration test, a HIPAA risk analysis or business associate agreements, and it has no intrusion detection, monitoring, backup policy or key-recovery plan. The full list is in [production readiness](production-readiness.md).
 - Sign-in proves who someone is. It does not make the system fit for protected health information.
 - Speech recognition and clinical drafting are off when hosted (the image has no models). Recording is off unless you add a media key. Video calls across networks need a TURN server that is not provided.
 
