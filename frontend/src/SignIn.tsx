@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { authSnapshot, signIn, signOut, startAuth, subscribeAuth, type AuthSnapshot } from "./authSession";
 import { LeafCard, NxBadge, NxButton, NxIcon } from "./nexus-ui";
+import SessionNotice from "./SessionNotice";
 import ThemeControl from "./ThemeControl";
 import { Brand } from "./ui";
 import "./signIn.css";
@@ -95,5 +96,10 @@ export default function AuthBoundary({ children }: { children: ReactNode }) {
     );
   if (auth.status === "signed-out" || auth.status === "expired")
     return <SignInScreen expired={auth.status === "expired"} problem={auth.problem} />;
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <SessionNotice />
+    </>
+  );
 }

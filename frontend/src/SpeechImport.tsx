@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { apiUrl, date, value } from "./api";
-import { authHeaders } from "./authSession";
+import { authorizedFetch, date, value } from "./api";
 import type { Bootstrap } from "./api";
 import { MAX_WAV_BYTES, validateWav, WAV_ERROR_MESSAGE } from "./wav";
 import { Button, Icon } from "./ui";
@@ -50,11 +49,10 @@ export default function SpeechImport({ clientId, data, onTranscript }: {
       if (!mounted.current || controller.signal.aborted) return;
       const checked = validateWav(wav);
       if (!checked.ok) throw new Error(checked.message);
-      const response = await fetch(apiUrl("/api/speech/transcribe"), {
+      const response = await authorizedFetch("/api/speech/transcribe", {
         method: "POST", signal: controller.signal,
         headers: {
           Accept: "application/json", "Content-Type": "audio/wav",
-          ...(await authHeaders()),
           "x-nexus-client": clientId, "x-nexus-consent": consentId,
         },
         body: wav,

@@ -2,6 +2,8 @@
 .local
 .env
 .env.*
+**/.env
+**/.env.*
 target
 **/node_modules
 **/dist
