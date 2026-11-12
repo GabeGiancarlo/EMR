@@ -188,6 +188,17 @@ Use the number from a direct call, not from a request that came through the site
 - **Deploy `main` only.** Changes reach `main` by a pull request from `dev` after its checks pass (`docs/development/git-workflow.md`).
 - **Watch the first start.** The service log shows one line if a migration or a setting fails, and the health check keeps the previous version serving until the new one is ready.
 
+## Replacing the database password
+
+Do this whenever the connection string has been shown anywhere it should not be. On Render, in this order, so the API is never left without a working password:
+
+1. Open the database (`nexus-db`), **Info → Credential Rotation**, and create a new default credential.
+2. Open the blueprint ("Nexus") and run **Manual sync**. The only change it should list is `DATABASE_URL` for `nexus-api`; approve it. The API redeploys with the new connection string.
+3. Wait until `/healthz` reports the database connected and both workers `running`, and the old credential shows no open connections.
+4. Delete the old credential. This cannot be undone, and the old connection string stops working at once.
+
+Done once, on November 12, 2026, after the connection string was pasted into a development chat during seeding.
+
 ## If something goes wrong
 
 | What you see | Likely cause |
