@@ -58,7 +58,7 @@ Auth0 names; other providers have equivalents.
    - Client ID.
    - There is no client secret to copy. Do not create one.
 
-**As set up on November 12, 2026.** Auth0 tenant `dev-vulcan-01` (US), issuer `https://dev-vulcan-01.us.auth0.com/`. Application "Nexus Demo" (single-page, no secret), client ID `hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt`, with the callback, logout and web-origin addresses set to `https://nexus-demo-orcin.vercel.app`. Refresh token rotation is on. The application signs in through one connection only, the database connection `Nexus-Staff`, which has sign-ups disabled; the tenant's shared `Username-Password-Authentication` and Google connections are switched off for this application, so accounts from other applications in the tenant cannot reach the sign-in. People are added under **User Management → Users → Create User**, connection `Nexus-Staff`, and must verify their email.
+**As set up on November 12, 2026.** Auth0 tenant `dev-vulcan-01` (US), issuer `https://dev-vulcan-01.us.auth0.com/`. Application "Nexus Demo" (single-page, no secret), client ID `hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt`, with the callback, logout and web-origin addresses set to `https://nexus-demo-orcin.vercel.app`. Refresh token rotation is on. The application signs in through two connections: Google (`google-oauth2`), and the database connection `Nexus-Staff`, which has sign-ups disabled. The tenant's shared `Username-Password-Authentication` connection is switched off for this application, so password accounts from other applications in the tenant cannot reach the sign-in. Google was switched on for the first demonstration so the owner can sign in without a new password; anyone with a Google account can reach the provider's sign-in, and the API then refuses every email that is not an active staff member. The tenant's Google connection uses Auth0's shared development keys, which Auth0 does not support for production: before real use, give it its own Google client or switch it off again. People are added under **User Management → Users → Create User**, connection `Nexus-Staff`, and must verify their email.
 
 Recommended: enable refresh token rotation for the application and set `NEXUS_OIDC_SCOPES` to `openid email profile offline_access`. Without it a session ends when the identity token expires (ten hours by default on Auth0) and anything unsaved at that moment is lost. The session then renews about a minute before each ID token expires, provided the provider returns a new ID token from the refresh (Auth0 does). If a provider answers a refresh without an ID token, which OpenID Connect allows, the session simply runs to the end of the current ID token and is not cut short. Without refresh, or with such a provider, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended"; signing in again is one click while the provider's own session is alive.
 
@@ -68,7 +68,17 @@ Create a managed PostgreSQL 17 database. Copy its connection string and make sur
 
 ### 4. Seed synthetic data (you, on your Mac)
 
-Seeding runs through a local-mode API on your own machine that is pointed at the hosted database, because it acts as the workspace administrator before anyone can sign in. From the repository root:
+Seeding runs through a local-mode API on your own machine that is pointed at the hosted database, because it acts as the workspace administrator before anyone can sign in.
+
+**One command.** From the repository root, on an up-to-date `main` checkout:
+
+```bash
+tools/seed-hosted-demo.sh you@example.com
+```
+
+It asks you to paste the database's external connection string (nothing is shown as you paste, and it is never printed or saved), refuses a string that points at this machine, starts the local-mode API on port 8095, seeds, and stops the API. Add `role=email` arguments to give other roles a sign-in, for example `clinician=someone@example.com`.
+
+**By hand**, the same thing in two terminals. From the repository root:
 
 ```bash
 NEXUS_LOCAL_DEV=1 PORT=8095 DATABASE_URL='PASTE-THE-HOSTED-CONNECTION-STRING' cargo run -p emr-api
@@ -93,7 +103,7 @@ Then stop the API with Ctrl-C. Notes:
 
 ### 5. Deploy the API (you)
 
-**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
+**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. The owner created it on November 12, 2026 as blueprint "Nexus": the API is `https://nexus-api-j435.onrender.com` and the database is `nexus-db`, with the plan's default 15 GB disk. At Render's published prices that day this is $7 a month for the API, $6 a month for the database and $4.50 a month for 15 GB of storage, about $17.50 a month, billed by the second. A disk cannot be made smaller; the only way to pay less for storage is to delete the database and create a new one. It deploys a commit on `main` only after that commit's GitHub checks pass. Vercel's deployment counts as one of those checks, so a failed Vercel build of a commit also holds back the API's deploy of that commit; the first deploy, made when the blueprint is created, does not wait. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
 
 **By hand, on any container host:**
 
@@ -117,7 +127,7 @@ If something is missing the service exits at once with one line naming it, for e
 
 ### 6. Point the frontend at the API and the identity provider (me, once you send the addresses)
 
-`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits (the third is done: `connect-src` names `https://dev-vulcan-01.us.auth0.com`):
+`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits, all done as of November 12, 2026: the rewrites name `nexus-api-j435.onrender.com` and `connect-src` names `https://dev-vulcan-01.us.auth0.com`. They are listed here for when an address changes:
 
 | Line to change | Replace | With |
 | --- | --- | --- |
@@ -209,7 +219,7 @@ Expired, malformed and wrongly signed tokens are not logged; the browser signs i
 
 ## Things not yet known
 
-- **Request limits behind the real proxies.** The limiter and its address rule are tested in-process only. How many addresses Render puts in `X-Forwarded-For`, and whether that number is stable, is not known until step 9 is done.
+- **Request limits behind the real proxies.** On November 12, 2026 a direct call to the API logged `forwarded_hops=2`, and the blueprint sets `NEXUS_TRUSTED_PROXIES` to 2. Whether that number is stable over time, and that a caller over the limit actually receives a 429 through Render and Vercel, has not been tested.
 - **Not deployed.** The Dockerfile is built by CI only; Docker is not installed on the development Mac. Vercel, a container host, managed PostgreSQL and a real identity provider have not been exercised.
 - **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly, and add `API` as a second origin in `connect-src` in `frontend/vercel.json`; the API already allows `SITE` as an origin.
 - **Sign-out.** If the provider publishes an end-session address the browser is sent there; otherwise only the Nexus session ends and the provider may sign the person straight back in.

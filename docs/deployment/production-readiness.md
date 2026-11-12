@@ -14,7 +14,7 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 | Area | What exists | Evidence |
 | --- | --- | --- |
 | Sign-in | Hosted mode verifies an identity-provider token (signature, issuer, audience, expiry, verified email) and maps the email to exactly one active staff member. Local operator headers are ignored when hosted. | Unit and PostgreSQL tests; a browser pass against a mock provider. Not yet run against Auth0. |
-| Identity provider | Auth0 application "Nexus Demo": single-page, no secret, refresh token rotation on, one staff-only connection with sign-up disabled. | Configured November 12. No one has signed in through it yet. |
+| Identity provider | Auth0 application "Nexus Demo": single-page, no secret, refresh token rotation on; sign-in through Google (on Auth0's shared development keys) and a staff-only password connection with sign-up disabled. | Configured November 12. No one has signed in through it yet. |
 | Access control | Organization and patient scope, role policies, primary-clinician scope and time-limited exceptions, checked on every route behind one gate. | Two code audits found no sign-in bypass and no cross-organization access. These were reviews, not a penetration test. |
 | Records | Immutable signatures and source versions, integer-cent money, audit rows written in the same transaction as the change, explicit corrections. | PostgreSQL integration suites in CI. |
 | Availability | Bounded database pool; statement and lock timeouts answered as retryable errors; liveness and readiness probes; supervised background workers; sign-in provider retried at startup; a handler crash answered instead of dropping the connection. | Unit and PostgreSQL tests; a short local smoke run. Not exercised under load. |
@@ -22,7 +22,7 @@ Last updated November 12, 2026. This page says what is in place, what is still n
 | Operability | One error format; a request id on every response and in the log; an access log with no addresses, tokens, emails or record content; startup fails with one line naming a missing setting. | Tests and the local smoke run. |
 | Browser | Content security policy limited to the site and the identity provider; framing denied; strict transport security; an error boundary and plain messages for network failures; session renewal. | Frontend tests and build. The boundary and failure screens were not exercised in a browser. |
 | Build and repository | `main` and `dev` protected: pull request and seven required checks, no force-push. CI runs format, lint, build, unit and PostgreSQL tests, frontend build, container build, secret scanning, dependency advisories, CodeQL and licence checks. Actions pinned to commits. Dependabot, `SECURITY.md`, `CODEOWNERS`. | Running on every pull request. |
-| Deployment definition | `render.yaml` blueprint (API and PostgreSQL, deploys `main` after checks pass); `frontend/vercel.json` builds only `main` and refuses to build with placeholder addresses. | Files reviewed; never applied. |
+| Deployment definition | `render.yaml` blueprint (API and PostgreSQL on Render's smallest paid plans, deploys `main` after checks pass); `frontend/vercel.json` builds only `main` and refuses to build with placeholder addresses. | Files reviewed; never applied. |
 
 ## Before the demonstration is live
 
@@ -50,7 +50,7 @@ None of these is done. The hosted demonstration must hold synthetic records only
 
 **Identity and session**
 
-- Multi-factor authentication required for every staff account, and a production identity-provider tenant separate from the development one.
+- Multi-factor authentication required for every staff account, a production identity-provider tenant separate from the development one, and Google sign-in either removed or given its own Google client instead of Auth0's shared development keys.
 - Sign-out after inactivity. Today a session lasts as long as the identity provider's token and its renewals.
 - A reviewed process for adding, changing and removing staff, including what happens to an open session when someone is deactivated.
 
