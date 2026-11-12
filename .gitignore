@@ -15,8 +15,8 @@
 
 # Environment and configuration
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.local.toml
 
 # Logs

@@ -1,0 +1,48 @@
+# Render blueprint for the hosted Nexus demo: the API as a Docker web service, and its
+# PostgreSQL database. Create both from Render's dashboard with New > Blueprint and this
+# repository. See docs/deployment/demo-hosting.md.
+#
+# Synthetic demonstration data only. Not for real patient data.
+#
+# Both plans are paid on purpose: a free web service sleeps when idle and a free
+# database is deleted after a trial period, and neither has backups.
+services:
+  - type: web
+    name: nexus-api
+    runtime: docker
+    dockerfilePath: ./infra/dockerfiles/Dockerfile.api
+    dockerContext: .
+    plan: 0.5c-512mb
+    region: oregon
+    branch: main
+    healthCheckPath: /healthz
+    # Deploy a commit on main only after its GitHub checks pass.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nexus-db
+          property: connectionString
+      # The identity provider (Auth0 tenant and its "Nexus Demo" application) and the site
+      # that may call this API. None is a secret: the browser is sent all of them. Change
+      # them here if the tenant, the application or the site address changes.
+      - key: NEXUS_OIDC_ISSUER
+        value: https://dev-vulcan-01.us.auth0.com/
+      - key: NEXUS_OIDC_CLIENT_ID
+        value: hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt
+      - key: NEXUS_OIDC_AUDIENCE
+        value: hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt
+      # offline_access lets a session renew itself instead of ending when the identity
+      # token expires. The application has refresh token rotation on.
+      - key: NEXUS_OIDC_SCOPES
+        value: openid email profile offline_access
+      - key: NEXUS_ALLOWED_ORIGINS
+        value: https://nexus-demo-orcin.vercel.app
+
+databases:
+  - name: nexus-db
+    plan: 0.1c-256mb
+    postgresMajorVersion: "17"
+    region: oregon
+    databaseName: nexus
+    user: nexus

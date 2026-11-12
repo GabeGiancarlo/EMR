@@ -1,3 +1,5 @@
+import { readStored, writeStored } from "./safeStorage.ts";
+
 export const THEME_STORAGE_KEY = "nexus.theme";
 
 export const THEME_MODES = ["light", "dark", "system"] as const;
@@ -15,22 +17,14 @@ export function isThemeMode(value: unknown): value is ThemeMode {
 }
 
 export function readStoredTheme(): ThemeMode {
-  if (typeof localStorage === "undefined") return "system";
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemeMode(stored) ? stored : "system";
-  } catch {
-    return "system";
-  }
+  // Runs before the page is drawn, so blocked site storage must not throw here.
+  const stored = readStored("local", THEME_STORAGE_KEY);
+  return isThemeMode(stored) ? stored : "system";
 }
 
 export function persistTheme(mode: ThemeMode): void {
-  if (!isThemeMode(mode) || typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, mode);
-  } catch {
-    /* Preference still applies for this view when storage is blocked. */
-  }
+  /* Preference still applies for this view when storage is blocked. */
+  if (isThemeMode(mode)) writeStored("local", THEME_STORAGE_KEY, mode);
 }
 
 export function systemPrefersDark(): boolean {

@@ -26,6 +26,9 @@ import ThemeControl from "./ThemeControl";
 import ProfileMenu from "./ProfileMenu";
 import { NoAccessScreen, useAuth } from "./SignIn";
 import { signOut } from "./authSession";
+import { isLocalDevelopment } from "./runtimeContext.ts";
+import { readStored, writeStored } from "./safeStorage.ts";
+import { isUnreachable } from "./transport.ts";
 import WorkspaceSearch from "./WorkspaceSearch";
 import { visibleViews } from "./search";
 import type { SearchResult } from "./search";
@@ -270,11 +273,14 @@ export default function App() {
   const [readinessClaim, setReadinessClaim] = useState<Row | null>(null);
   const [mobile, setMobile] = useState(false);
   const [actor, setActor] = useState(
-    localStorage.getItem(actorStorageKey) || "",
+    () => readStored("local", actorStorageKey) || "",
   );
   const auth = useAuth();
   const hosted = auth.status === "signed-in";
+  // Only a developer's own copy may mention starting the database and API.
+  const developerCopy = !hosted && isLocalDevelopment(import.meta.env.DEV, window.location.hostname);
   const [noAccess, setNoAccess] = useState(false);
+  const [unreachable, setUnreachable] = useState(true);
   const requestVersion = useRef(0);
   const reload = useCallback(async () => {
     const version = ++requestVersion.current;
@@ -299,6 +305,7 @@ export default function App() {
     } catch (e) {
       if (version !== requestVersion.current) return false;
       setNoAccess(e instanceof ApiRequestError && e.status === 403 && e.code === "no_access");
+      setUnreachable(isUnreachable(e));
       setError(
         e instanceof Error
           ? e.message
@@ -337,8 +344,7 @@ export default function App() {
       return !id;
     }
     ++requestVersion.current;
-    if (id) localStorage.setItem(actorStorageKey, id);
-    else localStorage.removeItem(actorStorageKey);
+    writeStored("local", actorStorageKey, id || null);
     setActor(id);
     setData(null);
     setLoading(true);
@@ -671,20 +677,25 @@ export default function App() {
           <Icon name="link" size={32} />
           <h1>Let’s get connected.</h1>
           <p>
-            {hosted
-              ? "The Nexus service is not responding right now. Wait a moment, then reconnect."
-              : "The Nexus local service is not available yet. Start the database and API, then reconnect."}
+            {developerCopy
+              ? "The Nexus local service is not available yet. Start the database and API, then reconnect."
+              : unreachable
+                ? "Nexus is not reachable right now. Try again in a moment."
+                : "Nexus could not open your workspace."}
           </p>
-          <div className="error-banner" role="alert">
-            {error}
-          </div>
+          {/* Staff see the reason only when the service answered with one; a failed connection has none worth showing. */}
+          {(developerCopy || (!unreachable && error)) && (
+            <div className="error-banner" role="alert">
+              {error}
+            </div>
+          )}
           <Button
             onClick={() => {
               setLoading(true);
               void reload();
             }}
           >
-            Reconnect <Icon name="arrow" size={17} />
+            {developerCopy ? "Reconnect" : "Retry"} <Icon name="arrow" size={17} />
           </Button>
         </div>
       </div>
@@ -736,7 +747,7 @@ export default function App() {
 
   const orgName = value(data.organizations[0], "name") || "Your organization";
   const workspaceModes = allowedWorkspaceModes(data);
-  const preferredMode = workspaceChoice?.actorId === data.actor.id ? workspaceChoice.mode : localStorage.getItem(`nexus.workspace.${data.actor.id}`) as WorkspaceMode | null;
+  const preferredMode = workspaceChoice?.actorId === data.actor.id ? workspaceChoice.mode : readStored("local", `nexus.workspace.${data.actor.id}`) as WorkspaceMode | null;
   const workspaceMode = preferredMode && workspaceModes.includes(preferredMode) ? preferredMode : defaultWorkspaceMode(data);
   const workspaceTitle = {clinical:"Clinical workspace",billing:"Billing workspace",executive:"Executive workspace"}[workspaceMode];
   const workspaceDescription = {clinical:"Appointments, documentation, and follow-through for your care team.",billing:"Coverage, claims, and payments in one place.",executive:"Care delivery, workforce, and financial oversight."}[workspaceMode];
@@ -2414,7 +2425,7 @@ export default function App() {
             <span>Recovery workspace</span>
           </div>
         </div>
-        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<select aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode) || !canLeaveDraftReview()) return; localStorage.setItem(`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</select></label>}
+        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<select aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode) || !canLeaveDraftReview()) return; writeStored("local",`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</select></label>}
         <nav aria-label="Primary navigation">
           {nav.filter(item => visibleViews(data).includes(item.id)).sort((a,b)=>navOrder.indexOf(a.id)-navOrder.indexOf(b.id)).map((item) => (
             <div key={item.id}>
@@ -2423,6 +2434,7 @@ export default function App() {
               )}
               <button
                 className={`nav-item ${view === item.id ? "active" : ""}`}
+                aria-current={view === item.id ? "page" : undefined}
                 onClick={() => navigate(item.id)}
               >
                 <Icon name={item.icon} size={19} />

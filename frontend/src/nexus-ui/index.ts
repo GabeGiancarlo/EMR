@@ -9,4 +9,5 @@ export { NxIcon, type NexusIconName } from "./Icon";
 export { Logo } from "./Logo";
 export { Scene, ContourPattern, type NexusSceneName } from "./Scene";
 export { statusStyle, type Tone } from "./status";
+export { ErrorBoundary, PageLoading } from "./PageState";
 export { NxButton, NxBadge, LeafCard, MetricCard, Field, NxTabs, Toast, EmptyState, NxPanel, type ButtonProps, type LeafCardProps } from "./components";

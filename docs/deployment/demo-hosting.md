@@ -58,7 +58,9 @@ Auth0 names; other providers have equivalents.
    - Client ID.
    - There is no client secret to copy. Do not create one.
 
-Optional: to let long sessions renew without a redirect, enable refresh token rotation for the application and add `offline_access` to `NEXUS_OIDC_SCOPES`. The session then renews about a minute before each ID token expires, provided the provider returns a new ID token from the refresh (Auth0 does). If a provider answers a refresh without an ID token, which OpenID Connect allows, the session simply runs to the end of the current ID token and is not cut short. Without refresh, or with such a provider, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended"; signing in again is one click while the provider's own session is alive.
+**As set up on November 12, 2026.** Auth0 tenant `dev-vulcan-01` (US), issuer `https://dev-vulcan-01.us.auth0.com/`. Application "Nexus Demo" (single-page, no secret), client ID `hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt`, with the callback, logout and web-origin addresses set to `https://nexus-demo-orcin.vercel.app`. Refresh token rotation is on. The application signs in through one connection only, the database connection `Nexus-Staff`, which has sign-ups disabled; the tenant's shared `Username-Password-Authentication` and Google connections are switched off for this application, so accounts from other applications in the tenant cannot reach the sign-in. People are added under **User Management → Users → Create User**, connection `Nexus-Staff`, and must verify their email.
+
+Recommended: enable refresh token rotation for the application and set `NEXUS_OIDC_SCOPES` to `openid email profile offline_access`. Without it a session ends when the identity token expires (ten hours by default on Auth0) and anything unsaved at that moment is lost. The session then renews about a minute before each ID token expires, provided the provider returns a new ID token from the refresh (Auth0 does). If a provider answers a refresh without an ID token, which OpenID Connect allows, the session simply runs to the end of the current ID token and is not cut short. Without refresh, or with such a provider, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended"; signing in again is one click while the provider's own session is alive.
 
 ### 3. Create the database (you)
 
@@ -80,12 +82,20 @@ python3 tools/seed-demo.py --api http://127.0.0.1:8095 --admin-email you@example
 
 Then stop the API with Ctrl-C. Notes:
 
+- **Seed from the commit that is deployed.** The local API applies its own database migrations when it starts, so run this step from an up-to-date `main` checkout (`git switch main && git pull`). Seeding from a branch with newer migrations would move the hosted database ahead of the hosted API.
+- **One journal per database.** The script records what it created in `.local/demo-seed-state.json`. If you delete and recreate the hosted database, pass a fresh `--journal` path (or delete the old file) so the script does not skip setup and then fail on records that no longer exist.
+- Before running it, read the database host in your connection string once more. This step writes to whatever database that string names.
+
 - The script creates one organization, six staff, three synthetic clients and example scheduling, documentation and billing records. It never deletes anything and refuses a database that already holds a different workspace.
 - Roles you do not name (`clinical_lead`, `clinician`, `billing`, `executive`, `support`) get placeholder emails that cannot sign in. To try another role, pass `--staff role=email` with a second provider account, or add staff later under **Team & access** as the administrator.
 - Each email can belong to only one staff member across the whole database.
 - If your host gives the database an internal and an external address, this step needs the external one; the hosted API (step 5) can use the internal one.
 
 ### 5. Deploy the API (you)
+
+**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
+
+**By hand, on any container host:**
 
 1. Create a web service from the GitHub repository `GabeGiancarlo/EMR`, runtime Docker, Dockerfile path `infra/dockerfiles/Dockerfile.api`, build context the repository root.
 2. Health check path: `/healthz`.
@@ -98,20 +108,21 @@ Then stop the API with Ctrl-C. Notes:
 | `NEXUS_OIDC_CLIENT_ID` | The client ID from step 2. |
 | `NEXUS_OIDC_AUDIENCE` | The same client ID. |
 | `NEXUS_ALLOWED_ORIGINS` | `SITE` |
+| `NEXUS_OIDC_SCOPES` | `openid email profile offline_access`, if refresh token rotation is on (step 2). Optional. |
 
-The image already sets `NEXUS_AUTH_MODE=oidc` and `HOST=0.0.0.0`. Do not set `NEXUS_LOCAL_DEV`. If the host assigns `PORT`, leave it alone; otherwise the API listens on 8090.
+The image already sets `NEXUS_AUTH_MODE=oidc`, `HOST=0.0.0.0` and `RUST_LOG=info` (so refused sign-ins and provider problems appear in the host's log). Do not set `NEXUS_LOCAL_DEV`. If the host assigns `PORT`, leave it alone; otherwise the API listens on 8090.
 
 If something is missing the service exits at once with one line naming it, for example `Nexus API did not start: Hosted mode (NEXUS_AUTH_MODE=oidc) cannot start. Missing: NEXUS_OIDC_ISSUER.` Note the service's public address, for example `https://nexus-api.onrender.com`. Call it `API`. Opening `API/healthz` should show `"authentication":"oidc"`.
 
 ### 6. Point the frontend at the API and the identity provider (me, once you send the addresses)
 
-`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits:
+`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits (the third is done: `connect-src` names `https://dev-vulcan-01.us.auth0.com`):
 
 | Line to change | Replace | With |
 | --- | --- | --- |
 | `rewrites`, source `/api/:path*` | `REPLACE-WITH-API-HOST.example.invalid` | the host of `API`, for example `nexus-api.onrender.com` |
 | `rewrites`, source `/healthz` | `REPLACE-WITH-API-HOST.example.invalid` | the same host |
-| `Content-Security-Policy`, `connect-src` | `https://REPLACE-WITH-IDENTITY-PROVIDER-HOST.example.invalid` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
+| `Content-Security-Policy`, `connect-src` | the identity provider origin listed after `'self'` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
 
 `connect-src` lists the only places the page may send requests: its own origin and the identity provider, whose token endpoint finishes sign-in. Do not widen it to `https:`.
 
@@ -138,6 +149,8 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 4. Production Branch: `main`. The work reaches `main` by a pull request from `dev`; until then, set the production branch to `dev` if you want to try it before releasing.
 5. Check the project's address equals `SITE`. If it differs, update the provider's URLs (step 2) and `NEXUS_ALLOWED_ORIGINS` (step 5).
 
+**Only `main` is built.** `frontend/vercel.json` tells Vercel to skip every other branch (`ignoreCommand`), so pull requests and `dev` do not produce a failed or half-working preview. If you ever want previews, remove that line and read the next paragraph first.
+
 **Preview deployments do not work for sign-in or saving.** Every Vercel preview gets its own address, such as `https://nexus-demo-git-some-branch-you.vercel.app`. That address is not in the provider's callback list, so sign-in is refused there, and it is not in `NEXUS_ALLOWED_ORIGINS`, so the API answers HTTP 400 to anything that saves. Use the production address. If you need one preview to work, add its exact origin to the provider's four URL fields and to `NEXUS_ALLOWED_ORIGINS` (comma-separated), and remove it afterwards.
 
 ### 8. Check it
@@ -146,6 +159,12 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 2. Sign in as the administrator email you seeded. You should land in the workspace, with "Demonstration workspace · Synthetic data only" in the sidebar.
 3. Sign in with an account that was not seeded. You should see "This account is not set up here."
 4. `SITE/healthz` should answer through the rewrite.
+
+## Before every later deploy
+
+- **Take a database snapshot first.** Migrations run when the API starts and only go forward; there is no down-migration. Rolling back a release that changed the schema means restoring the snapshot, not redeploying the old image.
+- **Deploy `main` only.** Changes reach `main` by a pull request from `dev` after its checks pass (`docs/development/git-workflow.md`).
+- **Watch the first start.** The service log shows one line if a migration or a setting fails, and the health check keeps the previous version serving until the new one is ready.
 
 ## If something goes wrong
 
@@ -178,7 +197,7 @@ Expired, malformed and wrongly signed tokens are not logged; the browser signs i
 - **Not deployed.** The Dockerfile is built by CI only; Docker is not installed on the development Mac. Vercel, a container host, managed PostgreSQL and a real identity provider have not been exercised.
 - **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly, and add `API` as a second origin in `connect-src` in `frontend/vercel.json`; the API already allows `SITE` as an origin.
 - **Sign-out.** If the provider publishes an end-session address the browser is sent there; otherwise only the Nexus session ends and the provider may sign the person straight back in.
-- **Abuse limits.** There is no request rate limiting. The API refuses unauthenticated requests cheaply, but the address is public.
+- **Identity provider with a separate token host.** `connect-src` in `frontend/vercel.json` must name the origin of the provider's **token endpoint**. For Auth0 that is the tenant's own address. For a provider that serves tokens from a different host than its login page, use the token endpoint's origin.
 - **Local tooling.** `tools/mock-oidc-provider.mjs` signs a token for any email typed into it. It listens on loopback only and exists to try hosted mode on your own machine. Never configure a hosted API to trust it.
 
 ## Optional features when hosted

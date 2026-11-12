@@ -312,7 +312,84 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--nx-action); }
 .nx-scene { display: block; width: 100%; height: auto; }
 .nx-pattern { position: absolute; inset: 0; pointer-events: none; }
 
+/* ------------------------------------------------------------ whole page */
+/* A page that is still arriving, or that could not be drawn. Matches the entry screens. */
+.nx-page-state {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  text-align: center;
+  background: var(--nx-page);
+  color: var(--nx-text);
+}
+.nx-page-state .nx-logo { margin-bottom: 40px; }
+.nx-page-state h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.2; color: var(--nx-text); }
+.nx-page-state p { margin: 0; max-width: 46ch; font-size: 15px; line-height: 1.55; color: var(--nx-text-secondary); }
+.nx-page-state .nx-button { margin-top: 22px; }
+.nx-page-spinner {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 18px;
+  border: 2px solid var(--nx-border);
+  border-top-color: var(--nx-action);
+  border-radius: 50%;
+  animation: nx-turn 1s linear infinite;
+}
+.nx-page-state[role="status"] p { font-size: 14px; }
+
+/* --------------------------------------------------------- session notice */
+/* Tells a signed-in person their session is about to end. Never blocks the page. */
+.nx-session-notice {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  z-index: 110;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(640px, calc(100vw - 24px));
+  display: flex;
+  align-items: center;
+  gap: 10px 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--nx-warning);
+  border-radius: var(--nx-corner-control);
+  background: var(--nx-warning-bg);
+  color: var(--nx-text);
+  font: 400 14px/1.4 var(--nx-font-ui);
+}
+.nx-session-notice > .nx-icon { flex: none; color: var(--nx-warning); }
+.nx-session-notice > span { flex: 1 1 240px; min-width: 0; }
+.nx-session-notice strong { white-space: nowrap; }
+.nx-session-notice--inline {
+  position: static;
+  transform: none;
+  width: auto;
+  max-width: none;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding: 10px 29px;
+}
+.nx-session-dismiss {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nx-radius-control);
+  background: none;
+  color: var(--nx-text-secondary);
+  cursor: pointer;
+}
+.nx-session-dismiss:hover { color: var(--nx-text); }
+.nx-session-dismiss:focus-visible { outline: 2px solid var(--nx-focus); outline-offset: 2px; }
+
 @media (prefers-reduced-motion: reduce) {
-  .nx-spin { animation: none; }
+  .nx-spin, .nx-page-spinner { animation: none; }
   .button, .nx-button, .nx-leaf::after, .metric::after { transition: none; }
 }

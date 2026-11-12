@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { apiUrl } from "./api";
-import { authHeaders } from "./authSession";
+import { authorizedFetch } from "./api";
 import { Button, Icon, Panel } from "./ui";
 
 function isoDay(date: Date) {
@@ -21,9 +20,9 @@ export default function ExportReports({ role }: { role: string }) {
     try {
       if (!from || !to || from > to)
         throw new Error("Choose a valid start and end date.");
-      const response = await fetch(
-        apiUrl(`/api/exports/${kind}.csv?${new URLSearchParams({ from, to })}`),
-        { headers: { ...(await authHeaders()), Accept: "text/csv" } },
+      const response = await authorizedFetch(
+        `/api/exports/${kind}.csv?${new URLSearchParams({ from, to })}`,
+        { headers: { Accept: "text/csv" } },
       );
       if (!response.ok) {
         const body = await response.json().catch(() => null);
