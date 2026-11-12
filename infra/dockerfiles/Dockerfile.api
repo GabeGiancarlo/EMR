@@ -23,5 +23,5 @@ USER nexus
 # without it only errors would reach the host's log.
 ENV NEXUS_AUTH_MODE=oidc HOST=0.0.0.0 PORT=8090 RUST_LOG=info
 EXPOSE 8090
-HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS "http://127.0.0.1:${PORT}/livez" || exit 1
 CMD ["/app/emr-api"]

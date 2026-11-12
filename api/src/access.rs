@@ -4,7 +4,7 @@ use crate::{
 };
 use actix_web::{web, HttpMessage, HttpRequest};
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgExecutor, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -35,7 +35,10 @@ pub(crate) fn staff_id(req: &HttpRequest) -> Result<Uuid> {
             .ok_or_else(ApiError::unauthenticated),
     }
 }
-pub async fn actor(req: &HttpRequest, pool: &PgPool) -> Result<Actor> {
+/// `db` is the pool, or the caller's open transaction. A handler that already holds a
+/// transaction must pass that transaction: asking the pool for a second connection
+/// while holding the first is how a busy pool deadlocks.
+pub async fn actor<'e>(req: &HttpRequest, db: impl PgExecutor<'e>) -> Result<Actor> {
     let id = staff_id(req)?;
     // Hosted mode: the gate read this active staff row moments ago, in this same
     // request. Mutations still re-read it inside their transaction (`lock_mutation`).
@@ -47,7 +50,7 @@ pub async fn actor(req: &HttpRequest, pool: &PgPool) -> Result<Actor> {
         Some(staff) => staff,
         None => sqlx::query_scalar("SELECT to_jsonb(s) FROM staff s WHERE id=$1 AND active")
             .bind(id)
-            .fetch_optional(pool)
+            .fetch_optional(db)
             .await?
             .ok_or_else(ApiError::denied)?,
     };
@@ -104,7 +107,13 @@ pub fn role_allows(role: &str, resource: &str, write: bool) -> bool {
         _ => false,
     }
 }
-pub async fn allowed(pool: &PgPool, actor: &Actor, resource: &str, write: bool) -> Result<bool> {
+/// See [`actor`] for which executor to pass.
+pub async fn allowed<'e>(
+    db: impl PgExecutor<'e>,
+    actor: &Actor,
+    resource: &str,
+    write: bool,
+) -> Result<bool> {
     if role_allows(&actor.role, resource, write) {
         return Ok(true);
     }
@@ -122,10 +131,15 @@ pub async fn allowed(pool: &PgPool, actor: &Actor, resource: &str, write: bool) 
     } else {
         resource
     };
-    Ok(sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM exceptions WHERE organization_id=$1 AND staff_id=$2 AND resource=$3 AND NOT revoked AND expires_at>now() AND (NOT $4 OR access_mode='write'))").bind(actor.org).bind(actor.id).bind(grant_resource).bind(write).fetch_one(pool).await?)
+    Ok(sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM exceptions WHERE organization_id=$1 AND staff_id=$2 AND resource=$3 AND NOT revoked AND expires_at>now() AND (NOT $4 OR access_mode='write'))").bind(actor.org).bind(actor.id).bind(grant_resource).bind(write).fetch_one(db).await?)
 }
-pub async fn require(pool: &PgPool, actor: &Actor, resource: &str, write: bool) -> Result<()> {
-    if allowed(pool, actor, resource, write).await? {
+pub async fn require<'e>(
+    db: impl PgExecutor<'e>,
+    actor: &Actor,
+    resource: &str,
+    write: bool,
+) -> Result<()> {
+    if allowed(db, actor, resource, write).await? {
         Ok(())
     } else {
         Err(ApiError::denied())

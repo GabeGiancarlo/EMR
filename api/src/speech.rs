@@ -79,19 +79,26 @@ fn configured_paths(cli: &str, model: &str) -> std::result::Result<(PathBuf, Pat
     Ok((cli, model))
 }
 
-fn load_configured() -> Result<(PathBuf, PathBuf)> {
+fn load_configured(hosted: bool) -> Result<(PathBuf, PathBuf)> {
     configured_paths(
         &std::env::var("NEXUS_WHISPER_CLI").unwrap_or_default(),
         &std::env::var("NEXUS_WHISPER_MODEL").unwrap_or_default(),
     )
-    .map_err(|_| unconfigured())
+    .map_err(|_| unconfigured(hosted))
 }
 
-fn unconfigured() -> ApiError {
+/// Locally the person reading the message is the one who can fix the machine, so it
+/// says how. Hosted, the reader is a signed-in user: server variable names and paths
+/// are the operator's concern and are left out.
+fn unconfigured(hosted: bool) -> ApiError {
     ApiError {
         status: StatusCode::SERVICE_UNAVAILABLE,
         code: "speech_unconfigured",
-        message: "Local whisper.cpp is unconfigured. Set NEXUS_WHISPER_CLI and NEXUS_WHISPER_MODEL to absolute paths of an existing whisper.cpp CLI and model file on this machine, then restart the API. No hosted speech service is called.".into(),
+        message: if hosted {
+            "Speech recognition is not available in this workspace.".into()
+        } else {
+            "Local whisper.cpp is unconfigured. Set NEXUS_WHISPER_CLI and NEXUS_WHISPER_MODEL to absolute paths of an existing whisper.cpp CLI and model file on this machine, then restart the API. No hosted speech service is called.".into()
+        },
     }
 }
 
@@ -111,11 +118,15 @@ fn timed_out() -> ApiError {
     }
 }
 
-fn spawn_failed(kind: std::io::ErrorKind) -> ApiError {
+fn spawn_failed(kind: std::io::ErrorKind, hosted: bool) -> ApiError {
     ApiError {
         status: StatusCode::SERVICE_UNAVAILABLE,
         code: "speech_failed",
-        message: format!("The configured whisper.cpp CLI could not be started ({kind:?}). Confirm NEXUS_WHISPER_CLI is an executable absolute path and NEXUS_WHISPER_MODEL is a readable model file. No hosted fallback was used."),
+        message: if hosted {
+            "Speech recognition could not be started. Nothing was saved.".into()
+        } else {
+            format!("The configured whisper.cpp CLI could not be started ({kind:?}). Confirm NEXUS_WHISPER_CLI is an executable absolute path and NEXUS_WHISPER_MODEL is a readable model file. No hosted fallback was used.")
+        },
     }
 }
 
@@ -486,7 +497,8 @@ pub async fn transcribe(
         return Err(wav_error(WavError::TooLarge));
     }
     validate_wav(&body).map_err(wav_error)?;
-    let (cli, model) = load_configured()?;
+    let hosted = !state.auth.is_local();
+    let (cli, model) = load_configured(hosted)?;
     audit_pair(&state.pool, &actor, READ_ACTION, client_id, consent_id).await?;
     let _permit = try_claim(jobs()).map_err(|_| busy())?;
     let dir = new_job_dir();
@@ -511,13 +523,13 @@ pub async fn transcribe(
         .args(command_argv(&model));
     let mut child = command.spawn().map_err(|err| {
         log::warn!("whisper.cpp could not be started ({:?})", err.kind());
-        spawn_failed(err.kind())
+        spawn_failed(err.kind(), hosted)
     })?;
     let status = match timeout(Duration::from_secs(JOB_TIMEOUT_SECS), child.wait()).await {
         Ok(Ok(status)) => status,
         Ok(Err(err)) => {
             log::warn!("whisper.cpp wait failed ({:?})", err.kind());
-            return Err(spawn_failed(err.kind()));
+            return Err(spawn_failed(err.kind(), hosted));
         }
         Err(_) => {
             let _ = child.kill().await;
@@ -861,7 +873,21 @@ mod tests {
 
     #[test]
     fn unconfigured_busy_and_timeout_are_actionable() {
-        let err = unconfigured();
+        // Hosted: the same codes, with no server variable names or setup steps.
+        for hosted in [
+            unconfigured(true),
+            spawn_failed(std::io::ErrorKind::NotFound, true),
+        ] {
+            assert_eq!(hosted.status, StatusCode::SERVICE_UNAVAILABLE);
+            assert!(!hosted.message.contains("NEXUS_"), "{}", hosted.message);
+            assert!(!hosted.message.contains("whisper"), "{}", hosted.message);
+            assert!(!hosted.message.contains("NotFound"), "{}", hosted.message);
+        }
+        assert_eq!(unconfigured(true).code, unconfigured(false).code);
+        assert!(spawn_failed(std::io::ErrorKind::NotFound, false)
+            .message
+            .contains("NEXUS_WHISPER_CLI"));
+        let err = unconfigured(false);
         assert_eq!(err.status, StatusCode::SERVICE_UNAVAILABLE);
         assert!(err.message.contains("NEXUS_WHISPER_CLI"));
         assert!(err.message.contains("NEXUS_WHISPER_MODEL"));

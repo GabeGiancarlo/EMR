@@ -1,8 +1,9 @@
 use super::*;
 use crate::media_transcription::Recognition;
-use sha2::{Digest, Sha256};
+use crate::workers::{Exit, Status};
 use sqlx::{Connection, PgConnection, PgPool};
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 
 const ADVISORY_LOCK_KEY: i64 = 734903221;
@@ -143,7 +144,7 @@ async fn guarded(
     tokio::pin!(recognition);
     let mut interval = tokio::time::interval(Duration::from_secs(2));
     loop {
-        tokio::select! {out=&mut recognition=>return out,_=interval.tick()=>{sqlx::query("SELECT 1").execute(&mut *owner).await?;let mut tx=pool.begin().await?;authorized(&mut tx,id).await?;tx.commit().await?;}}
+        tokio::select! {out=&mut recognition=>return out,_=interval.tick()=>{sqlx::query("SELECT 1").execute(&mut *owner).await?;let mut tx=crate::db::begin_background(pool).await?;authorized(&mut tx,id).await?;tx.commit().await?;}}
     }
 }
 async fn publish(
@@ -152,7 +153,7 @@ async fn publish(
     recognized: Recognition,
     source_hash: String,
 ) -> Result<()> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::db::begin_background(pool).await?;
     let (actor, room, job) = authorized(&mut tx, id).await?;
     let doc = Uuid::new_v4();
     let version = Uuid::new_v4();
@@ -187,7 +188,7 @@ async fn publish(
     Ok(())
 }
 async fn process(pool: &PgPool, owner: &mut sqlx::PgConnection, id: Uuid) -> Result<()> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::db::begin_background(pool).await?;
     let (actor, room, job) = authorized(&mut tx, id).await?;
     if job["state"] != "queued" {
         return Err(ApiError::conflict("This job was already claimed"));
@@ -214,27 +215,35 @@ async fn process(pool: &PgPool, owner: &mut sqlx::PgConnection, id: Uuid) -> Res
     )
     .await?;
     tx.commit().await?;
-    let hash = format!("{:x}", Sha256::digest(&bytes));
+    let hash = crate::sha256_hex(&bytes);
     let recognized = guarded(pool, owner, id, &bytes).await?;
     publish(pool, id, recognized, hash).await
 }
-pub(crate) async fn start(pool: PgPool) {
+/// One run of the worker: take ownership of the queue, then work it until the owning
+/// session is lost. The supervisor in `crate::workers` decides what happens next.
+pub(crate) async fn run(pool: PgPool, status: Arc<Status>) -> Exit {
     // A dedicated session owns this database's worker; its drop releases the lock.
     // Recovery reads and terminal writes use that session only. A pooled running
     // scan is not a fence after this connection dies.
-    let Ok(connection) = pool.acquire().await else {
+    let Ok(mut owner) = crate::db::dedicated(&pool).await else {
         log::error!("Transcription worker connection unavailable");
-        return;
+        return Exit::ConnectionUnavailable;
     };
-    let mut owner = connection.detach();
     let locked = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
         .bind(ADVISORY_LOCK_KEY)
         .fetch_one(&mut owner)
-        .await
-        .unwrap_or(false);
-    if !locked {
-        return;
+        .await;
+    match locked {
+        Ok(true) => {}
+        Ok(false) => {
+            // Another session owns the queue. Close this one now instead of leaving
+            // the server to notice a dropped socket.
+            let _ = owner.close().await;
+            return Exit::LockHeld;
+        }
+        Err(_) => return Exit::ConnectionUnavailable,
     }
+    status.running();
     let mut interrupted: Option<VecDeque<Uuid>> = None;
     let mut unsaved: Option<(Uuid, &'static str)> = None;
     loop {
@@ -244,7 +253,7 @@ pub(crate) async fn start(pool: PgPool) {
                 Err(_) => {
                     if same_session_unusable(&mut owner).await {
                         log::error!("Transcription worker ownership connection lost");
-                        return;
+                        return Exit::OwnershipLost;
                     }
                     log::error!("Transcription recovery query failed");
                     tokio::time::sleep(TERMINAL_SAVE_BACKOFF).await;
@@ -264,7 +273,7 @@ pub(crate) async fn start(pool: PgPool) {
                     }
                     TerminalPersist::OwnershipLost => {
                         log::error!("Transcription worker ownership connection lost");
-                        return;
+                        return Exit::OwnershipLost;
                     }
                 }
                 continue;
@@ -282,14 +291,14 @@ pub(crate) async fn start(pool: PgPool) {
                 }
                 TerminalPersist::OwnershipLost => {
                     log::error!("Transcription worker ownership connection lost");
-                    return;
+                    return Exit::OwnershipLost;
                 }
             }
         }
         // Do not acquire another job until this session has stored a pending terminal write.
         if same_session_unusable(&mut owner).await {
             log::error!("Transcription worker ownership connection lost");
-            return;
+            return Exit::OwnershipLost;
         }
         if let Ok(_permit) = crate::speech::recognition_permit() {
             match next_queued(&mut owner).await {
@@ -303,7 +312,7 @@ pub(crate) async fn start(pool: PgPool) {
                 Err(_) => {
                     if same_session_unusable(&mut owner).await {
                         log::error!("Transcription worker ownership connection lost");
-                        return;
+                        return Exit::OwnershipLost;
                     }
                     log::error!("Transcription queue unavailable");
                 }
@@ -316,4 +325,22 @@ pub(crate) async fn start(pool: PgPool) {
 #[cfg(test)]
 mod tests {
     include!("worker_terminal_tests.rs");
+
+    #[actix_web::test]
+    #[ignore = "Requires isolated nexus_test schemas"]
+    async fn transcript_run_yields_to_another_owner_and_ends_when_its_session_is_lost() {
+        let harness = Harness::create("nexus_transcript_supervise")
+            .await
+            .unwrap_or_else(|e| panic!("{e}"));
+        let result = crate::workers::testing::ownership_case(
+            &harness.pool,
+            &harness.control,
+            ADVISORY_LOCK_KEY,
+            super::run,
+        )
+        .await;
+        let cleanup = harness.cleanup().await;
+        result.unwrap();
+        cleanup.unwrap();
+    }
 }

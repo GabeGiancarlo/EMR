@@ -133,7 +133,7 @@ async fn populated_upgrade_preserves_rows_and_repeat_is_noop() {
     for key in ["claims", "sessions", "audit", "catalog", "revisions"] {
         assert_eq!(before[key], after[key]);
     }
-    assert_eq!(after["migrations"].as_array().unwrap().len(), 21);
+    assert_eq!(after["migrations"].as_array().unwrap().len(), 23);
     tokio::time::timeout(Duration::from_secs(10), migrate(&pool))
         .await
         .unwrap()
@@ -219,7 +219,7 @@ async fn populated_pre_program_schema_upgrades_without_new_columns() {
             .as_array()
             .unwrap()
             .len(),
-        21
+        23
     );
     cleanup(control, pool, schema).await;
 }
@@ -235,5 +235,117 @@ async fn catalog_boundary_whitespace_collision_blocks_upgrade() {
     let error = migrate(&pool).await.unwrap_err().to_string();
     assert!(error.contains("Canonical catalog collisions"), "{error}");
     assert_eq!(evidence(&pool).await, before);
+    cleanup(control, pool, schema).await;
+}
+async fn staff_rows(pool: &PgPool) -> Value {
+    sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM staff s")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+async fn staff_member(
+    pool: &PgPool,
+    org: &str,
+    email: &str,
+    active: bool,
+) -> Result<Uuid, sqlx::Error> {
+    let id = Uuid::new_v4();
+    sqlx::query("INSERT INTO staff(id,organization_id,name,email,role,active) VALUES($1,$2::uuid,'Synthetic',$3,'admin',$4)")
+        .bind(id).bind(org).bind(email).bind(active).execute(pool).await?;
+    Ok(id)
+}
+#[tokio::test]
+#[ignore = "requires disposable nexus_test PostgreSQL"]
+async fn shared_active_staff_email_blocks_migration_022_and_changes_no_row() {
+    const FIRST_ORG: &str = "00000000-0000-0000-0000-000000000001";
+    const SECOND_ORG: &str = "00000000-0000-0000-0000-0000000000a1";
+    const FIXTURE_STAFF: &str = "00000000-0000-0000-0000-000000000003";
+    let (control, pool, schema) = database(Some(202611040021)).await;
+    fixture(&pool).await;
+    sqlx::query("INSERT INTO organizations(id,name) VALUES($1::uuid,'Synthetic second tenant')")
+        .bind(SECOND_ORG)
+        .execute(&pool)
+        .await
+        .unwrap();
+    // The fixture administrator is synthetic@example.invalid. Before migration 022
+    // another tenant could hold the same address, and one tenant could hold it twice
+    // in different spellings. Hosted sign-in could not tell these people apart.
+    let other_tenant = staff_member(&pool, SECOND_ORG, "synthetic@example.invalid", true)
+        .await
+        .unwrap();
+    let other_case = staff_member(&pool, FIRST_ORG, "Synthetic@Example.INVALID", true)
+        .await
+        .unwrap();
+    // A former member with the same address is not part of the problem.
+    staff_member(&pool, SECOND_ORG, "SYNTHETIC@example.invalid", false)
+        .await
+        .unwrap();
+    let before = staff_rows(&pool).await;
+    let evidence_before = evidence(&pool).await;
+    for _ in 0..2 {
+        let error = tokio::time::timeout(Duration::from_secs(10), migrate(&pool))
+            .await
+            .expect("migration lock released")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("block migration 022"), "{error}");
+        for id in [
+            FIXTURE_STAFF.to_string(),
+            other_tenant.to_string(),
+            other_case.to_string(),
+        ] {
+            assert!(error.contains(&id), "{id} missing from: {error}");
+        }
+        // The message names records, not addresses.
+        assert!(!error.to_lowercase().contains("example.invalid"), "{error}");
+        // Nothing was rewritten, deleted or half applied.
+        assert_eq!(staff_rows(&pool).await, before);
+        assert_eq!(evidence(&pool).await, evidence_before);
+    }
+    // The operator resolves it deliberately: one holder stays active.
+    sqlx::query("UPDATE staff SET active=false WHERE id=ANY($1)")
+        .bind(vec![other_tenant, other_case])
+        .execute(&pool)
+        .await
+        .unwrap();
+    let resolved = staff_rows(&pool).await;
+    tokio::time::timeout(Duration::from_secs(10), migrate(&pool))
+        .await
+        .unwrap()
+        .unwrap();
+    // The migration itself changed no staff row, including the mixed-case spellings.
+    assert_eq!(staff_rows(&pool).await, resolved);
+    assert_eq!(
+        evidence(&pool).await["migrations"]
+            .as_array()
+            .unwrap()
+            .len(),
+        23
+    );
+    // From here on the database refuses a second active holder in any spelling or
+    // tenant, and still allows inactive ones and distinct addresses.
+    for (org, email) in [
+        (SECOND_ORG, "synthetic@example.invalid"),
+        (SECOND_ORG, "SYNTHETIC@EXAMPLE.INVALID"),
+        (FIRST_ORG, "Synthetic@example.invalid"),
+    ] {
+        let refused = staff_member(&pool, org, email, true).await.unwrap_err();
+        let code = refused.as_database_error().and_then(|e| e.code());
+        assert_eq!(code.as_deref(), Some("23505"), "{email}");
+    }
+    staff_member(&pool, SECOND_ORG, "Synthetic@Example.invalid", false)
+        .await
+        .unwrap();
+    staff_member(&pool, SECOND_ORG, "another@example.invalid", true)
+        .await
+        .unwrap();
+    // Reactivating a duplicate is refused as well.
+    let reactivated = sqlx::query("UPDATE staff SET active=true WHERE id=$1")
+        .bind(other_tenant)
+        .execute(&pool)
+        .await
+        .unwrap_err();
+    let code = reactivated.as_database_error().and_then(|e| e.code());
+    assert_eq!(code.as_deref(), Some("23505"));
     cleanup(control, pool, schema).await;
 }

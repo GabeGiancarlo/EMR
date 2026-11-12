@@ -10,11 +10,31 @@ use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-pub async fn health(state: web::Data<AppState>) -> Result<HttpResponse> {
-    sqlx::query("SELECT 1").execute(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(
-        json!({"status":"healthy","database":"connected","authentication":state.auth.label()}),
-    ))
+/// How long the readiness probe waits for a connection and its answer.
+const HEALTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Liveness: this process is accepting requests. Deliberately independent of the
+/// database, so a database outage does not make a host restart a working process.
+pub async fn live() -> HttpResponse {
+    HttpResponse::Ok().json(json!({"status":"alive"}))
+}
+/// Readiness: the database answers within two seconds. Worker states are reported
+/// for operators but never change the result: a worker waiting for a lock that
+/// another instance holds is normal.
+pub async fn health(state: web::Data<AppState>) -> HttpResponse {
+    let workers = state.workers.report();
+    let authentication = state.auth.label();
+    let answered = tokio::time::timeout(HEALTH_TIMEOUT, async {
+        let mut connection = state.pool.acquire().await?;
+        sqlx::query("SELECT 1").execute(&mut *connection).await
+    })
+    .await;
+    if matches!(answered, Ok(Ok(_))) {
+        return HttpResponse::Ok().json(json!({"status":"healthy","database":"connected","authentication":authentication,"workers":workers}));
+    }
+    HttpResponse::ServiceUnavailable()
+        .insert_header(("Retry-After", "2"))
+        .json(json!({"status":"unhealthy","database":"unavailable","authentication":authentication,"workers":workers,"error":{"code":"database_unavailable","message":"The database is temporarily unavailable."}}))
 }
 #[derive(Deserialize)]
 pub struct Setup {
@@ -38,9 +58,8 @@ pub async fn setup(state: web::Data<AppState>, body: web::Json<Setup>) -> Result
             return Err(ApiError::invalid("Organization, facility and administrator names are required (up to 200 characters)"));
         }
     }
-    if !body.admin_email.contains('@') || body.admin_email.contains(' ') {
-        return Err(ApiError::invalid("A valid administrator email is required"));
-    }
+    let admin_email = records::staff_email(&body.admin_email)
+        .map_err(|_| ApiError::invalid("A valid administrator email is required"))?;
     let mut tx = state.pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(9182401)")
         .execute(&mut *tx)
@@ -62,7 +81,7 @@ pub async fn setup(state: web::Data<AppState>, body: web::Json<Setup>) -> Result
     .fetch_one(&mut *tx)
     .await?;
     let facility:Value=sqlx::query_scalar("INSERT INTO facilities(id,organization_id,name) VALUES($1,$2,$3) RETURNING to_jsonb(facilities)").bind(facility_id).bind(org_id).bind(body.facility_name.trim()).fetch_one(&mut *tx).await?;
-    let value:Value=sqlx::query_scalar("INSERT INTO staff(id,organization_id,facility_id,name,email,role) VALUES($1,$2,$3,$4,$5,'admin') RETURNING to_jsonb(staff)").bind(actor_id).bind(org_id).bind(facility_id).bind(body.admin_name.trim()).bind(body.admin_email.trim().to_lowercase()).fetch_one(&mut *tx).await?;
+    let value:Value=sqlx::query_scalar("INSERT INTO staff(id,organization_id,facility_id,name,email,role) VALUES($1,$2,$3,$4,$5,'admin') RETURNING to_jsonb(staff)").bind(actor_id).bind(org_id).bind(facility_id).bind(body.admin_name.trim()).bind(&admin_email).fetch_one(&mut *tx).await?;
     let actor = Actor {
         id: actor_id,
         org: org_id,
@@ -135,8 +154,10 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
         .collect::<Vec<_>>());
     let mut tx = state.pool.begin().await?;
     for resource in RESOURCES.iter().copied().chain(std::iter::once("audit")) {
-        let read = access::allowed(&state.pool, &actor, resource, false).await?;
-        let write = access::allowed(&state.pool, &actor, resource, true).await?;
+        // On the transaction, never the pool: this request already holds a connection,
+        // and waiting for a second one deadlocks the pool under concurrent bootstraps.
+        let read = access::allowed(&mut *tx, &actor, resource, false).await?;
+        let write = access::allowed(&mut *tx, &actor, resource, true).await?;
         data["permissions"][resource] = json!({"read":read,"write":write});
         if read {
             data[resource] = json!(rows(&mut tx, resource, &actor).await?);

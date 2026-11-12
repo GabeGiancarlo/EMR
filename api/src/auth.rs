@@ -48,6 +48,58 @@ const PROVIDER_TIMEOUT: Duration = Duration::from_secs(10);
 const PROVIDER_DOCUMENT_LIMIT: usize = 512 * 1024;
 const MAX_TOKEN_BYTES: usize = 16 * 1024;
 
+/// How patiently startup waits for an identity provider that cannot be reached.
+#[derive(Clone, Copy, Debug)]
+pub struct RetryPolicy {
+    /// Stop retrying once this much time has passed since the first attempt.
+    pub patience: Duration,
+    /// Pause after the first failure; doubles after each further one.
+    pub first_pause: Duration,
+    pub longest_pause: Duration,
+}
+impl RetryPolicy {
+    /// A provider restart or a brief network fault at boot: about two minutes.
+    pub const STARTUP: RetryPolicy = RetryPolicy {
+        patience: Duration::from_secs(120),
+        first_pause: Duration::from_secs(1),
+        longest_pause: Duration::from_secs(30),
+    };
+
+    /// The pauses between attempts: doubling up to the ceiling, for as long as the
+    /// next pause still fits inside `patience`.
+    pub fn pauses(&self) -> Vec<Duration> {
+        let mut pauses = Vec::new();
+        let (mut next, mut total) = (self.first_pause, Duration::ZERO);
+        while !next.is_zero() && total + next <= self.patience {
+            pauses.push(next);
+            total += next;
+            next = (next * 2).min(self.longest_pause);
+        }
+        pauses
+    }
+}
+
+/// Why the provider could not be read at startup. `transient` is true only for
+/// faults that waiting can cure: the provider could not be reached, could not be
+/// read, or answered with a server-side or throttling status.
+struct ConnectError {
+    message: String,
+    transient: bool,
+}
+impl ConnectError {
+    fn permanent(message: String) -> Self {
+        Self {
+            message,
+            transient: false,
+        }
+    }
+}
+
+struct FetchError {
+    why: String,
+    transient: bool,
+}
+
 #[derive(Clone)]
 pub enum Auth {
     /// Loopback development. Operator selection is not authentication.
@@ -158,28 +210,37 @@ pub(crate) fn provider_url(raw: &str) -> Result<reqwest::Url, &'static str> {
 async fn fetch_json<T: serde::de::DeserializeOwned>(
     http: &reqwest::Client,
     url: &str,
-) -> Result<T, String> {
+) -> Result<T, FetchError> {
+    let failed = |why: &str, transient| FetchError {
+        why: why.to_string(),
+        transient,
+    };
     let mut response = http
         .get(url)
         .header(reqwest::header::ACCEPT, "application/json")
         .send()
         .await
-        .map_err(|_| "could not be reached".to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("answered HTTP {}", response.status().as_u16()));
+        .map_err(|_| failed("could not be reached", true))?;
+    let status = response.status();
+    if !status.is_success() {
+        let transient = status.is_server_error() || matches!(status.as_u16(), 408 | 429);
+        return Err(failed(
+            &format!("answered HTTP {}", status.as_u16()),
+            transient,
+        ));
     }
     let mut body = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|_| "could not be read".to_string())?
+        .map_err(|_| failed("could not be read", true))?
     {
         if body.len() + chunk.len() > PROVIDER_DOCUMENT_LIMIT {
-            return Err("returned an oversized document".into());
+            return Err(failed("returned an oversized document", false));
         }
         body.extend_from_slice(&chunk);
     }
-    serde_json::from_slice(&body).map_err(|_| "did not return the expected JSON".to_string())
+    serde_json::from_slice(&body).map_err(|_| failed("did not return the expected JSON", false))
 }
 
 /// Keep only keys a signature can be checked against: RSA or P-256/P-384 public
@@ -275,8 +336,11 @@ impl KeyStore {
             Ok(_) => log::warn!(
                 "Identity provider returned no usable signing keys; keeping the previous set"
             ),
-            Err(why) => {
-                log::warn!("Identity provider signing keys {why}; keeping the previous set")
+            Err(error) => {
+                log::warn!(
+                    "Identity provider signing keys {}; keeping the previous set",
+                    error.why
+                )
             }
         }
     }
@@ -286,26 +350,64 @@ impl Oidc {
     /// Read the provider's discovery document and signing keys. Startup fails here,
     /// with a message naming the variable to fix, instead of rejecting every sign-in later.
     pub async fn connect(settings: OidcSettings) -> Result<Self, String> {
-        provider_url(&settings.issuer).map_err(|why| format!("NEXUS_OIDC_ISSUER {why}."))?;
+        Self::connect_once(settings)
+            .await
+            .map_err(|error| error.message)
+    }
+
+    /// [`Oidc::connect`], retried while the provider cannot be reached, so a restart
+    /// does not crash-loop because the provider blinked. A fault that waiting cannot
+    /// cure (a wrong issuer, a document that is not the expected JSON, no usable key)
+    /// fails at once, and when patience runs out the last plain message is returned.
+    pub async fn connect_with_retry(
+        settings: OidcSettings,
+        policy: RetryPolicy,
+    ) -> Result<Self, String> {
+        let mut pauses = policy.pauses().into_iter();
+        loop {
+            let error = match Self::connect_once(settings.clone()).await {
+                Ok(connected) => return Ok(connected),
+                Err(error) => error,
+            };
+            match pauses.next() {
+                Some(pause) if error.transient => {
+                    log::warn!(
+                        "{} Trying again in {} seconds.",
+                        error.message,
+                        pause.as_secs_f32()
+                    );
+                    tokio::time::sleep(pause).await;
+                }
+                _ => return Err(error.message),
+            }
+        }
+    }
+
+    async fn connect_once(settings: OidcSettings) -> Result<Self, ConnectError> {
+        provider_url(&settings.issuer)
+            .map_err(|why| ConnectError::permanent(format!("NEXUS_OIDC_ISSUER {why}.")))?;
         let http = reqwest::Client::builder()
             .timeout(PROVIDER_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| {
-                "The HTTPS client for the identity provider could not start.".to_string()
+                ConnectError::permanent(
+                    "The HTTPS client for the identity provider could not start.".to_string(),
+                )
             })?;
         let discovery_url = format!(
             "{}/.well-known/openid-configuration",
             settings.issuer.trim_end_matches('/')
         );
-        let discovery: Discovery = fetch_json(&http, &discovery_url).await.map_err(|why| {
-            format!("The identity provider's discovery document ({discovery_url}) {why}. Check NEXUS_OIDC_ISSUER.")
+        let discovery: Discovery = fetch_json(&http, &discovery_url).await.map_err(|error| ConnectError {
+            message: format!("The identity provider's discovery document ({discovery_url}) {}. Check NEXUS_OIDC_ISSUER.", error.why),
+            transient: error.transient,
         })?;
         if discovery.issuer != settings.issuer {
-            return Err(format!(
+            return Err(ConnectError::permanent(format!(
                 "The identity provider reports its issuer as \"{}\". Set NEXUS_OIDC_ISSUER to exactly that value, including any trailing slash.",
                 discovery.issuer
-            ));
+            )));
         }
         let jwks_url = settings
             .jwks_url
@@ -319,19 +421,29 @@ impl Oidc {
             ),
             ("token endpoint", discovery.token_endpoint.as_str()),
         ] {
-            provider_url(value).map_err(|why| format!("The identity provider's {name} {why}."))?;
+            provider_url(value).map_err(|why| {
+                ConnectError::permanent(format!("The identity provider's {name} {why}."))
+            })?;
         }
         let end_session = discovery
             .end_session_endpoint
             .filter(|url| provider_url(url).is_ok());
         let keys =
-            signing_keys(fetch_json(&http, &jwks_url).await.map_err(|why| {
-                format!("The identity provider's signing keys ({jwks_url}) {why}.")
-            })?);
+            signing_keys(
+                fetch_json(&http, &jwks_url)
+                    .await
+                    .map_err(|error| ConnectError {
+                        message: format!(
+                            "The identity provider's signing keys ({jwks_url}) {}.",
+                            error.why
+                        ),
+                        transient: error.transient,
+                    })?,
+            );
         if keys.is_empty() {
-            return Err(format!(
+            return Err(ConnectError::permanent(format!(
                 "The identity provider's signing keys ({jwks_url}) contain no RSA or elliptic-curve signing key."
-            ));
+            )));
         }
         let now = Instant::now();
         Ok(Self {
@@ -413,6 +525,16 @@ impl Oidc {
     /// Check signature, issuer, audience, expiry and not-before, then return the
     /// verified email in lower case.
     pub async fn verify(&self, token: &str) -> Result<String, Rejection> {
+        self.verify_for(token, "-").await
+    }
+
+    /// [`Oidc::verify`], naming the request in the operator's log line when a
+    /// correctly signed token is refused.
+    pub(crate) async fn verify_for(
+        &self,
+        token: &str,
+        request_id: &str,
+    ) -> Result<String, Rejection> {
         if token.len() > MAX_TOKEN_BYTES {
             return Err(Rejection::Unauthenticated);
         }
@@ -453,7 +575,9 @@ impl Oidc {
         } else {
             "its email_verified claim is not true; the account's email is unverified at the provider"
         };
-        log::warn!("Sign-in refused for a correctly signed identity token: {cause}");
+        log::warn!(
+            "Sign-in refused for a correctly signed identity token: {cause} (request_id={request_id})"
+        );
         Err(Rejection::Forbidden)
     }
 }
@@ -461,7 +585,7 @@ impl Oidc {
 /// Routes whose caller is not a staff member. Each checks its own single-purpose
 /// token: `/api/auth/config` is public, visit routes take a patient invitation
 /// token, and recording-track routes take a per-track upload token.
-fn carries_own_credential(path: &str) -> bool {
+pub(crate) fn carries_own_credential(path: &str) -> bool {
     path == "/api/auth/config"
         || path == "/api/telehealth/visit"
         || path.starts_with("/api/telehealth/visit/")
@@ -491,9 +615,10 @@ async fn identify(
     state: &AppState,
     oidc: &Oidc,
 ) -> Result<Identity, ApiError> {
+    let request_id = crate::observe::request_id(req);
     let token = bearer(req).ok_or_else(ApiError::unauthenticated)?;
     let email = oidc
-        .verify(token)
+        .verify_for(token, &request_id)
         .await
         .map_err(|rejection| match rejection {
             Rejection::Unauthenticated => ApiError::unauthenticated(),
@@ -514,7 +639,9 @@ async fn identify(
     match (id, matches.pop()) {
         (Some(id), Some(staff)) => Ok(Identity { id, staff }),
         _ => {
-            log::info!("Sign-in refused: the verified email matches no single active staff member");
+            log::info!(
+                "Sign-in refused: the verified email matches no single active staff member (request_id={request_id})"
+            );
             Err(ApiError::no_access())
         }
     }
@@ -570,6 +697,29 @@ mod tests {
         assert!(provider_url("http://tenant.example.com/").is_err());
         assert!(provider_url("ftp://tenant.example.com/").is_err());
         assert!(provider_url("tenant.example.com").is_err());
+    }
+
+    #[test]
+    fn startup_retries_double_to_a_ceiling_and_stay_inside_their_patience() {
+        let seconds = |policy: RetryPolicy| -> Vec<u64> {
+            policy.pauses().iter().map(Duration::as_secs).collect()
+        };
+        assert_eq!(
+            seconds(RetryPolicy::STARTUP),
+            [1, 2, 4, 8, 16, 30, 30],
+            "about a minute and a half of pauses, then the last attempt"
+        );
+        assert!(RetryPolicy::STARTUP.pauses().iter().sum::<Duration>() <= Duration::from_secs(120));
+        let none = RetryPolicy {
+            patience: Duration::ZERO,
+            ..RetryPolicy::STARTUP
+        };
+        assert!(none.pauses().is_empty());
+        let stuck = RetryPolicy {
+            first_pause: Duration::ZERO,
+            ..RetryPolicy::STARTUP
+        };
+        assert!(stuck.pauses().is_empty());
     }
 
     #[test]

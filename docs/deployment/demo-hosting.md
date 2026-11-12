@@ -6,7 +6,7 @@ Written November 11, 2026. Nothing described here has been deployed. The steps w
 
 This hosts Nexus as a **demonstration that contains synthetic records only, behind real sign-in**.
 
-- **Do not enter information about real people.** No real patient, staff, payer or clinical data. The hosted configuration has not had a security review, penetration test, HIPAA risk analysis or business associate agreements, and it has no rate limiting, intrusion detection, backup policy or key-recovery plan.
+- **Do not enter information about real people.** No real patient, staff, payer or clinical data. The hosted configuration has not had a penetration test, a HIPAA risk analysis or business associate agreements, and it has no intrusion detection, monitoring, backup policy or key-recovery plan. The full list is in [production readiness](production-readiness.md).
 - Sign-in proves who someone is. It does not make the system fit for protected health information.
 - Speech recognition and clinical drafting are off when hosted (the image has no models). Recording is off unless you add a media key. Video calls across networks need a TURN server that is not provided.
 
@@ -58,6 +58,8 @@ Auth0 names; other providers have equivalents.
    - Client ID.
    - There is no client secret to copy. Do not create one.
 
+**As set up on November 12, 2026.** Auth0 tenant `dev-vulcan-01` (US), issuer `https://dev-vulcan-01.us.auth0.com/`. Application "Nexus Demo" (single-page, no secret), client ID `hiSdQk1bhasqtTMo2Lu60Jba3qa2htJt`, with the callback, logout and web-origin addresses set to `https://nexus-demo-orcin.vercel.app`. Refresh token rotation is on. The application signs in through one connection only, the database connection `Nexus-Staff`, which has sign-ups disabled; the tenant's shared `Username-Password-Authentication` and Google connections are switched off for this application, so accounts from other applications in the tenant cannot reach the sign-in. People are added under **User Management → Users → Create User**, connection `Nexus-Staff`, and must verify their email.
+
 Recommended: enable refresh token rotation for the application and set `NEXUS_OIDC_SCOPES` to `openid email profile offline_access`. Without it a session ends when the identity token expires (ten hours by default on Auth0) and anything unsaved at that moment is lost. The session then renews about a minute before each ID token expires, provided the provider returns a new ID token from the refresh (Auth0 does). If a provider answers a refresh without an ID token, which OpenID Connect allows, the session simply runs to the end of the current ID token and is not cut short. Without refresh, or with such a provider, a session lasts as long as the provider's ID token (Auth0 default: 10 hours) and then shows "Your session ended"; signing in again is one click while the provider's own session is alive.
 
 ### 3. Create the database (you)
@@ -91,12 +93,12 @@ Then stop the API with Ctrl-C. Notes:
 
 ### 5. Deploy the API (you)
 
-**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and fill in the four values it asks for (the table below; `DATABASE_URL` is wired automatically). It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
+**Fast path on Render.** The repository has a blueprint, `render.yaml`, that creates the API and the database together, so steps 3 and 5 become one: in Render choose **New → Blueprint**, pick `GabeGiancarlo/EMR`, and apply it. It asks for nothing: the identity provider values and the site address are written in the blueprint (none is a secret; the browser is sent all of them), and `DATABASE_URL` is wired automatically. If the tenant, the application or the site address changes, change them in `render.yaml`. It uses Render's smallest paid plans on purpose: a free web service sleeps when idle and a free database is deleted after a trial period, and neither has backups. It deploys a commit on `main` only after that commit's GitHub checks pass. If you use the blueprint, do step 4 (seeding) after it has created the database, using the database's **external** connection string.
 
 **By hand, on any container host:**
 
 1. Create a web service from the GitHub repository `GabeGiancarlo/EMR`, runtime Docker, Dockerfile path `infra/dockerfiles/Dockerfile.api`, build context the repository root.
-2. Health check path: `/healthz`.
+2. Health check path: `/livez` (the process is serving; it never touches the database, so a database blip does not get a working process restarted). `/healthz` is readiness: it answers 503 when the database does not respond within two seconds, and lists the background workers.
 3. Environment variables (see `.env.example` for all of them):
 
 | Variable | Value |
@@ -106,6 +108,8 @@ Then stop the API with Ctrl-C. Notes:
 | `NEXUS_OIDC_CLIENT_ID` | The client ID from step 2. |
 | `NEXUS_OIDC_AUDIENCE` | The same client ID. |
 | `NEXUS_ALLOWED_ORIGINS` | `SITE` |
+| `NEXUS_TRUSTED_PROXIES` | The number of the host's own proxies in front of the API. See "Request limits" below. |
+| `NEXUS_OIDC_SCOPES` | `openid email profile offline_access`, if refresh token rotation is on (step 2). Optional. |
 
 The image already sets `NEXUS_AUTH_MODE=oidc`, `HOST=0.0.0.0` and `RUST_LOG=info` (so refused sign-ins and provider problems appear in the host's log). Do not set `NEXUS_LOCAL_DEV`. If the host assigns `PORT`, leave it alone; otherwise the API listens on 8090.
 
@@ -113,13 +117,13 @@ If something is missing the service exits at once with one line naming it, for e
 
 ### 6. Point the frontend at the API and the identity provider (me, once you send the addresses)
 
-`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits:
+`vercel.json` cannot read environment variables, so two addresses are written into `frontend/vercel.json` by hand. Three edits (the third is done: `connect-src` names `https://dev-vulcan-01.us.auth0.com`):
 
 | Line to change | Replace | With |
 | --- | --- | --- |
 | `rewrites`, source `/api/:path*` | `REPLACE-WITH-API-HOST.example.invalid` | the host of `API`, for example `nexus-api.onrender.com` |
 | `rewrites`, source `/healthz` | `REPLACE-WITH-API-HOST.example.invalid` | the same host |
-| `Content-Security-Policy`, `connect-src` | `https://REPLACE-WITH-IDENTITY-PROVIDER-HOST.example.invalid` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
+| `Content-Security-Policy`, `connect-src` | the identity provider origin listed after `'self'` | the provider's origin, for example `https://your-tenant.us.auth0.com` (scheme and host only, no path, no trailing slash) |
 
 `connect-src` lists the only places the page may send requests: its own origin and the identity provider, whose token endpoint finishes sign-in. Do not widen it to `https:`.
 
@@ -155,7 +159,18 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 1. Open `SITE`. You should see "Sign in to Nexus." and be sent to the provider.
 2. Sign in as the administrator email you seeded. You should land in the workspace, with "Demonstration workspace · Synthetic data only" in the sidebar.
 3. Sign in with an account that was not seeded. You should see "This account is not set up here."
-4. `SITE/healthz` should answer through the rewrite.
+4. `SITE/healthz` should answer through the rewrite, with `"database":"connected"` and both workers listed.
+5. Set the request limits' proxy count (next section). Until then every caller shares one limit.
+
+### 9. Request limits (you, once, after the first deploy)
+
+The API refuses a client that sends too many requests (HTTP 429, "Too many requests. Wait a moment and try again."). It counts per client address, and behind proxies it has to be told how many of the addresses in `X-Forwarded-For` were written by proxies it can trust.
+
+1. From a terminal, call the API **directly**, not through the site: `curl -s https://YOUR-API-HOST/api/auth/config > /dev/null`.
+2. In the API's log on the host, find that request's line. It ends with `forwarded_hops=N`.
+3. Set `NEXUS_TRUSTED_PROXIES` to that `N` (in `render.yaml`, by pull request, or in the host's environment) and redeploy.
+
+Use the number from a direct call, not from a request that came through the site. The API's own address is public, so anyone can call it without passing through Vercel; counting Vercel as a trusted proxy would let such a caller put any address they like in the header and be counted under it. The cost of the safe setting is that people who come through the site are counted together, per Vercel address, which is why the blueprint raises the limits above the defaults. A deployment for real use should close the API's public address to everything but the site (a private network, or a secret header checked at the API) and then count per person.
 
 ## Before every later deploy
 
@@ -177,6 +192,9 @@ This is a normal change: a `feature/` branch and a pull request into `dev`. Send
 | Sign-in or saving fails on a preview deployment | Preview addresses are not the production address (step 7). |
 | Saving fails with HTTP 400 while reading works | The site's origin is not in `NEXUS_ALLOWED_ORIGINS`. |
 | "The Nexus service is not responding" | The API is down, or `vercel.json` still has the placeholder address. |
+| "Too many requests. Wait a moment and try again." for everyone at once | `NEXUS_TRUSTED_PROXIES` is still 0, so all callers share one limit (step 9), or the limits are too low for the number of people in visits. |
+| "The workspace is busy. Nothing was changed; try again in a moment." | A request waited 15 seconds for a lock another request held. Retrying is safe. If it persists, the API log shows which requests are slow (`duration_ms`). |
+| A person reports an error and you need the matching log line | Every response carries an `X-Request-Id` header; the API log has the same `request_id`. |
 
 ## What the API logs when it refuses a sign-in
 
@@ -191,6 +209,7 @@ Expired, malformed and wrongly signed tokens are not logged; the browser signs i
 
 ## Things not yet known
 
+- **Request limits behind the real proxies.** The limiter and its address rule are tested in-process only. How many addresses Render puts in `X-Forwarded-For`, and whether that number is stable, is not known until step 9 is done.
 - **Not deployed.** The Dockerfile is built by CI only; Docker is not installed on the development Mac. Vercel, a container host, managed PostgreSQL and a real identity provider have not been exercised.
 - **Upload size through Vercel.** Recording chunks are up to 8 MB. Whether Vercel forwards request bodies that large to an external address was not tested. If uploads fail, set `VITE_API_BASE_URL` to `API` in Vercel so the browser calls the API directly, and add `API` as a second origin in `connect-src` in `frontend/vercel.json`; the API already allows `SITE` as an origin.
 - **Sign-out.** If the provider publishes an end-session address the browser is sent there; otherwise only the Nexus session ends and the provider may sign the person straight back in.

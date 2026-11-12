@@ -18,7 +18,7 @@ The expanded pass authorized later on November 4 has a separate **$500 spending 
 |---|---|---|
 | Application | React/TypeScript frontend; Rust Actix API with SQLx | Only `api` is an active Cargo workspace member; `core`, `fhir`, `jobs` are parked |
 | UI | Custom React/CSS/inline SVG; React and React DOM are runtime frontend dependencies | No shadcn/ui, Radix or Tailwind component system; custom does not mean good usability or proven accessibility |
-| Persistence | PostgreSQL 17; 21 migrations; migration 021 tested in disposable schemas and applied to both local workspaces; 52 application tables | Not SQLite or browser-only storage. SQLx metadata brings the recorded restore count to 53 |
+| Persistence | PostgreSQL 17; 23 migrations (022 one active staff member per email, 023 a visit-event index; both tested in disposable schemas, not yet applied to the local workspaces); migration 021 tested in disposable schemas and applied to both local workspaces; 52 application tables | Not SQLite or browser-only storage. SQLx metadata brings the recorded restore count to 53 |
 | Workflows | Registration/intake/admission, versioned programs/services, scheduling, groups, plans/forms/notes, readiness, payment/reversal and CSV paths | Partial implementation across the broader product; see the 50-capability ledger |
 | Speech | Local Whisper base.en through whisper.cpp | OpenAI-created open-source model, not Nexus-trained; no hosted speech API required |
 | Drafting | Local Qwen3-4B through llama.cpp; approved sources and explicit review | Open-weight third-party model, not Nexus-trained; not autonomous clinical signing or validated clinical accuracy |
@@ -47,7 +47,7 @@ Optional local model service: loopback port 8093, alias `nexus-qwen3-4b`; models
 
 ## Hosted demonstration (prepared, not deployed)
 
-As of November 11, 2026 the owner's direction is a first hosted version that is a **synthetic-data demonstration behind real sign-in**, not a system for real patient data: frontend on the owner's personal Vercel, API and PostgreSQL on a container host, sign-in through a hosted identity provider. `NEXUS_AUTH_MODE=oidc` enables it; `local` remains the default and keeps the loopback guard. Nothing has been deployed and no provider or hosting account exists yet. The provider and container host are the owner's choice (recommended: Auth0 and Render). Steps, variables and open questions are in [demo hosting](deployment/demo-hosting.md); `.env.example` lists every variable.
+As of November 11, 2026 the owner's direction is a first hosted version that is a **synthetic-data demonstration behind real sign-in**, not a system for real patient data: frontend on the owner's personal Vercel, API and PostgreSQL on a container host, sign-in through a hosted identity provider. `NEXUS_AUTH_MODE=oidc` enables it; `local` remains the default and keeps the loopback guard. As of November 12 the identity provider is set up (Auth0 tenant `dev-vulcan-01`, application "Nexus Demo", a staff-only connection with sign-up disabled) and a Vercel project exists at `https://nexus-demo-orcin.vercel.app`, but the API and database are not deployed, so the site does not build yet and nothing is live. The container host is the owner's choice (recommended: Render, by the `render.yaml` blueprint). The hosted API also has `/livez` (liveness) beside `/healthz` (readiness, with worker states), an `X-Request-Id` on every response, per-address request limits (429 `rate_limited`) and bounded database waits (503 `database_busy`, `database_timeout`, `database_unavailable`); see `api/README.md`. Steps, variables and open questions are in [demo hosting](deployment/demo-hosting.md); `.env.example` lists every variable.
 
 ## Evidence and remaining readiness work
 
@@ -75,6 +75,7 @@ Detailed reviewed research now covers billing lifecycle/competitors, outpatient 
 - [Acceptance ledger](product/acceptance-ledger.md) and [November 13 plan](development/prototype-target-2026-11-13.md): scope and acceptance gates.
 - [Architecture](architecture/overview.md), [data model](architecture/data-model.md), [access policy](architecture/auth-rbac-audit.md): implemented contracts; verify against code/migrations.
 - [Demo hosting](deployment/demo-hosting.md): how the synthetic demonstration is hosted, and what only the owner can do.
+- [Production readiness](deployment/production-readiness.md): what is in place, what is left before the demonstration is live, and what is required before real patient data.
 - [Orchestration](development/orchestration.md), [Grok runners](development/xai-workers.md), [Git workflow](development/git-workflow.md): how recurring work is coordinated.
 
 At a handoff, record branch/revision, dirty files and their purpose, decisions changed, checks actually run, unresolved risks and the next concrete task. Update this page when durable facts change; keep detailed historical test results in verification/checkpoint documents. A new Codex task rooted in this repository can discover `AGENTS.md`; unrelated chats do not automatically gain this filesystem context.

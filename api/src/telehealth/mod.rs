@@ -10,9 +10,14 @@ use crate::{
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
+
+/// Events one participant may cause in ten minutes. Joining, leaving, clearing the
+/// board and each recording step write an append-only event, so without a ceiling an
+/// invitation holder could grow that history for as long as the room is open. An
+/// ordinary visit causes a handful.
+const PARTICIPANT_EVENT_LIMIT: i64 = 60;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.configure(recording::configure);
@@ -50,7 +55,7 @@ pub(super) fn fresh_token() -> (String, String) {
     (raw, hash)
 }
 pub(super) fn hash_token(raw: &str) -> String {
-    format!("{:x}", Sha256::digest(raw.as_bytes()))
+    crate::sha256_hex(raw.as_bytes())
 }
 pub(super) fn uid(row: &Value, key: &str) -> Result<Uuid> {
     records::uuid(row, key)
@@ -151,17 +156,59 @@ pub(super) async fn event(
     sqlx::query("INSERT INTO telehealth_events(id,organization_id,room_id,participant_id,actor_id,action) VALUES($1,$2,$3,$4,$5,$6)").bind(Uuid::new_v4()).bind(uid(room,"organization_id")?).bind(uid(room,"id")?).bind(participant).bind(actor).bind(action).execute(&mut **tx).await?;
     Ok(())
 }
-pub(super) async fn authorize(
-    req: &HttpRequest,
-    tx: &mut Transaction<'_, Postgres>,
-) -> Result<(Value, Value)> {
-    let raw = req
-        .headers()
+/// The bearer credential, if it has the shape of a token this module issues.
+pub(super) fn capability(req: &HttpRequest) -> Option<&str> {
+    req.headers()
         .get("authorization")
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "))
         .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or_else(denied)?;
+}
+/// Run before a visit route reads its request body: the caller must present an
+/// invitation that exists. This is one indexed lookup on a pooled connection that is
+/// returned before the body is read. It grants nothing; [`authorize`] still makes
+/// every check, under the organization lock, once the body has arrived.
+pub(super) async fn known_invitation(req: &HttpRequest, pool: &PgPool) -> Result<()> {
+    let raw = capability(req).ok_or_else(denied)?;
+    let known: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM telehealth_participants WHERE token_hash=$1)",
+    )
+    .bind(hash_token(raw))
+    .fetch_one(pool)
+    .await?;
+    if known {
+        Ok(())
+    } else {
+        Err(denied())
+    }
+}
+/// Refuse a participant who has already caused [`PARTICIPANT_EVENT_LIMIT`] events in
+/// the last ten minutes. Call it before writing an event on a participant's behalf.
+pub(super) async fn event_budget(
+    tx: &mut Transaction<'_, Postgres>,
+    room: &Value,
+    participant: Uuid,
+) -> Result<()> {
+    let recent: i64 = sqlx::query_scalar("SELECT count(*) FROM telehealth_events WHERE participant_id=$1 AND room_id=$2 AND occurred_at>clock_timestamp()-interval '10 minutes'")
+        .bind(participant)
+        .bind(uid(room, "id")?)
+        .fetch_one(&mut **tx)
+        .await?;
+    if recent >= PARTICIPANT_EVENT_LIMIT {
+        return Err(ApiError {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            code: "visit_rate",
+            message: "Too many visit actions in a short time. Wait a few minutes, then try again."
+                .into(),
+        });
+    }
+    Ok(())
+}
+pub(super) async fn authorize(
+    req: &HttpRequest,
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<(Value, Value)> {
+    let raw = capability(req).ok_or_else(denied)?;
     let hash = hash_token(raw);
     let address: Option<(Uuid, Uuid)> = sqlx::query_as(
         "SELECT room_id,organization_id FROM telehealth_participants WHERE token_hash=$1",

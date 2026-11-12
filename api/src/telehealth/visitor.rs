@@ -1,6 +1,10 @@
 use super::*;
-use crate::AppState;
+use crate::{payload, AppState};
 use serde::Deserialize;
+
+/// Unexpired signalling one participant may have queued, in messages and in bytes.
+const SIGNAL_LIMIT: i64 = 2000;
+const SIGNAL_BYTES_LIMIT: i64 = 8 * 1024 * 1024;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -200,7 +204,7 @@ pub async fn action(
     req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
-    body: web::Json<Command>,
+    body: web::Payload,
 ) -> Result<HttpResponse> {
     let action = path.into_inner();
     if !matches!(
@@ -209,6 +213,9 @@ pub async fn action(
     ) {
         return Err(ApiError::missing());
     }
+    // The invitation is checked before any of the body is read.
+    known_invitation(&req, &state.pool).await?;
+    let body: Command = payload::json(&req, body, payload::VISIT_JSON_LIMIT).await?;
     let mut tx = state.pool.begin().await?;
     let (room, mut p) = authorize(&req, &mut tx).await?;
     let id = uid(&p, "id")?;
@@ -226,6 +233,10 @@ pub async fn action(
         } else {
             "waiting"
         };
+        if !same {
+            // Each new connection writes an event; a join and leave loop is bounded.
+            event_budget(&mut tx, &room, id).await?;
+        }
         p=sqlx::query_scalar("UPDATE telehealth_participants SET connection_id=$2,state=$3,last_seen_at=clock_timestamp() WHERE id=$1 RETURNING to_jsonb(telehealth_participants)").bind(id).bind(body.connection_id).bind(next).fetch_one(&mut *tx).await?;
         if !same {
             event(
@@ -365,8 +376,8 @@ pub async fn action(
             .as_ref()
             .filter(|v| payload_valid(v))
             .ok_or_else(|| ApiError::invalid("Invalid WebRTC signaling payload"))?;
-        let count:i64=sqlx::query_scalar("SELECT count(*) FROM telehealth_signals WHERE from_id=$1 AND expires_at>clock_timestamp()").bind(id).fetch_one(&mut *tx).await?;
-        if count >= 2000 {
+        let (count, bytes): (i64, i64) = sqlx::query_as("SELECT count(*),COALESCE(sum(octet_length(payload::text)),0)::bigint FROM telehealth_signals WHERE from_id=$1 AND expires_at>clock_timestamp()").bind(id).fetch_one(&mut *tx).await?;
+        if count >= SIGNAL_LIMIT || bytes >= SIGNAL_BYTES_LIMIT {
             return Err(ApiError {
                 status: StatusCode::TOO_MANY_REQUESTS,
                 code: "visit_rate",
@@ -381,6 +392,7 @@ pub async fn action(
                 return Err(ApiError::denied());
             }
             board.clear();
+            event_budget(&mut tx, &room, id).await?;
             event(&mut tx, &room, Some(id), None, "whiteboard_cleared").await?;
         } else {
             let stroke = body

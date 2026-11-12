@@ -5,7 +5,6 @@ use ring::{
     aead,
     rand::{SecureRandom, SystemRandom},
 };
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 const KEY_ID: &str = "local-v1";
@@ -66,7 +65,7 @@ fn encrypt(key: &[u8; 32], context: &[u8], plain: &[u8]) -> Result<Sealed> {
         key_id: KEY_ID,
         nonce: nonce.to_vec(),
         ciphertext,
-        sha256: format!("{:x}", Sha256::digest(plain)),
+        sha256: crate::sha256_hex(plain),
     })
 }
 pub fn open(

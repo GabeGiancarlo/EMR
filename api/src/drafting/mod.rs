@@ -40,11 +40,12 @@ async fn job(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<Value> {
 }
 async fn scoped(
     req: &HttpRequest,
-    state: &AppState,
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<(Actor, Value)> {
-    let initial = access::actor(req, &state.pool).await?;
+    // The caller's transaction is already open, so the actor is read on it and not
+    // on a second pooled connection.
+    let initial = access::actor(req, &mut **tx).await?;
     let client: Uuid = sqlx::query_scalar(
         "SELECT client_id FROM clinical_draft_jobs WHERE id=$1 AND organization_id=$2",
     )
@@ -249,7 +250,7 @@ async fn read(
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse> {
     let mut tx = state.pool.begin().await?;
-    let (actor, mut row) = scoped(&req, &state, &mut tx, id.into_inner()).await?;
+    let (actor, mut row) = scoped(&req, &mut tx, id.into_inner()).await?;
     let review: Option<Value> =
         sqlx::query_scalar("SELECT to_jsonb(r) FROM clinical_draft_reviews r WHERE job_id=$1")
             .bind(uid(&row, "id")?)
@@ -273,7 +274,7 @@ async fn cancel(
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse> {
     let mut tx = state.pool.begin().await?;
-    let (actor, row) = scoped(&req, &state, &mut tx, id.into_inner()).await?;
+    let (actor, row) = scoped(&req, &mut tx, id.into_inner()).await?;
     let out:Value=sqlx::query_scalar("UPDATE clinical_draft_jobs SET state='cancelled',error_code='cancelled_by_operator',completed_at=clock_timestamp() WHERE id=$1 AND state IN ('queued','running') RETURNING to_jsonb(clinical_draft_jobs)").bind(uid(&row,"id")?).fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("Only queued or running drafts can be cancelled"))?;
     access::audit(
         &mut tx,
@@ -367,7 +368,7 @@ async fn review(
     body: web::Json<Review>,
 ) -> Result<HttpResponse> {
     let mut tx = state.pool.begin().await?;
-    let (actor, row) = scoped(&req, &state, &mut tx, id.into_inner()).await?;
+    let (actor, row) = scoped(&req, &mut tx, id.into_inner()).await?;
     if row["state"] != "ready"
         || !body.attested
         || !bounded_text(&body.reason, 10, 2000)

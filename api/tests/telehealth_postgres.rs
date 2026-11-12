@@ -566,3 +566,251 @@ async fn encounter_participation_and_signaling_enforce_current_access() {
         .unwrap();
     control.close().await;
 }
+
+/// A request with an exact body and headers, for what the JSON helper cannot send.
+async fn raw(
+    pool: &PgPool,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+    content_type: Option<&str>,
+    body: Vec<u8>,
+) -> (StatusCode, Value) {
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(AppState::local(pool.clone())))
+            .configure(configure),
+    )
+    .await;
+    let mut req = test::TestRequest::default()
+        .method(method.parse().unwrap())
+        .uri(path)
+        .set_payload(body);
+    if let Some(token) = token {
+        req = req.insert_header(("authorization", format!("Bearer {token}")));
+    }
+    if let Some(content_type) = content_type {
+        req = req.insert_header(("content-type", content_type));
+    }
+    let response = test::call_service(&app, req.to_request()).await;
+    let status = response.status();
+    let bytes = test::read_body(response).await;
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[actix_web::test]
+#[ignore = "Requires disposable nexus_test; creates only a unique test schema"]
+async fn visit_routes_check_the_token_before_the_body_and_bound_event_growth() {
+    let url = std::env::var("TEST_DATABASE_URL").expect("Set TEST_DATABASE_URL");
+    assert!(url.ends_with("/nexus_test"));
+    let control = PgPool::connect(&url).await.unwrap();
+    let actual: String = sqlx::query_scalar("SELECT current_database()")
+        .fetch_one(&control)
+        .await
+        .unwrap();
+    assert_eq!(actual, "nexus_test");
+    let schema = format!("nexus_visit_limits_test_{}", Uuid::new_v4().simple());
+    sqlx::query(&format!("CREATE SCHEMA \"{schema}\""))
+        .execute(&control)
+        .await
+        .unwrap();
+    let path = format!("SET search_path TO \"{schema}\"");
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .after_connect(move |conn, _| {
+            let path = path.clone();
+            Box::pin(async move {
+                sqlx::query(&path).execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect(&url)
+        .await
+        .unwrap();
+    migrate(&pool).await.unwrap();
+    let (status,setup)=send(&pool,None,None,"POST","/api/setup",json!({"organization_name":"Synthetic visit limits test","facility_name":"Synthetic facility","admin_name":"Synthetic clinician","admin_email":"visit-limits@example.invalid"})).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let actor = setup["actor"]["id"].as_str().unwrap();
+    let facility = &setup["facility"]["id"];
+    let client=create(&pool,actor,"clients",json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Participant","birth_date":"1990-01-01","primary_clinician_id":actor})).await;
+    let episode=support::legacy_episode(&pool,actor,json!({"facility_id":facility,"client_id":client["id"],"level_of_care":"iop","start_date":"2026-01-01"})).await;
+    let session=support::legacy_session(&pool,actor,json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":actor,"kind":"individual","starts_at":"2030-01-01T09:00:00Z","ends_at":"2030-01-01T10:00:00Z"})).await;
+    let room = create(
+        &pool,
+        actor,
+        "telehealth/rooms",
+        json!({"session_id":session["id"]}),
+    )
+    .await;
+    let guest = create(
+        &pool,
+        actor,
+        &format!("telehealth/rooms/{}/invite", room["id"].as_str().unwrap()),
+        json!({"client_id":client["id"]}),
+    )
+    .await;
+    let token = guest["token"].as_str().unwrap();
+    let participant = Uuid::parse_str(guest["participant"]["id"].as_str().unwrap()).unwrap();
+    let json_type = Some("application/json");
+    let stranger = "0".repeat(64);
+    let malformed = b"{\"connection_id\":".to_vec();
+    // Larger than a visit body may be, smaller than the staff JSON limit.
+    let oversized = format!(
+        "{{\"connection_id\":\"{}\",\"payload\":\"{}\"}}",
+        Uuid::new_v4(),
+        "x".repeat(300 * 1024)
+    )
+    .into_bytes();
+
+    // Without a real invitation the answer is the invitation refusal, whatever the
+    // body is: the body was never read, so its faults are never reported.
+    for path in [
+        "/api/telehealth/visit/join",
+        "/api/telehealth/visit/recordings/accept",
+        &format!("/api/telehealth/visit/recordings/{}/tracks", Uuid::new_v4()),
+    ] {
+        for credential in [None, Some(stranger.as_str()), Some("short")] {
+            for body in [malformed.clone(), oversized.clone()] {
+                let (status, answer) = raw(&pool, "POST", path, credential, json_type, body).await;
+                assert_eq!(status, StatusCode::FORBIDDEN, "{path}: {answer}");
+                assert_eq!(answer["error"]["code"], "visit_access", "{path}");
+            }
+        }
+        // With one, the body is read and judged.
+        let (status, answer) = raw(
+            &pool,
+            "POST",
+            path,
+            Some(token),
+            json_type,
+            malformed.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {answer}");
+        assert_eq!(answer["error"]["code"], "validation", "{path}");
+        let (status, answer) = raw(
+            &pool,
+            "POST",
+            path,
+            Some(token),
+            json_type,
+            oversized.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE, "{path}: {answer}");
+        assert_eq!(answer["error"]["code"], "payload_too_large", "{path}");
+        let (status, answer) = raw(
+            &pool,
+            "POST",
+            path,
+            Some(token),
+            Some("text/plain"),
+            b"{}".to_vec(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {answer}");
+    }
+
+    // Recording uploads: an unknown track or token is refused before the media is
+    // read. Nine mebibytes is over the piece limit, so reading it first would have
+    // answered 413 instead.
+    let nine_mebibytes = vec![0u8; 9 * 1024 * 1024];
+    let track = Uuid::new_v4();
+    for credential in [None, Some(stranger.as_str())] {
+        let (status, answer) = raw(
+            &pool,
+            "PUT",
+            &format!("/api/recording-tracks/{track}/chunks/0"),
+            credential,
+            None,
+            nine_mebibytes.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{answer}");
+        assert_eq!(answer["error"]["code"], "forbidden");
+        let (status, answer) = raw(
+            &pool,
+            "POST",
+            &format!("/api/recording-tracks/{track}/finish"),
+            credential,
+            json_type,
+            malformed.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{answer}");
+    }
+    let (status, answer) = raw(
+        &pool,
+        "GET",
+        &format!("/api/recording-tracks/{track}/chunks/0"),
+        None,
+        None,
+        Vec::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(answer["error"]["code"], "method_not_allowed");
+
+    // Joining and leaving in a loop writes two kept events a time. It is refused
+    // once the participant has caused sixty in ten minutes, and nothing more is
+    // written after that.
+    let events = || async {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM telehealth_events WHERE participant_id=$1",
+        )
+        .bind(participant)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let mut refused_after = None;
+    for cycle in 0..40 {
+        let connection = Uuid::new_v4();
+        let (status, answer) = visit(&pool, token, "join", connection, json!({})).await;
+        if status != StatusCode::OK {
+            assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{answer}");
+            assert_eq!(answer["error"]["code"], "visit_rate");
+            refused_after = Some(cycle);
+            break;
+        }
+        let (status, answer) = visit(&pool, token, "leave", connection, json!({})).await;
+        assert_eq!(status, StatusCode::OK, "{answer}");
+    }
+    let cycles = refused_after.expect("the join and leave loop was never refused");
+    assert!((29..=30).contains(&cycles), "refused after {cycles} cycles");
+    let written = events().await;
+    assert!((60..=61).contains(&written), "{written} events");
+    for _ in 0..5 {
+        let (status, _) = visit(&pool, token, "join", Uuid::new_v4(), json!({})).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    }
+    assert_eq!(events().await, written);
+    // The refusal changed nothing about the participant either.
+    let state: String = sqlx::query_scalar("SELECT state FROM telehealth_participants WHERE id=$1")
+        .bind(participant)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "left");
+    // Reading the visit is still possible; only new events are refused.
+    let (status, _) = send(
+        &pool,
+        None,
+        Some(token),
+        "GET",
+        "/api/telehealth/visit",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    pool.close().await;
+    sqlx::query(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
+        .execute(&control)
+        .await
+        .unwrap();
+    control.close().await;
+}
