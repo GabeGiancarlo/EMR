@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { actorStorageKey } from "./api";
+import { apiUrl } from "./api";
+import { authHeaders } from "./authSession";
 import { Button, Icon, Panel } from "./ui";
 
 function isoDay(date: Date) {
@@ -20,19 +21,9 @@ export default function ExportReports({ role }: { role: string }) {
     try {
       if (!from || !to || from > to)
         throw new Error("Choose a valid start and end date.");
-      const base =
-        (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-          /\/$/,
-          "",
-        ) || "";
       const response = await fetch(
-        `${base}/api/exports/${kind}.csv?${new URLSearchParams({ from, to })}`,
-        {
-          headers: {
-            "x-nexus-actor": localStorage.getItem(actorStorageKey) || "",
-            Accept: "text/csv",
-          },
-        },
+        apiUrl(`/api/exports/${kind}.csv?${new URLSearchParams({ from, to })}`),
+        { headers: { ...(await authHeaders()), Accept: "text/csv" } },
       );
       if (!response.ok) {
         const body = await response.json().catch(() => null);

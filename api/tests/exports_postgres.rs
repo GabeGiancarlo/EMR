@@ -23,7 +23,7 @@ struct Download {
 async fn download(pool: &PgPool, path: &str, actor: Option<&str>) -> Download {
     let app = test::init_service(
         App::new()
-            .app_data(web::Data::new(AppState { pool: pool.clone() }))
+            .app_data(web::Data::new(AppState::local(pool.clone())))
             .configure(configure),
     )
     .await;

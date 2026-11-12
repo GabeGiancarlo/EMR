@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { actorStorageKey, apiUrl, date, label, value } from "./api";
+import { apiUrl, date, label, value } from "./api";
+import { authHeaders } from "./authSession";
 import type { Bootstrap, Row } from "./api";
 import { facilityLocalToday } from "./adult.ts";
 import { Badge, Button, Icon } from "./ui";
@@ -42,17 +43,7 @@ export type ClientRegistrationProps = {
   onDirtyChange: (dirty: boolean) => void;
 };
 
-function currentActor(): string | null {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    return localStorage.getItem(actorStorageKey);
-  } catch {
-    return null;
-  }
-}
-
 async function postMatches(body: MatchRequest, signal: AbortSignal): Promise<unknown> {
-  const actor = currentActor();
   const response = await fetch(apiUrl("/api/intake/matches"), {
     method: "POST",
     signal,
@@ -60,7 +51,7 @@ async function postMatches(body: MatchRequest, signal: AbortSignal): Promise<unk
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      ...(actor ? { "x-nexus-actor": actor } : {}),
+      ...(await authHeaders()),
     },
     body: JSON.stringify(body),
   });

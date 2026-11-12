@@ -1,0 +1,18 @@
+# cargo-audit configuration.
+#
+# Both advisories below are for crates that are in Cargo.lock but are never compiled.
+# sqlx's macro crate declares its MySQL and SQLite drivers as optional dependencies,
+# and Cargo records optional dependencies in the lockfile even when the features that
+# would enable them are off. Nexus enables only `postgres` (api/Cargo.toml, with
+# default features off), so neither driver nor anything below it is built:
+#
+#   cargo tree --target all -e all -i rsa             -> nothing to print
+#   cargo tree --target all -e all -i libsqlite3-sys  -> nothing to print
+#
+# Remove an entry the moment its crate appears in `cargo tree`, for example if a
+# `mysql` or `sqlite` sqlx feature is ever enabled.
+[advisories]
+ignore = [
+    "RUSTSEC-2023-0071", # rsa 0.9 (Marvin timing attack): reached only through sqlx-mysql, not built
+    "RUSTSEC-2026-0459", # libsqlite3-sys 0.30 (bundled SQLite CVE): reached only through sqlx-sqlite, not built
+]

@@ -10,10 +10,12 @@ type Props = {
   canOpenSettings: boolean;
   onOpenSettings: () => boolean;
   onLeaveLocalOperator: () => boolean;
+  /** Hosted mode: the person signed in, so the last action signs them out. */
+  signedIn?: boolean;
 };
 
 /** Disclosure controls existing local routes; it grants no new permissions. */
-export default function ProfileMenu({ name, roleLabel, canOpenSettings, onOpenSettings, onLeaveLocalOperator }: Props) {
+export default function ProfileMenu({ name, roleLabel, canOpenSettings, onOpenSettings, onLeaveLocalOperator, signedIn = false }: Props) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState({ left: 8, bottom: 8, width: 280, maxHeight: 400 });
   const root = useRef<HTMLDivElement>(null);
@@ -59,10 +61,10 @@ export default function ProfileMenu({ name, roleLabel, canOpenSettings, onOpenSe
 
   return <div className="profile-menu" ref={root}>
     <button ref={trigger} type="button" className="profile-trigger" aria-expanded={open}
-      aria-controls={panelId} aria-label={`Profile and settings for ${name || "local operator"}`}
+      aria-controls={panelId} aria-label={`Profile and settings for ${name || (signedIn ? "your account" : "local operator")}`}
       onClick={() => { if (open) close(); else { position(); setOpen(true); } }}>
       <span className="profile-avatar" aria-hidden="true">{initials(name) || "N"}</span>
-      <span className="profile-identity"><strong>{name || "Local operator"}</strong><small>{roleLabel}</small></span>
+      <span className="profile-identity"><strong>{name || (signedIn ? "Signed in" : "Local operator")}</strong><small>{roleLabel}</small></span>
       <Icon name="chevron" size={16} />
     </button>
     {/* Keep ThemeControl mounted so system-theme changes still work when closed. */}
@@ -72,9 +74,9 @@ export default function ProfileMenu({ name, roleLabel, canOpenSettings, onOpenSe
       {canOpenSettings && <button type="button" className="button secondary"
         onClick={() => { if (onOpenSettings()) close(); }}>Workspace settings</button>}
       <button type="button" className="button secondary" onClick={() => { if (onLeaveLocalOperator()) close(); }}>
-        Switch or leave workspace
+        {signedIn ? "Sign out" : "Switch or leave workspace"}
       </button>
-      <small>Return to local operator selection.</small>
+      <small>{signedIn ? "End your session on this device." : "Return to local operator selection."}</small>
     </div>
   </div>;
 }

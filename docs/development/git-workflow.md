@@ -18,6 +18,8 @@ This replaces the earlier "target `nexus/integrated-prototype`" rule below, whic
 
 Use merge commits, not squash or rebase, for `dev` into `main`, so production history matches what was tested. Never force-push `main` or `dev`. CI runs on pushes to `main`, `dev` and `feature/**`, and on pull requests into `main` and `dev`. Branch protection on GitHub is not configured yet; until it is, the rules above are a convention.
 
+The separate `Security Analysis` workflow was repaired on November 11, 2026. What each of its jobs verifies, what it does not, and how to handle a failure are in [security-checks.md](security-checks.md).
+
 Older branches (`codex/prototype-readiness`, `nexus/integrated-prototype`, `brand/*`) were merged into `main` on November 11, 2026 and are no longer targets.
 
 Updated November 4, 2026. The active source baseline is `453c280` on `nexus/integrated-prototype`; current local review work is `codex/prototype-readiness`. `origin` is `https://github.com/GabeGiancarlo/EMR.git`.
