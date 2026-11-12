@@ -8,11 +8,13 @@ pub mod auth;
 mod availability;
 mod clinical;
 mod clinical_model;
+pub mod db;
 mod drafting;
 mod exports;
 mod forms;
 pub mod hosting;
 mod knowledge;
+pub mod limits;
 mod media_transcription;
 mod note_lineage;
 mod patient_identity;
@@ -24,15 +26,22 @@ mod scheduling;
 mod service_codes;
 mod speech;
 mod telehealth;
+pub mod workers;
 mod workflow;
 
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
 use serde_json::json;
 use sqlx::PgPool;
+use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
     pub auth: auth::Auth,
+    /// Per-client request limits for `/api`. `None` turns them off.
+    pub limits: Option<Arc<limits::RateLimiter>>,
+    /// The background workers started in this process, reported by `/healthz`.
+    pub workers: workers::Registry,
 }
 impl AppState {
     /// Loopback development: operators are selected, not authenticated.
@@ -40,21 +49,41 @@ impl AppState {
         Self {
             pool,
             auth: auth::Auth::Local,
+            limits: None,
+            workers: workers::Registry::default(),
         }
     }
     /// Hosted: staff are identified by tokens from the configured identity provider.
-    pub fn oidc(pool: PgPool, provider: std::sync::Arc<auth::Oidc>) -> Self {
+    pub fn oidc(pool: PgPool, provider: Arc<auth::Oidc>) -> Self {
         Self {
-            pool,
             auth: auth::Auth::Oidc(provider),
+            ..Self::local(pool)
         }
     }
+    /// Apply per-client request limits. Settings with limiting turned off apply none.
+    pub fn with_rate_limits(mut self, settings: &limits::Settings) -> Self {
+        self.limits = limits::RateLimiter::from_settings(settings).map(Arc::new);
+        self
+    }
+    pub fn with_workers(mut self, workers: workers::Registry) -> Self {
+        self.workers = workers;
+        self
+    }
 }
-pub fn start_background_workers(pool: PgPool) {
-    tokio::spawn(telehealth::recording::transcripts::worker::start(
-        pool.clone(),
-    ));
-    tokio::spawn(drafting::worker::start(pool));
+/// Start the supervised background workers. Each restarts itself with a growing
+/// pause when its database session is lost, and waits when another instance owns
+/// its queue. The returned registry is what `/healthz` reports.
+pub fn start_background_workers(pool: PgPool) -> workers::Registry {
+    let transcription = {
+        let pool = pool.clone();
+        workers::spawn("transcription", workers::Policy::STANDARD, move |status| {
+            telehealth::recording::transcripts::worker::run(pool.clone(), status)
+        })
+    };
+    let drafting = workers::spawn("drafting", workers::Policy::STANDARD, move |status| {
+        drafting::worker::run(pool.clone(), status)
+    });
+    workers::registry(vec![transcription, drafting])
 }
 pub type Result<T> = std::result::Result<T, ApiError>;
 
@@ -128,6 +157,12 @@ impl ResponseError for ApiError {
         if self.status == StatusCode::UNAUTHORIZED {
             response.insert_header(("WWW-Authenticate", "Bearer"));
         }
+        if matches!(
+            self.code,
+            "database_busy" | "database_timeout" | "database_unavailable"
+        ) {
+            response.insert_header(("Retry-After", "2"));
+        }
         response.json(json!({"error":{"code":self.code,"message":self.message}}))
     }
 }
@@ -148,6 +183,22 @@ impl From<sqlx::Error> for ApiError {
                 Some("P0001") => Self::conflict(
                     "This record is immutable; use the appropriate amendment workflow.",
                 ),
+                // lock_timeout: another request held a lock this one needed.
+                Some("55P03") => Self {
+                    status: StatusCode::SERVICE_UNAVAILABLE,
+                    code: "database_busy",
+                    message: "The workspace is busy. Nothing was changed; try again in a moment."
+                        .into(),
+                },
+                // statement_timeout: the statement was cancelled before it finished.
+                Some("57014") => {
+                    log::warn!("A database statement exceeded its time limit");
+                    Self {
+                        status: StatusCode::SERVICE_UNAVAILABLE,
+                        code: "database_timeout",
+                        message: "The request took too long and was stopped. Nothing was changed; try again in a moment.".into(),
+                    }
+                }
                 _ => {
                     log::error!("Database operation failed (SQLSTATE {:?})", db.code());
                     Self {
@@ -170,7 +221,9 @@ pub async fn migrate(pool: &PgPool) -> std::result::Result<(), sqlx::migrate::Mi
     use sqlx::{migrate::Migrate, Connection};
     // A dedicated connection cannot return a session advisory lock to the pool
     // on an error. Coordinate the compatibility check with SQLx's migration lock.
-    let mut conn = pool.acquire().await?.detach();
+    // Dedicated also means no request timeouts: a migration may run long, and a
+    // second instance starting at the same time waits for the first to finish.
+    let mut conn = db::dedicated(pool).await?;
     conn.lock().await?;
     let result = async {
         conn.ensure_migrations_table().await?;
@@ -206,11 +259,17 @@ pub fn speech_configuration_label() -> &'static str {
     speech::configuration_label()
 }
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.route("/healthz", web::get().to(routes::health))
+    // Liveness: the process is serving. It never touches the database.
+    cfg.route("/livez", web::get().to(routes::live))
+        // Readiness: the database answers. Worker states are reported, not judged.
+        .route("/healthz", web::get().to(routes::health))
         .service(
             web::scope("/api")
                 // Always installed, so hosted mode cannot be served without it.
                 .wrap(actix_web::middleware::from_fn(auth::gate))
+                // Registered after the gate, so it runs before it: a refused request
+                // costs no token verification and no database query.
+                .wrap(actix_web::middleware::from_fn(limits::limit))
                 .route("/auth/config", web::get().to(auth::config))
                 .configure(telehealth::configure)
                 .configure(knowledge::configure)

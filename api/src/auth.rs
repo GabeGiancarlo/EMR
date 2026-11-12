@@ -461,7 +461,7 @@ impl Oidc {
 /// Routes whose caller is not a staff member. Each checks its own single-purpose
 /// token: `/api/auth/config` is public, visit routes take a patient invitation
 /// token, and recording-track routes take a per-track upload token.
-fn carries_own_credential(path: &str) -> bool {
+pub(crate) fn carries_own_credential(path: &str) -> bool {
     path == "/api/auth/config"
         || path == "/api/telehealth/visit"
         || path.starts_with("/api/telehealth/visit/")
