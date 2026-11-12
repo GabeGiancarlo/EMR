@@ -63,12 +63,17 @@ pub struct Provider {
 impl Provider {
     /// Start the provider on a free loopback port, publishing `keys`.
     pub async fn start(keys: &[&SigningKey]) -> Self {
+        Self::start_on(0, keys).await
+    }
+    /// Start the provider on a chosen loopback port (0 picks a free one), for a test
+    /// that needs the provider to appear at an address the API is already trying.
+    pub async fn start_on(port: u16, keys: &[&SigningKey]) -> Self {
         let published = Arc::new(Mutex::new(Published {
             keys: keys.iter().map(|key| key.public.clone()).collect(),
             ..Default::default()
         }));
         let shared = published.clone();
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let listener = std::net::TcpListener::bind(("127.0.0.1", port)).unwrap();
         let issuer = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
         let base = issuer.clone();
         let server = HttpServer::new(move || {

@@ -2,7 +2,7 @@
 //! operators; `NEXUS_AUTH_MODE=oidc` is the hosted mode with identity-provider sign-in.
 use actix_web::{middleware::from_fn, web, App, HttpServer};
 use emr_api::{
-    auth::{Auth, Oidc},
+    auth::{Auth, Oidc, RetryPolicy},
     configure, db,
     hosting::{self, Mode, ServerConfig},
     observe, AppState,
@@ -33,8 +33,10 @@ async fn run() -> io::Result<()> {
     emr_api::migrate(&pool).await.map_err(io::Error::other)?;
     let auth = match &config.mode {
         Mode::Local => Auth::Local,
+        // A provider that cannot be reached is retried for about two minutes, so a
+        // restart during a brief provider fault does not crash-loop the service.
         Mode::Oidc(settings) => Auth::Oidc(Arc::new(
-            Oidc::connect(settings.clone())
+            Oidc::connect_with_retry(settings.clone(), RetryPolicy::STARTUP)
                 .await
                 .map_err(io::Error::other)?,
         )),
