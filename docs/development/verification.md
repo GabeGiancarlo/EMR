@@ -349,3 +349,9 @@ Verified revision `37b8ef5` on macOS 26.6.2 arm64 with Rust 1.95 and PostgreSQL 
 Rust formatting, Clippy with warnings denied, the locked workspace build and all 162 default Rust tests passed. All 41 cases in the 16 opt-in PostgreSQL CI steps passed on an isolated loopback `nexus_test` instance. These covered no-show claim writes and historical drafts, claim exports, stable knowledge-source identifiers, facility-local dates and stale-edit comparisons. Regression tests pin the numeric time-zone offset and fractional digits used in existing hashes and CSVs, timestamp separator validation and PostgreSQL leap-second normalization. All 136 frontend tests, TypeScript checks and the Vite production build passed.
 
 The first local run encountered existing worker locks on the shared disposable database. A fresh PostgreSQL instance allowed all six worker-ownership cases to run without interrupting the other session. The hosted environment was outside this verification.
+
+### November 18, 2026 — approved three-ring logo and business card
+
+Verified the v0.4 brand assets on macOS arm64 on the feature branch based on `dcfc535`. The running React app used the final master. Its full and small drawings and all five public browser and home-screen icons matched their sources. All nine raster exports had the expected dimensions. A half-degree radial comparison with the approved B proof found a single opening at the top in each master. The full mark retains three rings and the small mark retains one.
+
+Rendered the 29-page guide and the final two-sided business card. The card PDF has a 3.5 × 2 inch trim and 0.125 inch bleed on all sides. Its phone and demo links had the requested destinations. The QR code decoded to the demo address from the rendered back at both 300 and 150 dpi. All 136 frontend tests, TypeScript and the production build passed. Print verification used rendered pages.

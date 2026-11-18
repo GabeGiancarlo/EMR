@@ -19,7 +19,8 @@ INK = "currentColor"
 
 def export(field, name, title, desc, out, tol=1.0):
     polys = trace(field, tol=tol)
-    d = path_d(polys, scale=VB / S)
+    # Keep the approved wavy silhouette at the same optical size in the lockups.
+    d = path_d(polys, scale=(VB / S) * 1.1532, dx=-37.65, dy=-38.10)
     body = f'<path fill="{INK}" fill-rule="evenodd" d="{d}"/>'
     path = os.path.join(out, name)
     with open(path, "w") as f:
@@ -54,51 +55,47 @@ def checks(r, th, angles, r_in, r_out, width, seed, bend=0.07):
     return cut
 
 
-def mark_convergence(out, rings=(0.265, 0.435, 0.60, 0.755), line=0.056, name="nexus-symbol-convergence.svg",
-                     crack=26, soften=3.4, pith=0.098, seed=7, title="Nexus symbol: Convergence",
-                     angles=(-97, 12, 131), reaches=(0.755, 0.60, 0.435), bark=0.880, squiggle=0.021):
-    """A cross-section. Growth rings around one pith; three checks meet at it; a bark layer holds them."""
-    x, y, r, th, rho = trunk(seed)
+def mark_convergence(out, rings=(0.30, 0.52, 0.727), line=0.078, name="nexus-symbol-convergence.svg",
+                     crack=37, soften=3.8, pith=0.105, seed=7, title="Nexus symbol: Convergence",
+                     reaches=(1.10, 0.52, 0.30)):
+    """Three growth rings inside a wavy edge. Only the upper check opens to the outside."""
+    _, _, r, th, rho = trunk(seed)
     warp = rho + 0.020 * noise((S, S), 150, seed + 1) * smoothstep(0.05, 0.5, rho) * (1 - smoothstep(0.70, 0.86, rho))
-    ink = (rho < 1.0).astype(float)
+    # This contour was the inner edge of the old bark cut. It is now the silhouette.
+    rng = np.random.default_rng(seed + 9)
+    p = rng.uniform(0, 2 * np.pi, 4)
+    wave = (np.sin(19 * th + 1.7 * np.sin(3 * th + p[0]) + p[1])
+            + 0.45 * np.sin(31 * th + 1.2 * np.sin(2 * th + p[2]) + p[3]))
+    ink = (rho < 0.85424 + 0.021 * wave / 1.45).astype(float)
     wv = 1 + 0.30 * noise((S, S), 70, seed + 2)
     for c in rings:
         ink -= band(warp, c, line * wv)
-    if bark:
-        # the bark: one line that is plainly not a growth ring. It wanders in and out in short,
-        # uneven waves, the way the inner face of bark keys into the wood.
-        rng = np.random.default_rng(seed + 9)
-        p = rng.uniform(0, 2 * np.pi, 4)
-        wave = (np.sin(19 * th + 1.7 * np.sin(3 * th + p[0]) + p[1])
-                + 0.45 * np.sin(31 * th + 1.2 * np.sin(2 * th + p[2]) + p[3]))
-        ink -= band(rho, bark + squiggle * wave / 1.45, line * 0.92)
     # the pith: a carved eye with a seed left standing in it
     ink -= ((warp < pith + line * 0.9) & (warp > pith * 0.0)).astype(float) * (warp > 0.050)
     r_in = 452 * (pith + line * 0.5)
     # three checks of unequal reach and spacing: natural splits, not a spoked emblem
-    for ang, reach in zip(angles, reaches):
+    for ang, reach in zip((-97, 12, 131), reaches):
         ink -= checks(r, th, (ang,), r_in, 452 * reach, crack, seed + 3 + abs(int(ang)))
     ink = np.clip(ink, 0, 1)
     f = press(ink, soften=soften, rough=0.05, rough_scale=5, seed=seed + 4)
-    export(f, name, title,
-           "Tree cross-section. Rings record growth; three checks, for care, billing and oversight, meet at the pith; "
-           "a wavy bark line holds them all.", out)
+    export(f, name, title, "Carved tree cross-section with a wavy edge.", out)
 
 
 def mark_build(out):
-    """The symbol in four cuts, for the guide: pith, rings, checks, bark."""
-    steps = [("1-pith", dict(rings=(), reaches=(), angles=(), bark=None)),
-             ("2-rings", dict(reaches=(), angles=(), bark=None)),
-             ("3-checks", dict(bark=None)),
+    """Construction sequence used by the guide. The last drawing is the full master."""
+    steps = [("1-pith", dict(rings=(), reaches=())),
+             ("2-rings", dict(reaches=())),
+             ("3-checks", dict(reaches=(0.727, 0.52, 0.30))),
              ("4-bark", dict())]
     for tag, kw in steps:
         mark_convergence(out, name=f"nexus-symbol-build-{tag}.svg", title=f"Nexus symbol, step {tag}", **kw)
 
 
 def mark_convergence_small(out):
-    """Optical version for 16 to 32 px: two rings, wider cuts, no bark line (it closes up)."""
-    mark_convergence(out, rings=(0.46, 0.80), line=0.105, crack=52, soften=5.0, pith=0.13, bark=None,
-                     reaches=(0.80, 0.80, 0.46), name="nexus-symbol-convergence-small.svg", title="Nexus symbol: Convergence, small sizes")
+    """One wider ring below 32 px, with the same opening in the wavy perimeter."""
+    mark_convergence(out, rings=(0.54,), line=0.147, crack=65, soften=5.0, pith=0.147,
+                     reaches=(1.10, 0.54, 0.48), name="nexus-symbol-convergence-small.svg",
+                     title="Nexus symbol: Convergence, small sizes")
 
 
 def wordmark(out, text="Nexus", name="nexus-wordmark.svg", soften=3.6, track=-10,
