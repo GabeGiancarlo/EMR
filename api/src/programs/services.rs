@@ -89,6 +89,14 @@ pub(crate) async fn validate_claim(
         false,
     )
     .await?;
+    if records::uuid(&session, "client_id")? != records::uuid(claim, "client_id")? {
+        return Err(ApiError::missing());
+    }
+    if session["status"] == "no_show" {
+        return Err(ApiError::conflict(
+            "A no-show appointment cannot be billed for a service.",
+        ));
+    }
     if let Some(error) = claim_code_error(tx, &session, claim).await? {
         return Err(ApiError::invalid(error));
     }

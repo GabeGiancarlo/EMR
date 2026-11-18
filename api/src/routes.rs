@@ -8,6 +8,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// How long the readiness probe waits for a connection and its answer.
@@ -186,15 +187,26 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
                 .sum()
         })
         .unwrap_or_default();
-    let unbilled: i64 = data["claims"]
+    let attendance: HashMap<_, _> = data["sessions"]
         .as_array()
-        .map(|a| {
-            a.iter()
-                .filter(|r| matches!(r["status"].as_str(), Some("draft" | "ready")))
-                .map(|r| r["amount_cents"].as_i64().unwrap_or_default())
-                .sum()
-        })
-        .unwrap_or_default();
+        .into_iter()
+        .flatten()
+        .filter_map(|s| Some((s["id"].as_str()?, s["status"].as_str()?)))
+        .collect();
+    let unbilled = data["claims"].as_array().and_then(|claims| {
+        claims
+            .iter()
+            .filter(|claim| matches!(claim["status"].as_str(), Some("draft" | "ready")))
+            .try_fold(0_i64, |total, claim| {
+                if claim["status"] == "draft" {
+                    let session_id = claim["session_id"].as_str()?;
+                    if attendance.get(session_id).copied()? == "no_show" {
+                        return Some(total);
+                    }
+                }
+                total.checked_add(claim["amount_cents"].as_i64()?)
+            })
+    });
     let cash: i64 = data["payments"]
         .as_array()
         .map(|a| {
@@ -239,7 +251,7 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
         "scheduled_sessions": count("sessions", "status", "scheduled"),
         "draft_notes": count("notes", "status", "draft"),
         "outstanding_cents": (claims_readable && receipts_readable).then_some(claim_total - paid + reversed),
-        "unbilled_cents": claims_readable.then_some(unbilled),
+        "unbilled_cents": if claims_readable { unbilled } else { None },
         "cash_received_cents": receipts_readable.then_some(cash - reversed_cash),
         "adjustments_cents": receipts_readable.then_some(paid - cash - reversed + reversed_cash)
     });

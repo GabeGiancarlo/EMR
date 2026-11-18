@@ -630,6 +630,75 @@ async fn coverage_matches(report: &Value, expected: bool) {
 }
 
 #[actix_web::test]
+#[ignore = "requires disposable nexus_test"]
+async fn no_show_blocks_claim_writes_and_excludes_existing_draft_from_unbilled() {
+    let fixture = open_fixture().await;
+    let client = synthetic_client(&fixture, "Attendance").await;
+    let episode = synthetic_episode(&fixture, &client).await;
+    let policy = synthetic_policy(&fixture, &client, "ATTENDANCE-1").await;
+    let session = legacy_completed_session(&fixture, &client, &episode, 1).await;
+    let draft = create_claim(&fixture, &client, &policy, &session, "OP", 15000).await;
+    assert_eq!(metrics(&fixture).await["unbilled_cents"], 15000);
+    let (status, _) = patch(
+        &fixture.pool,
+        &fixture.actor,
+        "sessions",
+        &session,
+        json!({"status":"no_show"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = send(
+        &fixture.pool,
+        Some(&fixture.actor),
+        "POST",
+        "/api/claims",
+        claim_body(&client, &policy, &session, "OTHER", 8500),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(error_message(&body).contains("no-show"));
+    let other_client = synthetic_client(&fixture, "Another patient").await;
+    let other_policy = synthetic_policy(&fixture, &other_client, "ATTENDANCE-2").await;
+    let (status, _) = send(
+        &fixture.pool,
+        Some(&fixture.actor),
+        "POST",
+        "/api/claims",
+        claim_body(&other_client, &other_policy, &session, "OP", 15000),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let before = row_json(&fixture.pool, "claims", uid(&draft)).await;
+    let audits = audits_for(&fixture.pool, "claims", uid(&draft)).await;
+    let (status, body) = patch(
+        &fixture.pool,
+        &fixture.actor,
+        "claims",
+        &draft,
+        json!({"amount_cents":20000}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(error_message(&body).contains("no-show"));
+    assert_claim_unchanged(&fixture, uid(&draft), &before, &audits).await;
+    assert_eq!(metrics(&fixture).await["unbilled_cents"], 0);
+
+    let (status, row) = send(
+        &fixture.pool,
+        Some(&fixture.actor),
+        "POST",
+        &format!("/api/claims/{}/void", uid(&draft)),
+        json!({"reason":"Attendance corrected to no-show."}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(row["status"], "voided");
+    finish(fixture).await;
+}
+
+#[actix_web::test]
 #[ignore = "Requires disposable nexus_test; creates only a unique test schema"]
 async fn claim_patch_canonical_collision_leaves_row_and_audit_unchanged() {
     let fixture = open_fixture().await;

@@ -150,6 +150,8 @@ pub async fn evaluate(
         completed,
         if completed {
             "Session status is completed.".to_string()
+        } else if session["status"] == "no_show" {
+            "Attendance is recorded as a no-show. Void this draft if the attendance record is correct.".to_string()
         } else {
             format!(
                 "Complete the session before marking the claim ready (current status: {}).",

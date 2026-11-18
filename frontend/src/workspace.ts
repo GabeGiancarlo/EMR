@@ -21,7 +21,7 @@ export type MoneyState =
 
 export const LEDGER_DEFINITIONS = {
   charges:
-    "Charges are the sum of non-voided claim amounts whose linked session starts on a facility-local calendar date inside the inclusive range. This is not cash, not revenue, and not profit.",
+    "Charges sum claim amounts by facility-local service date. Voided claims and drafts for no-show appointments are excluded.",
   cash:
     "Payer and client receipts dated in the selected range, less cash reversals dated in that range, including reversals of earlier receipts. Excludes adjustments.",
   adjustments:
@@ -345,14 +345,15 @@ function sessionFacilityId(data: Bootstrap, session: Row): string {
   return typeof client?.facility_id === "string" ? client.facility_id : "";
 }
 
-export function claimServiceDate(data: Bootstrap, claim: Row): string | null {
-  const sessions = visibleRows(data, "sessions");
-  if (!sessions) return null;
-  const session = sessions.find((row) => row.id === claim.session_id);
+function serviceDate(data: Bootstrap, session: Row | undefined): string | null {
   if (!session || typeof session.starts_at !== "string") return null;
   const zone = facilityZone(data, sessionFacilityId(data, session));
   if (!zone) return null;
   return calendarDateInZone(new Date(session.starts_at), zone);
+}
+
+export function claimServiceDate(data: Bootstrap, claim: Row): string | null {
+  return serviceDate(data, visibleRows(data, "sessions")?.find(row => row.id === claim.session_id));
 }
 
 function sourceBucket(source: unknown): "cash" | "adjustment" | "unknown" {
@@ -464,23 +465,27 @@ function flowBucket(
   return { state: "value", cents: saw ? total : 0 };
 }
 
-export function flowCharges(data: Bootstrap, from: string, to: string): MoneyState {
+export function recordedCharges(data: Bootstrap, range?: { from: string; to: string }): MoneyState {
   const claims = visibleRows(data, "claims");
   if (!claims) return unavailable("Claims are not included for this access, so charges are not shown as zero.");
-  if (!visibleRows(data, "sessions")) {
+  const sessions = visibleRows(data, "sessions");
+  if (range && !sessions) {
     return unknown("Sessions are not included, so charge dates cannot be placed in the range.");
   }
+  const sessionsById = new Map(sessions?.map(session => [session.id, session]));
   let total = 0;
-  let saw = false;
   for (const claim of claims) {
-    if (text(claim, "status") === "voided") continue;
-    const serviceDate = claimServiceDate(data, claim);
-    if (!serviceDate) {
-      return unknown(
-        "A non-voided claim has no facility-local service date, so month charges are not shown as zero or partial.",
-      );
+    if (claim.status === "voided") continue;
+    const session = sessionsById.get(text(claim, "session_id"));
+    if (claim.status === "draft") {
+      if (!session?.status) return unknown("Appointment attendance is missing for a draft claim.");
+      if (session.status === "no_show") continue;
     }
-    if (!inInclusiveRange(serviceDate, from, to)) continue;
+    if (range) {
+      const date = serviceDate(data, session);
+      if (!date) return unknown("A claim is missing its facility-local service date.");
+      if (!inInclusiveRange(date, range.from, range.to)) continue;
+    }
     const amount = asCents(claim.amount_cents);
     if (amount === null) {
       return unknown("A charge amount is missing or not a safe integer, so charges are not shown as zero.");
@@ -488,9 +493,12 @@ export function flowCharges(data: Bootstrap, from: string, to: string): MoneySta
     const next = addCents(total, amount);
     if (next === null) return unknown("Charges exceed safe integer cents.");
     total = next;
-    saw = true;
   }
-  return { state: "value", cents: saw ? total : 0 };
+  return { state: "value", cents: total };
+}
+
+export function flowCharges(data: Bootstrap, from: string, to: string): MoneyState {
+  return recordedCharges(data, { from, to });
 }
 
 export type FlowLedger = {
