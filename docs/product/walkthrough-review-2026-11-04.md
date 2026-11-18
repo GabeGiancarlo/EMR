@@ -1,5 +1,12 @@
 # Nexus design and workflow review November 4 2026
 
+## Open design work requested November 18, 2026
+
+- [x] Owner selected option B with one path through the wavy outer edge. Use three rings for the full mark and one wider ring for the small mark.
+- [ ] Review and redo every form. Walk through each form as the person who uses it, including field order, defaults, validation and recovery after an error.
+- [ ] Redesign all action buttons across the app. Review their labels, placement and interaction states in the workflows where people use them.
+- [ ] Review calendar cards in context. Check what is clickable, what opens, how selected and locked states look and behave, and what staff can customize.
+
 ## Review outcome
 
 The current prototype demonstrates connected functionality, but its visual design and user experience do not meet the owner's standard for Nexus. A substantial UI and UX redesign is required. Custom code, working persistence and passing tests do not establish product acceptance.

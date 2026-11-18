@@ -4,10 +4,10 @@ use crate::{
     scheduling, ApiError, AppState, Result,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
@@ -114,10 +114,10 @@ pub async fn update(
         return Err(ApiError::denied());
     }
     let expected=body._expected_updated_at.as_deref().filter(|s|!s.trim().is_empty()).ok_or_else(||ApiError::precondition("Reload this availability block before saving; the originally loaded updated_at is required."))?;
-    let expected = DateTime::parse_from_rfc3339(expected).map_err(|_| {
+    let expected = crate::datetime::parse_timestamp(expected).map_err(|_| {
         ApiError::invalid("The original updated_at must be a timestamp with timezone")
     })?;
-    let actual = DateTime::parse_from_rfc3339(row["updated_at"].as_str().unwrap_or_default())
+    let actual = crate::datetime::parse_timestamp(row["updated_at"].as_str().unwrap_or_default())
         .map_err(|_| ApiError::conflict("Reload this availability block before saving"))?;
     if expected != actual {
         return Err(ApiError::conflict("This availability block changed after you opened it. Keep your unsaved edits and reload the latest version."));
@@ -137,7 +137,7 @@ pub async fn update(
     validate(&mut tx, &actor, &row).await?;
     let (start, end) = scheduling::interval(&row)?;
     let updated:Value=sqlx::query_scalar("UPDATE staff_unavailability SET starts_at=$3,ends_at=$4,reason=$5,active=$6,updated_at=$7 WHERE id=$1 AND organization_id=$2 RETURNING to_jsonb(staff_unavailability)")
-        .bind(id).bind(actor.org).bind(start).bind(end).bind(row["reason"].as_str().unwrap_or_default()).bind(row["active"].as_bool().unwrap_or(true)).bind(Utc::now()).fetch_one(&mut *tx).await?;
+        .bind(id).bind(actor.org).bind(start).bind(end).bind(row["reason"].as_str().unwrap_or_default()).bind(row["active"].as_bool().unwrap_or(true)).bind(OffsetDateTime::now_utc()).fetch_one(&mut *tx).await?;
     access::audit(&mut tx, &actor, "update", "staff_unavailability", Some(id)).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(updated))

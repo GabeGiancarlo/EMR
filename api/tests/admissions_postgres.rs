@@ -107,7 +107,7 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    let today: chrono::NaiveDate =
+    let today: time::Date =
         sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date")
             .fetch_one(&pool)
             .await
@@ -757,7 +757,7 @@ async fn intake_identity_checklist_admission_and_scope_invariants() {
     )
     .await;
     let sid = second["id"].as_str().unwrap();
-    let future = today.succ_opt().unwrap();
+    let future = today.next_day().unwrap();
     let future_case = post(
         &pool,
         &admin,

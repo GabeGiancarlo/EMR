@@ -5,9 +5,9 @@
 
 use crate::{access, records, ApiError, AppState, Result};
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use time::{Date, OffsetDateTime, PlainDateTime};
 use uuid::Uuid;
 
 pub const DISCLAIMER: &str = "These items reflect active organization-authored template rules only. Nexus does not infer legal or clinical requirements.";
@@ -17,9 +17,9 @@ struct EpisodeCandidate {
     id: Uuid,
     status: String,
     level_of_care: String,
-    start_date: NaiveDate,
-    end_date: Option<NaiveDate>,
-    created_at: DateTime<Utc>,
+    start_date: Date,
+    end_date: Option<Date>,
+    created_at: OffsetDateTime,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -230,14 +230,14 @@ fn evaluate_context(
 }
 
 fn map_episode(row: &sqlx::postgres::PgRow) -> EpisodeCandidate {
-    let created: NaiveDateTime = row.get("created_at");
+    let created: PlainDateTime = row.get("created_at");
     EpisodeCandidate {
         id: row.get("id"),
         status: row.get("status"),
         level_of_care: row.get("level_of_care"),
         start_date: row.get("start_date"),
         end_date: row.get("end_date"),
-        created_at: DateTime::<Utc>::from_naive_utc_and_offset(created, Utc),
+        created_at: created.assume_offset(time::UtcOffset::UTC),
     }
 }
 
@@ -463,7 +463,7 @@ mod tests {
         evaluate, rule_reason, select_relevant_episode, EpisodeCandidate, ResponseFact,
         TemplateRule, DISCLAIMER,
     };
-    use chrono::{DateTime, NaiveDate, Utc};
+    use time::{Date, OffsetDateTime};
     use uuid::Uuid;
 
     fn uid(kind: u8, n: u8) -> Uuid {
@@ -473,27 +473,24 @@ mod tests {
         Uuid::from_bytes(bytes)
     }
 
-    fn at(hour: u32) -> DateTime<Utc> {
-        DateTime::<Utc>::from_naive_utc_and_offset(
-            NaiveDate::from_ymd_opt(2024, 1, 1)
-                .unwrap()
-                .and_hms_opt(hour, 0, 0)
-                .unwrap(),
-            Utc,
-        )
+    fn at(hour: u8) -> OffsetDateTime {
+        time::macros::date!(2024 - 01 - 01)
+            .with_hms(hour, 0, 0)
+            .unwrap()
+            .assume_offset(time::UtcOffset::UTC)
     }
 
-    fn day(year: i32, month: u32, dom: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(year, month, dom).unwrap()
+    fn day(year: i32, month: u8, dom: u8) -> Date {
+        Date::from_calendar_date(year, month.try_into().unwrap(), dom).unwrap()
     }
 
     fn episode(
         n: u8,
         status: &str,
         level: &str,
-        start: (i32, u32, u32),
-        end: Option<(i32, u32, u32)>,
-        hour: u32,
+        start: (i32, u8, u8),
+        end: Option<(i32, u8, u8)>,
+        hour: u8,
     ) -> EpisodeCandidate {
         EpisodeCandidate {
             id: uid(2, n),

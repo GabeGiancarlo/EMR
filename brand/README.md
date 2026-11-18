@@ -1,6 +1,6 @@
-# Nexus brand kit v0.3
+# Nexus brand kit v0.4
 
-Start with [Nexus-Brand-Guidelines-v0.3.pdf](Nexus-Brand-Guidelines-v0.3.pdf) (29 pages, with contents and an
+Start with [Nexus-Brand-Guidelines-v0.4.pdf](Nexus-Brand-Guidelines-v0.4.pdf) (29 pages, with contents and an
 index), or open [guidelines/index.html](guidelines/index.html) in a browser. The HTML edition is the same
 document with live hover states.
 
@@ -48,7 +48,7 @@ at night). Used as an `<img>`, a scene shows its daylight form.
 ## Rebuilding
 
 Everything is generated. Needs Python 3 with numpy, scipy, scikit-image, matplotlib, Pillow and fontTools; the
-PDF and PNG exports also need Google Chrome.
+PDF and PNG exports also need Google Chrome. Business cards use ReportLab and the guide examples use Poppler.
 
 ```bash
 python3 brand/tools/build_all.py
@@ -58,6 +58,16 @@ The symbol is Convergence, chosen by the owner on November 11, 2026. To add an i
 `tools/build_icons.py` and list it in `ICONS`. To add a page to the guide, add a `<section class="page" id="...">`
 to `guidelines/template.html`; `data-sec` and `data-toc` put it in the contents, and the `INDEX` table in
 `tools/build_guidelines.py` feeds the index.
+
+## Business cards
+
+The full mark has three rings. The upper cut crosses the wavy perimeter in both the full and one-ring small drawings. The front of the card uses the full mark. The back carries a telephone link, demo address and scannable QR code.
+
+For a two-page PDF, run the following with the cardholder’s details and a local output path. Trim is 3.5 × 2 inches with 0.125 inches of bleed on all sides. Running the generator without arguments updates the two fictional guide samples.
+
+```sh
+python3 brand/tools/build_business_card.py --name "Alex Morgan" --role "Co-founder" --phone "(202) 555-0148" --output card.pdf
+```
 
 ## Open
 

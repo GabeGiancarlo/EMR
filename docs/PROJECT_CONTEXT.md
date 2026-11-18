@@ -10,6 +10,8 @@ The target is **Friday November 13, 2026** for all planned internal prototype fe
 
 The latest sequence is **functionality first, branding implementation afterward**. Current visuals are rejected. Future brand work should use restrained growth/nature motifs, less saturated earthy greens, supportive neutrals and distinct light/dark palettes, firmer corners, custom components and subtle accessible motion. Profile/settings/theme/sign-out belong at the **bottom left under navigation**. See the [owner review](product/walkthrough-review-2026-11-04.md) and [research/planning review](research/research-planning-review-2026-11-04.md).
 
+The v0.4 [brand kit](../brand/README.md) is in the app. The owner's [November 18 design to-dos](product/walkthrough-review-2026-11-04.md#open-design-work-requested-november-18-2026) record the approved open-edge logo and the upcoming form, button, and calendar interaction reviews.
+
 The expanded pass authorized later on November 4 has a separate **$500 spending target and ceiling**. It uses higher-effort Grok 4.7 workers and Grok multi-agent research, with OpenAI core review. The expanded run is closed. The [final handoff](research/2026-11-04/final-handoff.md) records the release decision and current walkthrough, and [provider evidence](research/2026-11-04/expanded-run-evidence.md) separates $206.81231595 in confirmed charges from $278 in unresolved reservations. No paid workers remain active.
 
 ## What is implemented

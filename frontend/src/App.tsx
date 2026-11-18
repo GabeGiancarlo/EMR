@@ -12,7 +12,7 @@ import StaffAvailability from "./StaffAvailability";
 import TelehealthManager from "./TelehealthManager";
 import { schedulingZone, facilityWallTime } from "./schedulingTime";
 import RoleWorkspace from "./RoleWorkspace";
-import { allowedWorkspaceModes, defaultWorkspaceMode, claimMatchesFilter } from "./workspace";
+import { allowedWorkspaceModes, defaultWorkspaceMode, claimMatchesFilter, recordedCharges } from "./workspace";
 import type { WorkspaceMode } from "./workspace";
 import StructuredForms from "./StructuredForms";
 import ExportReports from "./ExportReports";
@@ -1640,6 +1640,7 @@ export default function App() {
         </Panel>
       );
     const rows = matching(data![billingTab as Resource]).filter(row => billingTab !== "claims" || claimMatchesFilter(value(row,"status"),filter));
+    const charges = recordedCharges(data!);
     const cols: Record<string, Column[]> = {
       claims: [
         { label: "Client / service", render: clientCell },
@@ -1829,12 +1830,8 @@ export default function App() {
           <Metric
             icon="billing"
             title="Recorded charges"
-            number={canRead("claims", false) ? money(
-              data!.claims
-                .filter((c) => c.status !== "voided")
-                .reduce((n, c) => n + numeric(c, "amount_cents"), 0),
-            ) : "Unavailable"}
-            caption="Recorded charges, excluding voided claims"
+            number={charges.state === "value" ? money(charges.cents) : "Unavailable"}
+            caption="Excludes voided claims and no-show drafts"
           />
           <Metric
             icon="check"

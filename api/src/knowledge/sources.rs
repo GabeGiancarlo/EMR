@@ -33,9 +33,9 @@ fn document(
     };
     let episode_id = optional(row, "episode_id")?;
     let session_id = optional(row, "session_id")?;
-    let source_date = chrono::DateTime::parse_from_rfc3339(row[date].as_str().unwrap_or_default())
-        .map_err(|_| ApiError::conflict("An approved source has no valid source date"))?
-        .to_rfc3339();
+    let source_date = crate::datetime::parse_timestamp(row[date].as_str().unwrap_or_default())
+        .map(crate::datetime::canonical_timestamp)
+        .map_err(|_| ApiError::conflict("An approved source has no valid source date"))?;
     let source_hash=sync::hash(&json!({"body":body,"title":title,"date":source_date,"episode":episode_id,"session":session_id,"version":version}).to_string());
     let id = sync::stable_id(&format!(
         "{}:{client}:{kind}:{source_id}:{version}:{source_hash}",

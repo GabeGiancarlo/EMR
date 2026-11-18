@@ -8,10 +8,10 @@ use crate::{
     records, ApiError, AppState, Result,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sqlx::{Postgres, Transaction};
+use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 const STALE: &str = "This record was updated after you opened it. Reload the latest version and preserve your unsaved edits; they were not saved.";
@@ -82,7 +82,7 @@ fn allows(from: &str, to: &str) -> bool {
             | ("ready", "screening" | "admitted" | "declined" | "withdrawn")
     )
 }
-fn expected_stamp(value: Option<&Value>) -> Result<DateTime<Utc>> {
+fn expected_stamp(value: Option<&Value>) -> Result<OffsetDateTime> {
     let Some(Value::String(text)) = value else {
         return Err(ApiError::precondition("Reload the record before saving. The originally loaded updated_at is required so a newer edit is not overwritten."));
     };
@@ -90,13 +90,11 @@ fn expected_stamp(value: Option<&Value>) -> Result<DateTime<Utc>> {
     if text.is_empty() {
         return Err(ApiError::precondition("Reload the record before saving. The originally loaded updated_at is required so a newer edit is not overwritten."));
     }
-    DateTime::parse_from_rfc3339(text)
-        .map(|stamp| stamp.with_timezone(&Utc))
+    crate::datetime::parse_timestamp(text)
         .map_err(|_| ApiError::invalid("_expected_updated_at must be an RFC3339 timestamp"))
 }
-fn require_version(row: &Value, expected: DateTime<Utc>) -> Result<()> {
-    let current = DateTime::parse_from_rfc3339(row["updated_at"].as_str().unwrap_or_default())
-        .map(|stamp| stamp.with_timezone(&Utc))
+fn require_version(row: &Value, expected: OffsetDateTime) -> Result<()> {
+    let current = crate::datetime::parse_timestamp(row["updated_at"].as_str().unwrap_or_default())
         .map_err(|_| ApiError::conflict(STALE))?;
     if current != expected {
         Err(ApiError::conflict(STALE))
@@ -153,14 +151,14 @@ async fn facility_context(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
     facility_id: Uuid,
-) -> Result<(Value, NaiveDate)> {
+) -> Result<(Value, Date)> {
     let facility = records::get(tx, "facilities", facility_id, actor.org, false)
         .await
         .map_err(|_| {
             ApiError::invalid("The intended facility must be active in this workspace.")
         })?;
     let zone = facility["timezone"].as_str().unwrap_or("UTC");
-    let today: NaiveDate = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE $1)::date")
+    let today: Date = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE $1)::date")
         .bind(zone)
         .fetch_one(&mut **tx)
         .await
@@ -359,13 +357,15 @@ struct CreateCase {
     facility_id: Option<Uuid>,
     level_of_care: Option<String>,
     legacy_episode_id: Option<Uuid>,
-    starts_on: NaiveDate,
+    #[serde(deserialize_with = "crate::datetime::date_string")]
+    starts_on: Date,
     owner_id: Uuid,
     referral_type: String,
     referrer_name: String,
     referrer_contact: String,
     referral_reason: String,
-    received_on: NaiveDate,
+    #[serde(deserialize_with = "crate::datetime::date_string")]
+    received_on: Date,
 }
 async fn create_case(
     req: HttpRequest,
