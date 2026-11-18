@@ -3,9 +3,9 @@
 
 use crate::{access, ApiError, AppState, Result};
 use actix_web::{http::header, web, HttpRequest, HttpResponse};
-use chrono::{Days, NaiveDate, Utc};
 use serde::Deserialize;
 use sqlx::FromRow;
+use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 const MAX_WINDOW_DAYS: i64 = 366;
@@ -59,7 +59,7 @@ pub struct ExportWindow {
     to: Option<String>,
 }
 
-fn parse_date(value: &str) -> Result<NaiveDate> {
+fn parse_date(value: &str) -> Result<Date> {
     let bytes = value.as_bytes();
     if bytes.len() != 10
         || value.starts_with("0000")
@@ -72,20 +72,16 @@ fn parse_date(value: &str) -> Result<NaiveDate> {
     {
         return Err(ApiError::invalid("Export dates must use YYYY-MM-DD."));
     }
-    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+    crate::datetime::parse_date(value)
         .map_err(|_| ApiError::invalid("Export date is not a valid calendar date."))
 }
 
-fn window(
-    query: &ExportWindow,
-    require_bounds: bool,
-    today: NaiveDate,
-) -> Result<(NaiveDate, NaiveDate)> {
+fn window(query: &ExportWindow, require_bounds: bool, today: Date) -> Result<(Date, Date)> {
     let dates = match (&query.from, &query.to) {
         (Some(from), Some(to)) => (parse_date(from)?, parse_date(to)?),
         (None, None) if !require_bounds => (
             today
-                .checked_sub_days(Days::new(29))
+                .checked_sub(time::SignedDuration::days(29))
                 .ok_or_else(|| ApiError::invalid("Export date is out of range."))?,
             today,
         ),
@@ -95,7 +91,7 @@ fn window(
             ))
         }
     };
-    let span = dates.1.signed_duration_since(dates.0).num_days();
+    let span = (dates.1 - dates.0).whole_days();
     if !(0..MAX_WINDOW_DAYS).contains(&span) {
         return Err(ApiError::invalid(
             "Export dates must be ordered and span no more than 366 inclusive days.",
@@ -146,7 +142,7 @@ fn response(csv: String, name: &str) -> HttpResponse {
 
 #[derive(Debug, FromRow)]
 struct AccountingRow {
-    received_on: NaiveDate,
+    received_on: Date,
     source: String,
     entry_count: i64,
     cash_received_cents: i64,
@@ -182,7 +178,7 @@ pub async fn accounting(
         return Err(ApiError::denied());
     }
     access::require(&state.pool, &actor, "payments", false).await?;
-    let (from, to) = window(&query, true, Utc::now().date_naive())?;
+    let (from, to) = window(&query, true, OffsetDateTime::now_utc().date())?;
     let mut tx = state.pool.begin().await?;
     let rows: Vec<AccountingRow> = sqlx::query_as(ACCOUNTING_SQL)
         .bind(actor.org)
@@ -214,8 +210,8 @@ struct ClaimRow {
     external_reference: String,
     denial_reason: String,
     void_reason: String,
-    created_at: chrono::DateTime<Utc>,
-    updated_at: chrono::DateTime<Utc>,
+    created_at: OffsetDateTime,
+    updated_at: OffsetDateTime,
 }
 
 /// An internal review extract, deliberately not a payer-ready X12 transaction.
@@ -230,16 +226,13 @@ pub async fn claims(
         return Err(ApiError::denied());
     }
     access::require(&state.pool, &actor, "claims", false).await?;
-    let (from, to) = window(&query, false, Utc::now().date_naive())?;
-    let start = from
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| ApiError::invalid("Export start is out of range."))?
-        .and_utc();
+    let (from, to) = window(&query, false, OffsetDateTime::now_utc().date())?;
+    let start = from.midnight().assume_offset(time::UtcOffset::UTC);
     let end = to
-        .checked_add_days(Days::new(1))
-        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .next_day()
         .ok_or_else(|| ApiError::invalid("Export end is out of range."))?
-        .and_utc();
+        .midnight()
+        .assume_offset(time::UtcOffset::UTC);
     let mut tx = state.pool.begin().await?;
     let rows: Vec<ClaimRow> = sqlx::query_as("SELECT id,client_id,policy_id,session_id,authorization_id,service_code,diagnosis_code,units,amount_cents,status,external_reference,denial_reason,void_reason,created_at,updated_at FROM claims WHERE organization_id=$1 AND created_at >= $2 AND created_at < $3 ORDER BY created_at,id LIMIT $4")
         .bind(actor.org).bind(start).bind(end).bind((MAX_CLAIMS + 1) as i64).fetch_all(&mut *tx).await?;
@@ -268,8 +261,8 @@ pub async fn claims(
                 row.external_reference,
                 row.denial_reason,
                 row.void_reason,
-                row.created_at.to_rfc3339(),
-                row.updated_at.to_rfc3339(),
+                crate::datetime::canonical_timestamp(row.created_at),
+                crate::datetime::canonical_timestamp(row.updated_at),
             ],
         );
     }
@@ -292,8 +285,8 @@ pub async fn claims(
 mod tests {
     use super::*;
 
-    fn today() -> NaiveDate {
-        NaiveDate::from_ymd_opt(2026, 11, 2).expect("valid test date")
+    fn today() -> Date {
+        time::macros::date!(2026 - 11 - 02)
     }
     fn query(from: Option<&str>, to: Option<&str>) -> ExportWindow {
         ExportWindow {
@@ -376,7 +369,7 @@ mod tests {
         assert!(window(&query(Some("2026-11-01"), None), false, today()).is_err());
         let (from, to) = window(&query(None, None), false, today()).expect("default dates");
         assert_eq!(to, today());
-        assert_eq!((to - from).num_days(), 29);
+        assert_eq!((to - from).whole_days(), 29);
     }
 
     #[test]

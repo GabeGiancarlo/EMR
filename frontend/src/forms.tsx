@@ -582,6 +582,10 @@ export function RecordForm({
   ));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const claimSession = resource === "claims"
+    ? data.sessions.find(row => row.id === (initial.id ? initial.session_id : values.session_id))
+    : undefined;
+  const noShowClaim = claimSession?.status === "no_show";
   const selectedService=scheduling ? values.program_service_id===initial.program_service_id ? serviceSnapshot(initial as Row) : data.program_services?.find(row=>row.id===values.program_service_id) : undefined;
   const set = (key: string, v: unknown) => {
     setValues((prev) => {
@@ -602,6 +606,7 @@ export function RecordForm({
   };
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (noShowClaim) return;
     setBusy(true);
     setError("");
     try {
@@ -663,7 +668,9 @@ export function RecordForm({
       <div className="form-body">
         {scheduling && <p className="scheduling-zone-note">Appointment times use <strong>{zone}</strong>. The selected episode or facility sets the timezone.</p>}
         {selectedService && <div className="scheduling-zone-note"><strong>{value(selectedService,"name")}</strong> · {value(selectedService,"min_minutes")}–{value(selectedService,"max_minutes")} minutes. Default: {value(selectedService,"default_minutes")} minutes. <Button variant="text small" disabled={busy || !values.starts_at} onClick={()=>{try{const start=resolveFacilityTime(String(values.starts_at),zone,occurrences.starts_at,typeof initial.starts_at==="string"?initial.starts_at:undefined);const end=new Date(Date.parse(start)+Number(selectedService.default_minutes)*60000).toISOString();setValues(prev=>({...prev,ends_at:facilityWallTime(end,zone)}));setOccurrences(prev=>({...prev,ends_at:end}));setError("");}catch(error){setError(error instanceof Error?error.message:"Review the start time before applying the duration.");}}}>Apply default duration</Button></div>}
-        {resource === "claims" && serviceSnapshot(data.sessions.find(row=>row.id===values.session_id)) && <p className="scheduling-zone-note">Service code and suggested charge come from the encounter's saved service. Review the amount, units, diagnosis, and payer requirements before saving.</p>}
+        {claimSession && Boolean(initial.id) && <p>Appointment attendance: <strong>{label(value(claimSession, "status"))}</strong></p>}
+        {noShowClaim ? <p className="scheduling-zone-note">This appointment was a no-show. A service claim cannot be saved for it.</p>
+          : claimSession && serviceSnapshot(claimSession) && <p className="scheduling-zone-note">Service code and suggested charge come from the encounter's saved service. Review the amount, units, diagnosis, and payer requirements before saving.</p>}
         <div className="form-grid">
           {fields.map((f) => {
             let choices = f.ref ? data[f.ref] || [] : [];
@@ -747,8 +754,9 @@ export function RecordForm({
                           </option>
                         ))}
                         {choices.map((row) => (
-                          <option value={row.id} key={row.id}>
+                          <option value={row.id} key={row.id} disabled={resource === "claims" && f.ref === "sessions" && row.status === "no_show"}>
                             {f.catalog ? `${value(row,"service_code")} · ${value(row,"name")} · ${value(data.care_programs?.find(p=>p.id===row.program_id),"name")}${row._historical ? " · saved encounter service" : ""}` : optionName(f.ref!, row, data)}
+                            {resource === "claims" && f.ref === "sessions" && ` · ${label(value(row, "status"))}`}
                           </option>
                         ))}
                       </select>
@@ -821,7 +829,7 @@ export function RecordForm({
         <Button variant="secondary" onClick={onCancel} disabled={busy}>
           Cancel
         </Button>
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || noShowClaim}>
           {busy ? "Saving…" : submitLabel}
           <Icon name="arrow" size={16} />
         </Button>

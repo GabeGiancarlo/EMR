@@ -2,10 +2,10 @@
 //! Checklist and mark-ready/record-submission must both call [`evaluate`].
 use crate::{access, access::Actor, records, AppState, Result};
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::NaiveDate;
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::{Postgres, Transaction};
+use time::Date;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -150,6 +150,8 @@ pub async fn evaluate(
         completed,
         if completed {
             "Session status is completed.".to_string()
+        } else if session["status"] == "no_show" {
+            "Attendance is recorded as a no-show. Void this draft if the attendance record is correct.".to_string()
         } else {
             format!(
                 "Complete the session before marking the claim ready (current status: {}).",
@@ -199,14 +201,14 @@ pub async fn evaluate(
 
     let policy_id = records::uuid(&claim, "policy_id")?;
     let policy = records::get(tx, "policies", policy_id, actor.org, true).await?;
-    let service_date: NaiveDate = sqlx::query_scalar(
+    let service_date: Date = sqlx::query_scalar(
         "SELECT (s.starts_at AT TIME ZONE f.timezone)::date FROM sessions s JOIN episodes e ON e.id=s.episode_id AND e.organization_id=s.organization_id JOIN facilities f ON f.id=e.facility_id AND f.organization_id=e.organization_id WHERE s.id=$1 AND s.organization_id=$2",
     )
     .bind(session_id)
     .bind(actor.org)
     .fetch_one(&mut **tx)
     .await?;
-    let date = service_date.format("%Y-%m-%d").to_string();
+    let date = service_date.to_string();
     let policy_failure = policy_problem(&policy, &date);
     check(
         &mut checklist,

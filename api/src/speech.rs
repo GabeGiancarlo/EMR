@@ -2,13 +2,13 @@
 use crate::{access, access::Actor, ApiError, AppState, Result};
 use actix_web::http::StatusCode;
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::NaiveDate;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
+use time::Date;
 use tokio::io::AsyncReadExt;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::time::timeout;
@@ -211,10 +211,10 @@ fn clinician_assigned(role: &str, actor_id: Uuid, primary: Option<Uuid>) -> bool
 
 fn recording_consent_active(
     kind: &str,
-    granted: NaiveDate,
-    expires: Option<NaiveDate>,
-    revoked: Option<NaiveDate>,
-    today: NaiveDate,
+    granted: Date,
+    expires: Option<Date>,
+    revoked: Option<Date>,
+    today: Date,
 ) -> bool {
     kind == "recording"
         && revoked.is_none()
@@ -438,7 +438,7 @@ async fn authorize(
         return Err(ApiError::missing());
     };
     let primary: Option<Uuid> = client.try_get("primary_clinician_id")?;
-    let today: NaiveDate = client.try_get("today")?;
+    let today: Date = client.try_get("today")?;
     if !clinician_assigned(&actor.role, actor.id, primary) {
         return Err(ApiError::denied());
     }
@@ -452,9 +452,9 @@ async fn authorize(
         return Err(consent_required());
     };
     let kind: String = consent.try_get("kind")?;
-    let granted: NaiveDate = consent.try_get("granted_on")?;
-    let expires: Option<NaiveDate> = consent.try_get("expires_on")?;
-    let revoked: Option<NaiveDate> = consent.try_get("revoked_on")?;
+    let granted: Date = consent.try_get("granted_on")?;
+    let expires: Option<Date> = consent.try_get("expires_on")?;
+    let revoked: Option<Date> = consent.try_get("revoked_on")?;
     if recording_consent_active(&kind, granted, expires, revoked, today) {
         Ok(actor)
     } else {
@@ -826,7 +826,7 @@ mod tests {
         assert!(!clinician_assigned("clinician", actor, None));
         assert!(clinician_assigned("admin", actor, None));
         assert!(clinician_assigned("clinical_lead", actor, Some(other)));
-        let today = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        let today = time::macros::date!(2026 - 04 - 15);
         assert!(recording_consent_active(
             "recording",
             today,
@@ -850,7 +850,7 @@ mod tests {
         ));
         assert!(!recording_consent_active(
             "recording",
-            NaiveDate::from_ymd_opt(2026, 4, 16).unwrap(),
+            time::macros::date!(2026 - 04 - 16),
             None,
             None,
             today
@@ -858,7 +858,7 @@ mod tests {
         assert!(!recording_consent_active(
             "recording",
             today,
-            Some(NaiveDate::from_ymd_opt(2026, 4, 14).unwrap()),
+            Some(time::macros::date!(2026 - 04 - 14)),
             None,
             today
         ));

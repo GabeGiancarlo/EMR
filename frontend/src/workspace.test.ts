@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Bootstrap, Row } from "./api.ts";
+import { recordedCharges } from "./workspace.ts";
 import { allowedWorkspaceModes, defaultWorkspaceMode, visibleRows, noteActionsAllowed, flowLedger, currentOutstanding, claimBalance, calendarDateInZone, currentCensus, currentStaffing, upcomingPlanReviews, expiringAuthorizations, claimMatchesFilter, operationalWorkload } from "./workspace.ts";
 
 const row = (id: string, fields: Record<string, unknown> = {}): Row => ({ id, ...fields });
@@ -55,6 +56,23 @@ test("missing or malformed financial inputs are distinct from a valid zero",()=>
   data.payments=[];
   data.payment_reversals=[row("orphan",{payment_id:"missing",amount_cents:100,reversed_on:"2026-03-02"})];
   assert.equal(flowLedger(data,"2026-03-01","2026-03-31").cash.state,"unknown");
+});
+test("executive period charges and the billing total exclude only no-show drafts and voids", () => {
+  const data = fixture("executive");
+  const attended = { ...data.sessions[0], status: "completed" };
+  const missed = { ...attended, id: "missed", status: "no_show" };
+  data.sessions = [attended, missed];
+  data.claims = [
+    row("attended-draft", { session_id: attended.id, status: "draft", amount_cents: 3000 }),
+    row("missed-draft", { session_id: missed.id, status: "draft", amount_cents: 15000 }),
+    row("void", { session_id: attended.id, status: "voided", amount_cents: 5000 }),
+    row("posted", { session_id: attended.id, status: "submitted", amount_cents: 15000 }),
+  ];
+  assert.deepEqual(recordedCharges(data), { state: "value", cents: 18000 });
+  assert.deepEqual(flowLedger(data, "2026-02-01", "2026-02-28").charges, recordedCharges(data));
+  assert.deepEqual(currentOutstanding(data), { state: "value", cents: 15000 });
+  data.permissions!.sessions!.read = false;
+  assert.equal(recordedCharges(data).state, "unknown");
 });
 test("date bucketing follows facility dates at month and DST boundaries",()=>{
   assert.equal(calendarDateInZone(new Date("2026-03-01T02:00:00Z"),"America/New_York"),"2026-02-28");

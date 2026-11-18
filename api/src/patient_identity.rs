@@ -4,11 +4,11 @@ use crate::{
     records, ApiError, AppState, Result,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::NaiveDate;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
 use std::collections::HashSet;
+use time::Date;
 use uuid::Uuid;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
@@ -109,7 +109,8 @@ fn intake_role(actor: &Actor) -> Result<()> {
 struct MatchInput {
     first_name: String,
     last_name: String,
-    birth_date: NaiveDate,
+    #[serde(deserialize_with = "crate::datetime::date_string")]
+    birth_date: Date,
     #[serde(default)]
     email: String,
     #[serde(default)]
@@ -146,7 +147,7 @@ async fn candidates(
     validate_demographics(input)?;
     records::text(input, "first_name")?;
     records::text(input, "last_name")?;
-    let birth = NaiveDate::parse_from_str(records::text(input, "birth_date")?, "%Y-%m-%d")
+    let birth = crate::datetime::parse_date(records::text(input, "birth_date")?)
         .map_err(|_| ApiError::invalid("Enter a valid birth date"))?;
     let rows:Vec<Value>=sqlx::query_scalar("SELECT jsonb_build_object('id',id,'mrn',mrn,'first_name',first_name,'last_name',last_name,'preferred_name',preferred_name,'birth_date',birth_date,'email',email,'phone',phone,'facility_id',facility_id,'status',status,'primary_clinician_id',primary_clinician_id) FROM clients WHERE organization_id=$1 AND birth_date=$2 AND ($3::uuid IS NULL OR id<>$3) ORDER BY mrn LIMIT 1001").bind(actor.org).bind(birth).bind(exclude).fetch_all(&mut **tx).await?;
     if rows.len() > 1000 {

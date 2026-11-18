@@ -5,7 +5,6 @@
 use crate::access::{self, Actor};
 use crate::{ApiError, AppState, Result};
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
-use chrono::DateTime;
 use serde_json::{json, Map, Value};
 use sqlx::{Postgres, Transaction};
 use std::collections::HashSet;
@@ -204,7 +203,7 @@ fn expected_stamp(value: Option<&Value>) -> Result<String> {
     if text.is_empty() {
         return Err(ApiError::precondition(NEED_STAMP));
     }
-    DateTime::parse_from_rfc3339(text)
+    crate::datetime::parse_timestamp(text)
         .map_err(|_| ApiError::invalid("_expected_updated_at must be an RFC3339 timestamp"))?;
     Ok(text.to_string())
 }

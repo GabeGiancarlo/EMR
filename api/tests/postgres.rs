@@ -7,6 +7,7 @@ use actix_web::{
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime, SignedDuration};
 use uuid::Uuid;
 
 async fn attach_loaded_updated_at(
@@ -958,11 +959,15 @@ async fn verify_role_changes_preserve_clinical_assignments(
 ) {
     let client = create(pool, actor, "clients", json!({"facility_id":facility,"first_name":"Synthetic","last_name":"Role transition","birth_date":"1990-01-01"})).await;
     let episode = support::legacy_episode(pool, actor, json!({"client_id":client["id"],"facility_id":facility,"level_of_care":"iop","start_date":"2026-01-01"})).await;
-    let future = chrono::Utc::now() + chrono::Duration::days(2);
+    let future = OffsetDateTime::now_utc() + SignedDuration::days(2);
     for (index, kind) in ["client", "session", "group"].into_iter().enumerate() {
         // Each assignment is eventually transferred to the same administrator.
         // Use distinct appointments so this tests role changes, not double-booking.
-        let future = future + chrono::Duration::hours(index as i64 * 2);
+        let future = future + SignedDuration::hours(index as i64 * 2);
+        let starts_at = future.format(&Rfc3339).unwrap();
+        let ends_at = (future + SignedDuration::hours(1))
+            .format(&Rfc3339)
+            .unwrap();
         let staff = create(pool, actor, "staff", json!({"name":format!("Synthetic {kind} clinician"),"email":format!("role-{kind}@example.invalid"),"role":"clinician"})).await;
         let staff_id = staff["id"].as_str().unwrap();
         let (resource, assignment, field) = match kind {
@@ -971,8 +976,8 @@ async fn verify_role_changes_preserve_clinical_assignments(
                 assert_eq!(status, StatusCode::OK, "{row}");
                 ("clients", row, "primary_clinician_id")
             },
-            "session" => ("sessions", support::legacy_session(pool, actor, json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":staff_id,"kind":"individual","starts_at":future,"ends_at":future+chrono::Duration::hours(1)})).await, "clinician_id"),
-            _ => ("groups", support::legacy_group(pool, actor, json!({"facility_id":facility,"clinician_id":staff_id,"title":"Synthetic role guard group","kind":"skills","starts_at":future,"ends_at":future+chrono::Duration::hours(1),"capacity":4})).await, "clinician_id"),
+            "session" => ("sessions", support::legacy_session(pool, actor, json!({"client_id":client["id"],"episode_id":episode["id"],"clinician_id":staff_id,"kind":"individual","starts_at":starts_at,"ends_at":ends_at})).await, "clinician_id"),
+            _ => ("groups", support::legacy_group(pool, actor, json!({"facility_id":facility,"clinician_id":staff_id,"title":"Synthetic role guard group","kind":"skills","starts_at":starts_at,"ends_at":ends_at,"capacity":4})).await, "clinician_id"),
         };
         let id = Uuid::parse_str(staff_id).unwrap();
         let audit_before: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_events WHERE resource='staff' AND action='update' AND record_id=$1").bind(id).fetch_one(pool).await.unwrap();
@@ -1136,8 +1141,12 @@ async fn verify_facility_service_dates(pool: &PgPool, actor: &str) {
     .await;
     let client = create(pool, actor, "clients", json!({"facility_id":facility["id"], "first_name":"Timezone", "last_name":"QA", "birth_date":"1990-01-01"})).await;
     let episode = support::legacy_episode(pool, actor, json!({"client_id":client["id"], "facility_id":facility["id"], "level_of_care":"outpatient", "start_date":"2026-02-01"})).await;
-    let future = chrono::Utc::now() + chrono::Duration::days(1);
-    let (status, _) = request(pool, Method::POST, "/api/sessions", Some(actor), json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":future, "ends_at":future+chrono::Duration::hours(1), "status":"completed"})).await;
+    let future = OffsetDateTime::now_utc() + SignedDuration::days(1);
+    let starts_at = future.format(&Rfc3339).unwrap();
+    let ends_at = (future + SignedDuration::hours(1))
+        .format(&Rfc3339)
+        .unwrap();
+    let (status, _) = request(pool, Method::POST, "/api/sessions", Some(actor), json!({"client_id":client["id"], "episode_id":episode["id"], "clinician_id":actor, "kind":"individual", "starts_at":starts_at, "ends_at":ends_at, "status":"completed"})).await;
     assert_eq!(
         status,
         StatusCode::CONFLICT,

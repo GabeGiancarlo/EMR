@@ -146,7 +146,8 @@ async fn upload_access(
         return Err(ApiError::denied());
     }
     let grace = matches!(r["state"].as_str(), Some("paused" | "ended"))
-        && time(&r, "stopped_at").is_some_and(|t| Utc::now() <= t + chrono::Duration::seconds(30));
+        && time(&r, "stopped_at")
+            .is_some_and(|t| OffsetDateTime::now_utc() <= t + time::SignedDuration::seconds(30));
     if r["state"] != "recording" && !grace {
         return Err(ApiError::denied());
     }

@@ -6,11 +6,11 @@
 mod support;
 
 use actix_web::{http::StatusCode, test, web, App};
-use chrono::{Duration as ChronoDuration, Utc};
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 struct Fixture {
@@ -126,11 +126,18 @@ fn checklist<'a>(report: &'a Value, code: &str) -> &'a Value {
 }
 
 fn past_window(days_ago: i64) -> (String, String) {
-    let end = Utc::now() - ChronoDuration::days(days_ago);
-    let start = end - ChronoDuration::minutes(50);
+    let end = OffsetDateTime::now_utc() - time::SignedDuration::days(days_ago);
+    let start = end - time::SignedDuration::minutes(50);
     (
-        start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        end.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        start
+            .replace_nanosecond(0)
+            .unwrap()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap(),
+        end.replace_nanosecond(0)
+            .unwrap()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap(),
     )
 }
 
@@ -627,6 +634,75 @@ async fn coverage_matches(report: &Value, expected: bool) {
         true,
         "{report}"
     );
+}
+
+#[actix_web::test]
+#[ignore = "requires disposable nexus_test"]
+async fn no_show_blocks_claim_writes_and_excludes_existing_draft_from_unbilled() {
+    let fixture = open_fixture().await;
+    let client = synthetic_client(&fixture, "Attendance").await;
+    let episode = synthetic_episode(&fixture, &client).await;
+    let policy = synthetic_policy(&fixture, &client, "ATTENDANCE-1").await;
+    let session = legacy_completed_session(&fixture, &client, &episode, 1).await;
+    let draft = create_claim(&fixture, &client, &policy, &session, "OP", 15000).await;
+    assert_eq!(metrics(&fixture).await["unbilled_cents"], 15000);
+    let (status, _) = patch(
+        &fixture.pool,
+        &fixture.actor,
+        "sessions",
+        &session,
+        json!({"status":"no_show"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = send(
+        &fixture.pool,
+        Some(&fixture.actor),
+        "POST",
+        "/api/claims",
+        claim_body(&client, &policy, &session, "OTHER", 8500),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(error_message(&body).contains("no-show"));
+    let other_client = synthetic_client(&fixture, "Another patient").await;
+    let other_policy = synthetic_policy(&fixture, &other_client, "ATTENDANCE-2").await;
+    let (status, _) = send(
+        &fixture.pool,
+        Some(&fixture.actor),
+        "POST",
+        "/api/claims",
+        claim_body(&other_client, &other_policy, &session, "OP", 15000),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let before = row_json(&fixture.pool, "claims", uid(&draft)).await;
+    let audits = audits_for(&fixture.pool, "claims", uid(&draft)).await;
+    let (status, body) = patch(
+        &fixture.pool,
+        &fixture.actor,
+        "claims",
+        &draft,
+        json!({"amount_cents":20000}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(error_message(&body).contains("no-show"));
+    assert_claim_unchanged(&fixture, uid(&draft), &before, &audits).await;
+    assert_eq!(metrics(&fixture).await["unbilled_cents"], 0);
+
+    let (status, row) = send(
+        &fixture.pool,
+        Some(&fixture.actor),
+        "POST",
+        &format!("/api/claims/{}/void", uid(&draft)),
+        json!({"reason":"Attendance corrected to no-show."}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(row["status"], "voided");
+    finish(fixture).await;
 }
 
 #[actix_web::test]

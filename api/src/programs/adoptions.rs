@@ -2,10 +2,10 @@
 use super::rules;
 use crate::{access, records, ApiError, AppState, Result};
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 pub(crate) fn configure(cfg: &mut web::ServiceConfig) {
@@ -70,8 +70,12 @@ pub(crate) async fn attach(
 #[serde(deny_unknown_fields)]
 struct Assignment {
     program_id: Uuid,
-    #[serde(rename = "_expected_updated_at")]
-    expected: Option<DateTime<Utc>>,
+    #[serde(
+        default,
+        rename = "_expected_updated_at",
+        deserialize_with = "crate::datetime::optional_timestamp"
+    )]
+    expected: Option<OffsetDateTime>,
     reason: String,
     attested: bool,
 }
@@ -104,9 +108,9 @@ async fn assign(
     {
         return Err(ApiError::denied());
     }
-    let current = DateTime::parse_from_rfc3339(episode["updated_at"].as_str().unwrap_or_default())
-        .map_err(|_| ApiError::conflict("Reload the latest episode."))?
-        .with_timezone(&Utc);
+    let current =
+        crate::datetime::parse_timestamp(episode["updated_at"].as_str().unwrap_or_default())
+            .map_err(|_| ApiError::conflict("Reload the latest episode."))?;
     if current != expected {
         return Err(ApiError::conflict(
             "This episode changed after you opened it. Reload before assigning a program.",

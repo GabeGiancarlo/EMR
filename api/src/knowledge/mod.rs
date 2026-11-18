@@ -185,7 +185,7 @@ async fn search(
     .await?;
     tx.commit().await?;
     Ok(response(
-        json!({"client_id":client,"indexed_at":chrono::Utc::now(),"document_count":documents,"chunk_count":chunks,"total":total,"limit":limit,"offset":offset,"results":results}),
+        json!({"client_id":client,"indexed_at":crate::datetime::now_timestamp(),"document_count":documents,"chunk_count":chunks,"total":total,"limit":limit,"offset":offset,"results":results}),
     ))
 }
 async fn counts(tx: &mut Transaction<'_, Postgres>, org: Uuid, client: Uuid) -> Result<(i64, i64)> {
@@ -212,7 +212,7 @@ async fn rebuild(
     .await?;
     tx.commit().await?;
     Ok(response(
-        json!({"client_id":client,"document_count":documents,"chunk_count":chunks,"indexed_at":chrono::Utc::now()}),
+        json!({"client_id":client,"document_count":documents,"chunk_count":chunks,"indexed_at":crate::datetime::now_timestamp()}),
     ))
 }
 async fn source(

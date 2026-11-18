@@ -1,7 +1,6 @@
 //! Typed user-authored forms with immutable template snapshots and answer provenance.
 use crate::telehealth::recording::transcripts::excerpts;
 use crate::{access::Actor, records, ApiError, Result};
-use chrono::{NaiveDate, Utc};
 use serde_json::{json, Map, Value};
 use sqlx::{Postgres, Transaction};
 
@@ -43,7 +42,7 @@ pub fn validate(value: &Value, required: bool) -> Result<()> {
             "checkbox" => answer.is_boolean(),
             "date" => answer
                 .as_str()
-                .map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok())
+                .map(|s| crate::datetime::parse_date(s).is_ok())
                 .unwrap_or(false),
             "select" => {
                 answer.is_string()
@@ -178,7 +177,7 @@ pub async fn perform(
                 id,
                 actor.org,
                 object(
-                    json!({"status":"reviewed","reviewer_id":actor.id,"reviewed_at":Utc::now()}),
+                    json!({"status":"reviewed","reviewer_id":actor.id,"reviewed_at":crate::datetime::now_timestamp()}),
                 ),
             )
             .await
@@ -200,7 +199,7 @@ pub async fn perform(
                 "form_responses",
                 id,
                 actor.org,
-                object(json!({"status":"signed","signed_by":actor.id,"signed_at":Utc::now()})),
+                object(json!({"status":"signed","signed_by":actor.id,"signed_at":crate::datetime::now_timestamp()})),
             )
             .await
         }

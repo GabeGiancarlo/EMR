@@ -1,16 +1,16 @@
 //! Adult outpatient/IOP/PHP product policy. February 29 maps to March 1
 //! in non-leap years; this is not a statement of jurisdiction-specific law.
-use chrono::{Datelike, NaiveDate};
 
-pub fn adult_anniversary(birth: NaiveDate) -> Option<NaiveDate> {
+use time::Date;
+pub fn adult_anniversary(birth: Date) -> Option<Date> {
     let year = birth.year().checked_add(18)?;
-    birth.with_year(year).or_else(|| {
-        (birth.month() == 2 && birth.day() == 29)
-            .then(|| NaiveDate::from_ymd_opt(year, 3, 1))
+    birth.replace_year(year).ok().or_else(|| {
+        (birth.month() == time::Month::February && birth.day() == 29)
+            .then(|| Date::from_calendar_date(year, time::Month::March, 1).ok())
             .flatten()
     })
 }
-pub fn has_completed_adult_years(birth: NaiveDate, today: NaiveDate) -> bool {
+pub fn has_completed_adult_years(birth: Date, today: Date) -> bool {
     adult_anniversary(birth).is_some_and(|anniversary| today >= anniversary)
 }
 pub fn ineligible_message(field: &str) -> String {
@@ -19,8 +19,8 @@ pub fn ineligible_message(field: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    fn d(y: i32, m: u8, day: u8) -> Date {
+        Date::from_calendar_date(y, m.try_into().unwrap(), day).unwrap()
     }
     #[test]
     fn birthday_boundary_uses_calendar_years() {
