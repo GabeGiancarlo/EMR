@@ -1,9 +1,9 @@
 //! Live intake checklist. Items describe missing staff actions only.
 //! Coverage and task counts are informational and are not electronic verification.
 use crate::{access::Actor, records, ApiError, Result};
-use chrono::NaiveDate;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
+use time::Date;
 use uuid::Uuid;
 
 fn item(code: &str, title: &str, required: bool, passed: bool, detail: &str) -> Value {
@@ -18,7 +18,7 @@ pub(super) async fn evaluate(
     let facility_id = records::uuid(episode, "facility_id")?;
     let facility = records::get(tx, "facilities", facility_id, actor.org, false).await?;
     let zone = facility["timezone"].as_str().unwrap_or("UTC");
-    let today: NaiveDate = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE $1)::date")
+    let today: Date = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE $1)::date")
         .bind(zone)
         .fetch_one(&mut **tx)
         .await

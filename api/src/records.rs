@@ -1,8 +1,8 @@
 use crate::adult::{self, has_completed_adult_years};
 use crate::{access::Actor, ApiError, Result};
-use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::{json, Map, Value};
 use sqlx::{Postgres, Transaction};
+use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 pub const RESOURCES: &[&str] = &[
@@ -156,22 +156,22 @@ pub fn clean(resource: &str, input: &Value) -> Result<Map<String, Value>> {
                 | "target_date"
         ) && !value.is_null()
         {
-            let date = NaiveDate::parse_from_str(value.as_str().unwrap_or_default(), "%Y-%m-%d")
+            let date = crate::datetime::parse_date(value.as_str().unwrap_or_default())
                 .map_err(|_| ApiError::invalid(format!("{key} must be a valid YYYY-MM-DD date")))?;
             if matches!(
                 key.as_str(),
                 "birth_date" | "received_on" | "granted_on" | "revoked_on"
-            ) && date > Utc::now().date_naive()
+            ) && date > OffsetDateTime::now_utc().date()
             {
                 return Err(ApiError::invalid(format!("{key} cannot be in the future")));
             }
         }
         if matches!(key.as_str(), "starts_at" | "ends_at" | "expires_at") && !value.is_null() {
-            let date =
-                DateTime::parse_from_rfc3339(value.as_str().unwrap_or_default()).map_err(|_| {
+            let date = crate::datetime::parse_timestamp(value.as_str().unwrap_or_default())
+                .map_err(|_| {
                     ApiError::invalid(format!("{key} needs an RFC3339 timestamp with timezone"))
                 })?;
-            if key == "expires_at" && date <= Utc::now() {
+            if key == "expires_at" && date <= OffsetDateTime::now_utc() {
                 return Err(ApiError::invalid(
                     "Permission exception expiry must be in the future",
                 ));
@@ -318,7 +318,7 @@ pub async fn patch(
     mut data: Map<String, Value>,
 ) -> Result<Value> {
     fields(resource)?;
-    data.insert("updated_at".into(), json!(Utc::now()));
+    data.insert("updated_at".into(), json!(crate::datetime::now_timestamp()));
     let sets = data
         .keys()
         .map(|k| format!("\"{k}\"=p.\"{k}\""))
@@ -430,18 +430,14 @@ pub async fn validate_links(
     Ok(())
 }
 
-pub fn parse_record_date(value: &Value, key: &str) -> Result<NaiveDate> {
-    NaiveDate::parse_from_str(value[key].as_str().unwrap_or_default(), "%Y-%m-%d")
+pub fn parse_record_date(value: &Value, key: &str) -> Result<Date> {
+    crate::datetime::parse_date(value[key].as_str().unwrap_or_default())
         .map_err(|_| ApiError::invalid(format!("{key} must be a valid YYYY-MM-DD date")))
 }
 
 /// Adult program gate. Callers supply the facility-local calendar date.
 /// Does not read or rewrite stored client rows.
-pub fn require_adult_program(
-    birth: NaiveDate,
-    facility_today: NaiveDate,
-    field: &str,
-) -> Result<()> {
+pub fn require_adult_program(birth: Date, facility_today: Date, field: &str) -> Result<()> {
     if has_completed_adult_years(birth, facility_today) {
         return Ok(());
     }
@@ -449,10 +445,10 @@ pub fn require_adult_program(
 }
 
 pub fn ensure_session_ended(session: &Value) -> Result<()> {
-    let end = DateTime::parse_from_rfc3339(text(session, "ends_at")?).map_err(|_| {
+    let end = crate::datetime::parse_timestamp(text(session, "ends_at")?).map_err(|_| {
         ApiError::invalid("Session end must include a valid timestamp and timezone")
     })?;
-    if end > Utc::now() {
+    if end > OffsetDateTime::now_utc() {
         return Err(ApiError::conflict(
             "The session must end before completion, signing or billing readiness",
         ));
@@ -521,27 +517,20 @@ mod tests {
     }
     #[test]
     fn adult_program_uses_calendar_anniversary_not_day_count() {
-        use chrono::NaiveDate;
-        let birth = NaiveDate::from_ymd_opt(2008, 4, 9).unwrap();
-        let today = NaiveDate::from_ymd_opt(2026, 4, 9).unwrap();
+        let birth = time::macros::date!(2008 - 04 - 09);
+        let today = time::macros::date!(2026 - 04 - 09);
         assert!(require_adult_program(birth, today, "birth_date").is_ok());
         let err =
-            require_adult_program(birth, today.pred_opt().unwrap(), "birth_date").unwrap_err();
+            require_adult_program(birth, today.previous_day().unwrap(), "birth_date").unwrap_err();
         assert!(err.message.contains("birth_date"));
         assert!(err.message.contains("18"));
-        let leap = NaiveDate::from_ymd_opt(2004, 2, 29).unwrap();
-        assert!(require_adult_program(
-            leap,
-            NaiveDate::from_ymd_opt(2022, 2, 28).unwrap(),
-            "birth_date"
-        )
-        .is_err());
-        assert!(require_adult_program(
-            leap,
-            NaiveDate::from_ymd_opt(2022, 3, 1).unwrap(),
-            "birth_date"
-        )
-        .is_ok());
+        let leap = time::macros::date!(2004 - 02 - 29);
+        assert!(
+            require_adult_program(leap, time::macros::date!(2022 - 02 - 28), "birth_date").is_err()
+        );
+        assert!(
+            require_adult_program(leap, time::macros::date!(2022 - 03 - 01), "birth_date").is_ok()
+        );
     }
     #[test]
     fn validates_template_applicability() {

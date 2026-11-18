@@ -1,9 +1,9 @@
 //! Transactional reservations for individual care, shared groups and staff time away.
 //! Callers acquire the organization lock before any row lock or schedule mutation.
 use crate::{access::Actor, ApiError, Result};
-use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{Postgres, Transaction};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 pub async fn lock_org(tx: &mut Transaction<'_, Postgres>, org: Uuid) -> Result<()> {
@@ -13,10 +13,9 @@ pub async fn lock_org(tx: &mut Transaction<'_, Postgres>, org: Uuid) -> Result<(
         .await?;
     Ok(())
 }
-pub fn interval(value: &Value) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
+pub fn interval(value: &Value) -> Result<(OffsetDateTime, OffsetDateTime)> {
     let parse = |key: &str| {
-        DateTime::parse_from_rfc3339(value[key].as_str().unwrap_or_default())
-            .map(|time| time.with_timezone(&Utc))
+        crate::datetime::parse_timestamp(value[key].as_str().unwrap_or_default())
             .map_err(|_| ApiError::invalid(format!("{key} needs a timestamp with timezone")))
     };
     let (start, end) = (parse("starts_at")?, parse("ends_at")?);
@@ -44,7 +43,7 @@ async fn check_clinician(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
     clinician: Uuid,
-    interval: (DateTime<Utc>, DateTime<Utc>),
+    interval: (OffsetDateTime, OffsetDateTime),
     session: Option<Uuid>,
     group: Option<Uuid>,
 ) -> Result<()> {
@@ -65,7 +64,7 @@ async fn check_client(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
     client: Uuid,
-    interval: (DateTime<Utc>, DateTime<Utc>),
+    interval: (OffsetDateTime, OffsetDateTime),
     session: Option<Uuid>,
     group: Option<Uuid>,
 ) -> Result<()> {

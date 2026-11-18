@@ -1,8 +1,8 @@
 //! Treatment-plan attestation, review history, and shared group attendance workflows.
 use crate::{access::Actor, records, ApiError, Result};
-use chrono::{DateTime, Utc};
 use serde_json::{json, Map, Value};
 use sqlx::{Postgres, Transaction};
+use time::OffsetDateTime;
 
 fn object(v: Value) -> Map<String, Value> {
     v.as_object().expect("internal JSON object").clone()
@@ -18,9 +18,10 @@ fn attendance_status(status: &str) -> Result<&'static str> {
 }
 fn check_attendance_time(group: &Value, status: &str) -> Result<()> {
     if matches!(status, "attended" | "no_show") {
-        let start = DateTime::parse_from_rfc3339(group["starts_at"].as_str().unwrap_or_default())
-            .map_err(|_| ApiError::invalid("Invalid group start time"))?;
-        if start > Utc::now() {
+        let start =
+            crate::datetime::parse_timestamp(group["starts_at"].as_str().unwrap_or_default())
+                .map_err(|_| ApiError::invalid("Invalid group start time"))?;
+        if start > OffsetDateTime::now_utc() {
             return Err(ApiError::conflict(
                 "Attendance cannot be recorded before the group starts",
             ));
@@ -392,7 +393,7 @@ pub async fn perform(
                 resource,
                 id,
                 actor.org,
-                object(json!({"status":"active","signed_at":Utc::now(),"signed_by":actor.id})),
+                object(json!({"status":"active","signed_at":crate::datetime::now_timestamp(),"signed_by":actor.id})),
             )
             .await
         }
@@ -475,9 +476,9 @@ pub async fn perform(
             if old["status"] != "scheduled" {
                 return Err(ApiError::conflict("Only a scheduled group can complete"));
             }
-            let end = DateTime::parse_from_rfc3339(old["ends_at"].as_str().unwrap_or_default())
+            let end = crate::datetime::parse_timestamp(old["ends_at"].as_str().unwrap_or_default())
                 .map_err(|_| ApiError::invalid("Invalid group end time"))?;
-            if end > Utc::now() {
+            if end > OffsetDateTime::now_utc() {
                 return Err(ApiError::conflict("A group cannot complete before it ends"));
             }
             let pending:i64=sqlx::query_scalar("SELECT count(*) FROM group_attendance WHERE organization_id=$1 AND group_id=$2 AND status='scheduled'").bind(actor.org).bind(id).fetch_one(&mut **tx).await?;

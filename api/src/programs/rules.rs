@@ -1,8 +1,8 @@
 //! Shared program policies and source-aware required forms.
 use crate::{access::Actor, records, ApiError, Result};
-use chrono::{Datelike, NaiveDate};
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
+use time::Date;
 use uuid::Uuid;
 
 pub(crate) async fn program(
@@ -30,12 +30,12 @@ pub(crate) async fn program(
     Ok(row)
 }
 
-pub(crate) fn completed_age(birth: NaiveDate, today: NaiveDate) -> i32 {
+pub(crate) fn completed_age(birth: Date, today: Date) -> i32 {
     today.year()
         - birth.year()
         - i32::from((today.month(), today.day()) < (birth.month(), birth.day()))
 }
-pub(crate) fn age_matches(program: &Value, birth: NaiveDate, today: NaiveDate) -> bool {
+pub(crate) fn age_matches(program: &Value, birth: Date, today: Date) -> bool {
     let age = completed_age(birth, today) as i64;
     program["min_age"].as_i64().is_some_and(|min| age >= min)
         && (program["max_age"].is_null()
@@ -45,7 +45,7 @@ pub(crate) async fn context(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
     program: &Value,
-) -> Result<(Value, NaiveDate)> {
+) -> Result<(Value, Date)> {
     let facility = records::get(
         tx,
         "facilities",
@@ -229,27 +229,11 @@ mod tests {
     use super::*;
     #[test]
     fn configured_age_ranges_use_calendar_anniversaries() {
-        let birth = NaiveDate::from_ymd_opt(2000, 2, 29).unwrap();
+        let birth = time::macros::date!(2000 - 02 - 29);
         let p = json!({"min_age":21,"max_age":25});
-        assert!(!age_matches(
-            &p,
-            birth,
-            NaiveDate::from_ymd_opt(2021, 2, 28).unwrap()
-        ));
-        assert!(age_matches(
-            &p,
-            birth,
-            NaiveDate::from_ymd_opt(2021, 3, 1).unwrap()
-        ));
-        assert!(age_matches(
-            &p,
-            birth,
-            NaiveDate::from_ymd_opt(2026, 2, 28).unwrap()
-        ));
-        assert!(!age_matches(
-            &p,
-            birth,
-            NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()
-        ));
+        assert!(!age_matches(&p, birth, time::macros::date!(2021 - 02 - 28)));
+        assert!(age_matches(&p, birth, time::macros::date!(2021 - 03 - 01)));
+        assert!(age_matches(&p, birth, time::macros::date!(2026 - 02 - 28)));
+        assert!(!age_matches(&p, birth, time::macros::date!(2026 - 03 - 01)));
     }
 }

@@ -8,9 +8,9 @@ use crate::{
     records, ApiError, Result,
 };
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Postgres, Transaction};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 /// Events one participant may cause in ten minutes. Joining, leaving, clearing the
@@ -60,14 +60,14 @@ pub(super) fn hash_token(raw: &str) -> String {
 pub(super) fn uid(row: &Value, key: &str) -> Result<Uuid> {
     records::uuid(row, key)
 }
-pub(super) fn time(row: &Value, key: &str) -> Option<DateTime<Utc>> {
+pub(super) fn time(row: &Value, key: &str) -> Option<OffsetDateTime> {
     row[key]
         .as_str()
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|t| t.with_timezone(&Utc))
+        .and_then(|s| crate::datetime::parse_timestamp(s).ok())
 }
 pub(super) fn online(row: &Value) -> bool {
-    time(row, "last_seen_at").is_some_and(|t| t > Utc::now() - chrono::Duration::seconds(20))
+    time(row, "last_seen_at")
+        .is_some_and(|t| t > OffsetDateTime::now_utc() - time::SignedDuration::seconds(20))
         && row["connection_id"].is_string()
 }
 pub(super) fn public_participant(row: &Value) -> Value {
@@ -82,7 +82,9 @@ pub(super) async fn room(
     found.ok_or_else(ApiError::missing)
 }
 pub(super) fn live(room: &Value) -> Result<()> {
-    if !room["ended_at"].is_null() || time(room, "expires_at").is_none_or(|t| t <= Utc::now()) {
+    if !room["ended_at"].is_null()
+        || time(room, "expires_at").is_none_or(|t| t <= OffsetDateTime::now_utc())
+    {
         return Err(denied());
     }
     Ok(())
@@ -139,7 +141,7 @@ pub(super) async fn eligible(
     room: &Value,
     p: &Value,
 ) -> Result<bool> {
-    if time(p, "token_expires_at").is_none_or(|t| t <= Utc::now()) {
+    if time(p, "token_expires_at").is_none_or(|t| t <= OffsetDateTime::now_utc()) {
         return Ok(false);
     }
     let result:bool=sqlx::query_scalar("SELECT CASE WHEN p.staff_id IS NOT NULL THEN EXISTS(SELECT 1 FROM staff st WHERE st.id=p.staff_id AND st.organization_id=p.organization_id AND st.active AND (st.role IN ('admin','clinical_lead') OR (st.role='clinician' AND (EXISTS(SELECT 1 FROM sessions s JOIN clients c ON c.id=s.client_id WHERE s.id=r.session_id AND s.clinician_id=st.id AND c.primary_clinician_id=st.id) OR EXISTS(SELECT 1 FROM groups g WHERE g.id=r.group_id AND g.clinician_id=st.id))))) ELSE EXISTS(SELECT 1 FROM sessions s JOIN episodes e ON e.id=s.episode_id WHERE s.id=r.session_id AND s.client_id=p.client_id AND e.status='active') OR EXISTS(SELECT 1 FROM group_attendance a JOIN episodes e ON e.id=a.episode_id WHERE a.group_id=r.group_id AND a.client_id=p.client_id AND a.status IN ('scheduled','attended') AND e.status='active') END AND (EXISTS(SELECT 1 FROM sessions s WHERE s.id=r.session_id AND s.status='scheduled') OR EXISTS(SELECT 1 FROM groups g WHERE g.id=r.group_id AND g.status='scheduled')) FROM telehealth_participants p JOIN telehealth_rooms r ON r.id=p.room_id WHERE p.id=$1 AND r.id=$2")

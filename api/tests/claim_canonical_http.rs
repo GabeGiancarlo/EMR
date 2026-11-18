@@ -6,11 +6,11 @@
 mod support;
 
 use actix_web::{http::StatusCode, test, web, App};
-use chrono::{Duration as ChronoDuration, Utc};
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 struct Fixture {
@@ -126,11 +126,18 @@ fn checklist<'a>(report: &'a Value, code: &str) -> &'a Value {
 }
 
 fn past_window(days_ago: i64) -> (String, String) {
-    let end = Utc::now() - ChronoDuration::days(days_ago);
-    let start = end - ChronoDuration::minutes(50);
+    let end = OffsetDateTime::now_utc() - time::SignedDuration::days(days_ago);
+    let start = end - time::SignedDuration::minutes(50);
     (
-        start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        end.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        start
+            .replace_nanosecond(0)
+            .unwrap()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap(),
+        end.replace_nanosecond(0)
+            .unwrap()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap(),
     )
 }
 

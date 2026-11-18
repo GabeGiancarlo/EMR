@@ -1,8 +1,8 @@
 use crate::{access, records, ApiError, AppState, Result};
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{NaiveDate, Utc};
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
+use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 pub async fn action(
@@ -75,7 +75,7 @@ pub async fn action(
                 "notes",
                 id,
                 actor.org,
-                json!({"status":"signed","signed_at":Utc::now(),"signed_by":actor.id})
+                json!({"status":"signed","signed_at":crate::datetime::now_timestamp(),"signed_by":actor.id})
                     .as_object()
                     .unwrap()
                     .clone(),
@@ -116,14 +116,12 @@ pub async fn action(
                     "Explain the reversal in at least 10 characters",
                 ));
             }
-            let date = NaiveDate::parse_from_str(records::text(&body, "reversed_on")?, "%Y-%m-%d")
+            let date = crate::datetime::parse_date(records::text(&body, "reversed_on")?)
                 .map_err(|_| ApiError::invalid("Enter a valid reversal date"))?;
-            let received = NaiveDate::parse_from_str(
-                old["received_on"].as_str().unwrap_or_default(),
-                "%Y-%m-%d",
-            )
-            .map_err(|_| ApiError::invalid("Invalid original receipt date"))?;
-            if date < received || date > Utc::now().date_naive() {
+            let received =
+                crate::datetime::parse_date(old["received_on"].as_str().unwrap_or_default())
+                    .map_err(|_| ApiError::invalid("Invalid original receipt date"))?;
+            if date < received || date > OffsetDateTime::now_utc().date() {
                 return Err(ApiError::invalid(
                     "Reversal date must be between the receipt date and today",
                 ));
@@ -247,9 +245,9 @@ pub async fn action(
             }
             let reason = records::text(&body, "discharge_reason")?;
             let date = records::text(&body, "end_date")?;
-            let end = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            let end = crate::datetime::parse_date(date)
                 .map_err(|_| ApiError::invalid("Enter a valid discharge date"))?;
-            let today: NaiveDate = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE f.timezone)::date FROM facilities f WHERE f.id=$1 AND f.organization_id=$2").bind(records::uuid(&old,"facility_id")?).bind(actor.org).fetch_one(&mut *tx).await?;
+            let today: Date = sqlx::query_scalar("SELECT (CURRENT_TIMESTAMP AT TIME ZONE f.timezone)::date FROM facilities f WHERE f.id=$1 AND f.organization_id=$2").bind(records::uuid(&old,"facility_id")?).bind(actor.org).fetch_one(&mut *tx).await?;
             if end > today {
                 return Err(ApiError::invalid(
                     "Discharge cannot be recorded in the future",

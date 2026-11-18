@@ -416,12 +416,8 @@ fn ensure_bounds(minutes: f64, min: i64, max: i64) -> Result<()> {
 
 fn elapsed_minutes(record: &Value) -> Result<f64> {
     let (start, end) = scheduling::interval(record)?;
-    let nanos = end
-        .signed_duration_since(start)
-        .num_nanoseconds()
-        .ok_or_else(|| {
-            ApiError::invalid("The appointment duration is outside supported bounds.")
-        })?;
+    let nanos = i64::try_from((end - start).whole_nanoseconds())
+        .map_err(|_| ApiError::invalid("The appointment duration is outside supported bounds."))?;
     Ok(nanos as f64 / 60_000_000_000.0)
 }
 
@@ -464,7 +460,7 @@ fn field_changed(before: &Value, data: &Map<String, Value>, key: &str) -> bool {
         let instant = |value: &Value| {
             value
                 .as_str()
-                .and_then(|text| chrono::DateTime::parse_from_rfc3339(text).ok())
+                .and_then(|text| crate::datetime::parse_timestamp(text).ok())
         };
         return match (before.get(key).and_then(instant), instant(value)) {
             (Some(previous), Some(next)) => previous != next,

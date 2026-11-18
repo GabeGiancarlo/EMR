@@ -4,11 +4,11 @@ use crate::{
     ApiError, AppState, Result,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
 use std::collections::HashMap;
+use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 /// How long the readiness probe waits for a connection and its answer.
@@ -406,7 +406,7 @@ pub async fn create(
 }
 const STALE_RECORD: &str = "This record was updated after you opened it. Reload the latest version and preserve your unsaved edits; they were not saved.";
 
-fn take_expected_updated_at(input: &mut Value) -> Result<DateTime<Utc>> {
+fn take_expected_updated_at(input: &mut Value) -> Result<OffsetDateTime> {
     let object = input
         .as_object_mut()
         .ok_or_else(|| ApiError::invalid("Expected a JSON object"))?;
@@ -431,16 +431,14 @@ fn take_expected_updated_at(input: &mut Value) -> Result<DateTime<Utc>> {
             "Reload the record before saving. The originally loaded updated_at is required so a newer edit is not overwritten.",
         ));
     };
-    DateTime::parse_from_rfc3339(&text)
-        .map(|stamp| stamp.with_timezone(&Utc))
+    crate::datetime::parse_timestamp(&text)
         .map_err(|_| ApiError::invalid("_expected_updated_at must be an RFC3339 timestamp"))
 }
 
-fn require_current_version(before: &Value, expected: DateTime<Utc>) -> Result<()> {
+fn require_current_version(before: &Value, expected: OffsetDateTime) -> Result<()> {
     let current = before["updated_at"].as_str().unwrap_or_default();
-    let current = DateTime::parse_from_rfc3339(current)
-        .map(|stamp| stamp.with_timezone(&Utc))
-        .map_err(|_| ApiError::conflict(STALE_RECORD))?;
+    let current =
+        crate::datetime::parse_timestamp(current).map_err(|_| ApiError::conflict(STALE_RECORD))?;
     if current != expected {
         return Err(ApiError::conflict(STALE_RECORD));
     }
@@ -678,10 +676,10 @@ async fn facility_local_today(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Actor,
     facility_id: Uuid,
-) -> Result<NaiveDate> {
+) -> Result<Date> {
     let facility = records::get(tx, "facilities", facility_id, actor.org, false).await?;
     let zone = facility["timezone"].as_str().unwrap_or("UTC");
-    let today: NaiveDate = sqlx::query_scalar(
+    let today: Date = sqlx::query_scalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE $1)::date",
     )
     .bind(zone)
@@ -794,7 +792,6 @@ async fn validate_payment(
 mod concurrency_tests {
     use super::{require_current_version, take_expected_updated_at};
     use actix_web::http::StatusCode;
-    use chrono::{DateTime, Utc};
     use serde_json::json;
 
     #[test]
@@ -803,9 +800,7 @@ mod concurrency_tests {
         let expected = take_expected_updated_at(&mut body).unwrap();
         assert_eq!(
             expected,
-            DateTime::parse_from_rfc3339("2026-02-01T14:00:00Z")
-                .unwrap()
-                .with_timezone(&Utc)
+            crate::datetime::parse_timestamp("2026-02-01T14:00:00Z").unwrap()
         );
         assert!(body.get("_expected_updated_at").is_none());
         assert!(crate::records::clean("facilities", &body).is_ok());
@@ -833,13 +828,9 @@ mod concurrency_tests {
     #[test]
     fn stale_loaded_timestamp_conflicts_without_treating_format_as_different() {
         let before = json!({"updated_at":"2026-02-01T14:00:00.123456+00:00"});
-        let same = DateTime::parse_from_rfc3339("2026-02-01T14:00:00.123456Z")
-            .unwrap()
-            .with_timezone(&Utc);
+        let same = crate::datetime::parse_timestamp("2026-02-01T14:00:00.123456Z").unwrap();
         assert!(require_current_version(&before, same).is_ok());
-        let stale = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
-            .unwrap()
-            .with_timezone(&Utc);
+        let stale = crate::datetime::parse_timestamp("2026-01-01T00:00:00Z").unwrap();
         let err = require_current_version(&before, stale).unwrap_err();
         assert_eq!(err.status, StatusCode::CONFLICT);
         assert_eq!(err.code, "conflict");

@@ -1,9 +1,9 @@
 //! Adult intake rule against a unique schema in nexus_test. No live-database writes.
 use actix_web::{http::StatusCode, test, web, App};
-use chrono::{Datelike, NaiveDate};
 use emr_api::{configure, migrate, AppState};
 use serde_json::{json, Value};
 use sqlx::{postgres::PgPoolOptions, PgPool};
+use time::Date;
 use uuid::Uuid;
 
 async fn send(
@@ -68,7 +68,7 @@ async fn facility(pool: &PgPool, org: Uuid, timezone: &str) -> Uuid {
     id
 }
 
-async fn facility_today(pool: &PgPool, facility: Uuid) -> NaiveDate {
+async fn facility_today(pool: &PgPool, facility: Uuid) -> Date {
     sqlx::query_scalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE timezone)::date FROM facilities WHERE id=$1",
     )
@@ -78,16 +78,17 @@ async fn facility_today(pool: &PgPool, facility: Uuid) -> NaiveDate {
     .unwrap()
 }
 
-fn years_before(date: NaiveDate, years: i32) -> NaiveDate {
-    date.with_year(date.year() - years)
-        .unwrap_or_else(|| NaiveDate::from_ymd_opt(date.year() - years, 3, 1).unwrap())
+fn years_before(date: Date, years: i32) -> Date {
+    date.replace_year(date.year() - years).unwrap_or_else(|_| {
+        Date::from_calendar_date(date.year() - years, time::Month::March, 1).unwrap()
+    })
 }
 
 async fn insert_client(
     pool: &PgPool,
     org: Uuid,
     facility: Uuid,
-    birth: NaiveDate,
+    birth: Date,
     clinician: Uuid,
 ) -> Uuid {
     let id = Uuid::new_v4();
@@ -154,8 +155,10 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
     );
 
     let adult_birth = behind_today
-        .with_year(behind_today.year() - 18)
-        .unwrap_or_else(|| NaiveDate::from_ymd_opt(behind_today.year() - 18, 2, 28).unwrap());
+        .replace_year(behind_today.year() - 18)
+        .unwrap_or_else(|_| {
+            Date::from_calendar_date(behind_today.year() - 18, time::Month::February, 28).unwrap()
+        });
     let minor_birth = years_before(ahead_today, 17);
 
     let (status, body) = send(
@@ -196,8 +199,10 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
 
     // Turning 18 on the facility-local today is eligible; tomorrow is not.
     let turns_today = ahead_today
-        .with_year(ahead_today.year() - 18)
-        .unwrap_or_else(|| NaiveDate::from_ymd_opt(ahead_today.year() - 18, 2, 28).unwrap());
+        .replace_year(ahead_today.year() - 18)
+        .unwrap_or_else(|_| {
+            Date::from_calendar_date(ahead_today.year() - 18, time::Month::February, 28).unwrap()
+        });
     let (status, body) = send(
         &pool,
         admin,
@@ -213,7 +218,7 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
-    let tomorrow_birth = turns_today.succ_opt().unwrap();
+    let tomorrow_birth = turns_today.next_day().unwrap();
     let (status, body) = send(
         &pool,
         admin,
@@ -233,7 +238,7 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
 
     let legacy_birth = years_before(ahead_today, 10);
     let legacy = insert_client(&pool, org, ahead, legacy_birth, admin).await;
-    let stored: NaiveDate = sqlx::query_scalar("SELECT birth_date FROM clients WHERE id=$1")
+    let stored: Date = sqlx::query_scalar("SELECT birth_date FROM clients WHERE id=$1")
         .bind(legacy)
         .fetch_one(&pool)
         .await
@@ -259,10 +264,7 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{corrected}");
-    assert_eq!(
-        corrected["birth_date"],
-        json!(legacy_birth.format("%Y-%m-%d").to_string())
-    );
+    assert_eq!(corrected["birth_date"], json!(legacy_birth.to_string()));
     assert_eq!(corrected["phone"], "555-0100");
 
     let updated_at = corrected["updated_at"].as_str().unwrap();
@@ -289,7 +291,7 @@ async fn adult_program_blocks_minor_intake_and_preserves_legacy_rows() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{rejected}");
     assert!(message(&rejected).contains("birth_date"));
-    let still: NaiveDate = sqlx::query_scalar("SELECT birth_date FROM clients WHERE id=$1")
+    let still: Date = sqlx::query_scalar("SELECT birth_date FROM clients WHERE id=$1")
         .bind(legacy)
         .fetch_one(&pool)
         .await

@@ -182,10 +182,17 @@ fn booking_form_body(resource: &str, row: &Value) -> Value {
     let mut body = serde_json::Map::new();
     for field in fields {
         let value = if matches!(*field, "starts_at" | "ends_at") {
-            let instant = chrono::DateTime::parse_from_rfc3339(row[field].as_str().unwrap())
-                .unwrap()
-                .with_timezone(&chrono::Utc);
-            json!(instant.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            let instant = time::OffsetDateTime::parse(
+                row[field].as_str().unwrap(),
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap()
+            .to_offset(time::UtcOffset::UTC);
+            json!(instant
+                .format(time::macros::format_description!(
+                    "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z"
+                ))
+                .unwrap())
         } else {
             row[field].clone()
         };
