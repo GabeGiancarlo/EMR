@@ -1,5 +1,11 @@
 # Nexus design and workflow review November 4 2026
 
+## Open design work requested November 18, 2026
+
+- [ ] Fix the Nexus logo mark. Review the current Convergence mark in the app, including its small-size version.
+- [ ] Review and redo every form. Walk through each form as the person who uses it, including field order, defaults, validation and recovery after an error.
+- [ ] Redesign all action buttons across the app. Review their labels, placement and interaction states in the workflows where people use them.
+
 ## Review outcome
 
 The current prototype demonstrates connected functionality, but its visual design and user experience do not meet the owner's standard for Nexus. A substantial UI and UX redesign is required. Custom code, working persistence and passing tests do not establish product acceptance.
