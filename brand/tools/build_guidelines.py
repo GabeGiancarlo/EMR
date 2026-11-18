@@ -4,7 +4,7 @@ Reads brand/guidelines/template.html (plus the screen-*.html partials), fills in
 icons, patterns and token values straight from the generated files, and writes:
 
   brand/guidelines/index.html              self-contained page, opens in any browser
-  brand/Nexus-Brand-Guidelines-v0.3.pdf    printed from that page with headless Chrome
+  brand/Nexus-Brand-Guidelines-v0.4.pdf    printed from that page with headless Chrome
 
 Run:  python3 brand/tools/build_guidelines.py [--pages DIR]
 With --pages, also writes one HTML file per page into DIR for visual review.
@@ -66,9 +66,13 @@ def m_uri(arg):
     return "url('data:image/svg+xml;base64," + base64.b64encode(s.encode()).decode() + "')"
 
 
+def png_src(arg):
+    with open(os.path.join(BRAND, arg.strip()), "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+
 def m_datauri(arg):
-    path = arg.strip()
-    return "url('data:image/png;base64," + base64.b64encode(open(os.path.join(BRAND, path), "rb").read()).decode() + "')"
+    return f"url('{png_src(arg)}')"
 
 
 def m_motifs(_):
@@ -143,7 +147,7 @@ PAGE = {sec["id"]: n for n, sec in enumerate(SECTIONS, 1) if "id" in sec}
 INDEX = {
     "Accent colour (Clay)": ["colour", "colour-roles"], "App icon and favicon": ["logo-family", "applications"],
     "Appendix slides": ["teaching"], "Asset library": ["assets"], "Audit, contrast": ["colour-roles"],
-    "Badges": ["icon-use", "components"], "Bark (logo layer)": ["symbol"], "Bark (pattern)": ["patterns"],
+    "Badges": ["icon-use", "components"], "Bark edge (symbol)": ["symbol"], "Bark (pattern)": ["patterns"],
     "Billing workspace": ["billing"], "Business card": ["applications"], "Buttons": ["components", "interaction"],
     "Cards": ["leaf"], "Checkboxes and toggles": ["components"], "Clear space": ["logo-use"],
     "Client (the word)": ["voice"], "Clinical workspace": ["clinical", "clinical-dark"], "Colour roles": ["colour-roles"],
@@ -249,7 +253,7 @@ def m_index(_):
 
 MACROS = {"pat": m_pat, "tint": m_tint, "vein": m_vein, "toc": m_toc, "pg": m_pg, "index": m_index, "svg": m_svg, "ic": m_ic, "uri": m_uri, "tokens": m_tokens, "iconsgrid": m_iconsgrid, "iconrow": m_iconrow,
           "swatches": m_swatches, "roles": m_roles, "contrast": m_contrast, "screen": m_screen,
-          "iconcount": lambda _: str(len(ICONS)), "datauri": m_datauri, "motifs": m_motifs}
+          "iconcount": lambda _: str(len(ICONS)), "png": png_src, "datauri": m_datauri, "motifs": m_motifs}
 
 
 def expand(s):
@@ -272,7 +276,7 @@ def main():
             open(os.path.join(d, f"p{i:02d}.html"), "w").write(
                 head + f'<body style="counter-reset:pg {i - 1};background:none">' + PATTERN_DEFS + p.replace("../", BRAND + "/") + "</body>")
     if "--no-pdf" not in sys.argv:
-        pdf = os.path.join(BRAND, "Nexus-Brand-Guidelines-v0.3.pdf")
+        pdf = os.path.join(BRAND, "Nexus-Brand-Guidelines-v0.4.pdf")
         subprocess.run([CHROME, "--headless=new", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}",
                         "file://" + out], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print(f"PDF: {os.path.getsize(pdf) / 1e6:.1f} MB")
