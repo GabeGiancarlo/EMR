@@ -95,6 +95,14 @@ pub async fn setup(state: web::Data<AppState>, body: web::Json<Setup>) -> Result
         .json(json!({"organization":organization,"facility":facility,"actor":value})))
 }
 
+// Used by both calendar reads and the serialized session update guard.
+const PROTECTED_SESSIONS: &str = "
+    SELECT session_id FROM notes
+    WHERE organization_id=$1 AND session_id IS NOT NULL AND status='signed'
+    UNION ALL
+    SELECT session_id FROM claims
+    WHERE organization_id=$1 AND session_id IS NOT NULL AND status<>'draft'";
+
 pub async fn rows(
     tx: &mut Transaction<'_, Postgres>,
     resource: &str,
@@ -116,7 +124,13 @@ pub async fn rows(
     } else {
         ""
     };
-    let query=format!("SELECT to_jsonb(t) FROM {resource} t WHERE t.organization_id=$1{scope} ORDER BY t.created_at DESC");
+    let projection = if resource == "sessions" {
+        // Expose only the scheduling restriction, including to staff who cannot read its sources.
+        format!("to_jsonb(t) || jsonb_build_object('edit_locked', t.id IN ({PROTECTED_SESSIONS}))")
+    } else {
+        "to_jsonb(t)".to_owned()
+    };
+    let query=format!("SELECT {projection} FROM {resource} t WHERE t.organization_id=$1{scope} ORDER BY t.created_at DESC");
     let q = sqlx::query_scalar(&query).bind(actor.org);
     Ok(if scope.is_empty() {
         q.fetch_all(&mut **tx).await?
@@ -515,7 +529,12 @@ pub async fn update(
         }
     }
     if resource == "sessions" {
-        let locked:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM notes WHERE organization_id=$1 AND session_id=$2 AND status='signed') OR EXISTS(SELECT 1 FROM claims WHERE organization_id=$1 AND session_id=$2 AND status<>'draft')").bind(actor.org).bind(id).fetch_one(&mut *tx).await?;
+        let query = format!("SELECT $2::uuid IN ({PROTECTED_SESSIONS})");
+        let locked: bool = sqlx::query_scalar(&query)
+            .bind(actor.org)
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
         if locked {
             return Err(ApiError::conflict(
                 "A session with signed documentation or an advanced claim cannot be rewritten",

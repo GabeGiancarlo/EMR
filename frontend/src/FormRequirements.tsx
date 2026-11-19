@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { label, request } from "./api";
-import type { Bootstrap } from "./api";
+import type { Bootstrap, Row } from "./api";
 import { Badge, Button, Empty, Panel } from "./ui";
+
+import { mayEditResponse, savedFormResponse } from "./savedFormResponse";
 
 export type FormRequirement = {
   template_id: string;
@@ -31,6 +33,8 @@ export default function FormRequirements({
   data,
   canStart,
   onStart,
+  onContinue,
+  onView,
   onAuthorRules,
   episodeId,
   stage,
@@ -43,6 +47,8 @@ export default function FormRequirements({
     episodeId: string | null,
     templateName?: string,
   ) => void;
+  onContinue: (row: Row) => void;
+  onView: (row: Row) => void;
   onAuthorRules?: () => void;
   episodeId?: string;
   stage?:string;
@@ -95,6 +101,26 @@ export default function FormRequirements({
           : " · no relevant care episode"
       }`
     : "";
+
+  function requirementAction(item: FormRequirement) {
+    if (loading || item.completion === "configuration_review") return null;
+    const start = (label: string) => canStart && <Button variant="text small"
+      onClick={() => onStart(item.template_id, item.episode_id, item.template_name)}>{label}</Button>;
+    if (item.completion !== "signed") {
+      const response = savedFormResponse(data.form_responses, clientId, item.episode_id, item.template_id, data.actor);
+      if (response) {
+        if (canStart && response.status === "draft" && mayEditResponse(response, data.actor)) {
+          return <Button variant="text small" onClick={() => onContinue(response)}>Continue draft</Button>;
+        }
+        return <div className="row-actions">
+          <Button variant="text small" onClick={() => onView(response)}>View saved form</Button>
+          {!mayEditResponse(response, data.actor) && start("Start another")}
+        </div>;
+      }
+      if (item.completion === "draft") return <small>Refresh the workspace to load the saved form.</small>;
+    }
+    return start(item.completion === "signed" ? "Start another" : "Start form");
+  }
 
   return (
     <Panel
@@ -177,20 +203,7 @@ export default function FormRequirements({
                       {item.completion === "source_review" && <small>The signed history is preserved, but its source changed or is unavailable. Complete a response from current evidence.</small>}
                     </td>
                     <td>
-                      {canStart && item.completion!=="configuration_review" && (
-                        <Button
-                          variant="text small"
-                          onClick={() =>
-                            onStart(
-                              item.template_id,
-                              item.episode_id,
-                              item.template_name,
-                            )
-                          }
-                        >
-                          {item.completion === "signed" ? "Start another" : "Start form"}
-                        </Button>
-                      )}
+                      {requirementAction(item)}
                     </td>
                   </tr>
                 ))}

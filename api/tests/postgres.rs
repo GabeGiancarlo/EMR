@@ -289,6 +289,27 @@ async fn persistent_workflows_and_boundaries() {
         json!({"client_id":client["id"],"session_id":unsigned_session["id"],"policy_id":policy["id"],"service_code":"TEST","diagnosis_code":"TEST","amount_cents":500}),
     )
     .await;
+    // Scheduling staff can see the restriction without reading documentation or claims.
+    let (status, schedule) = request(
+        &pool,
+        Method::GET,
+        "/api/bootstrap",
+        Some(support_id),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(schedule["notes"], json!([]));
+    assert_eq!(schedule["claims"], json!([]));
+    for (row, locked) in [(&session, true), (&unsigned_session, false)] {
+        let card = schedule["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|card| card["id"] == row["id"])
+            .unwrap();
+        assert_eq!(card["edit_locked"], locked);
+    }
     let blocked_id = blocked["id"].as_str().unwrap();
     let (status, failed) = request(
         &pool,
@@ -501,7 +522,7 @@ async fn persistent_workflows_and_boundaries() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
     // Source records behind signed notes and billed claims cannot silently change.
-    let (status, _) = request(
+    let (status, lock_error) = request(
         &pool,
         Method::PATCH,
         &format!("/api/sessions/{}", session["id"].as_str().unwrap()),
@@ -510,6 +531,10 @@ async fn persistent_workflows_and_boundaries() {
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
+    assert!(lock_error["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("cannot be rewritten"));
     let (status, _) = request(
         &pool,
         Method::PATCH,

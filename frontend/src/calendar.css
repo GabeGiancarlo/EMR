@@ -340,6 +340,14 @@
 .cal-facts { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; margin: 16px 0; }
 .cal-facts dt { color: var(--cal-muted); font-size: 14px; }
 .cal-facts dd { margin: 0; font-size: 15px; }
+.cal-lock-label { display: block; font-weight: 700; }
+.cal-lock-notice {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--cal-accent);
+  background: var(--cal-bg);
+}
+.cal-lock-notice p { margin: 3px 0 0; }
 .cal-dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .calendar-workspace :focus-visible {
   outline: 3px solid var(--nx-focus);
