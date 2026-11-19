@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { FieldInput } from "./nexus-ui/FieldControls";
+import { useMemo, useState } from "react";
 import type { Bootstrap, Resource, Row } from "./api";
 import { label } from "./api";
 import {
@@ -27,6 +28,11 @@ import {
   writeAllowed,
 } from "./workspace";
 import type { MoneyState, WorkspaceMode } from "./workspace";
+import { NxIcon } from "./nexus-ui/Icon";
+import { Avatar } from "./nexus-ui/Avatar";
+import { Badge } from "./ui";
+import { addDays, defaultFacilityId } from "./calendar";
+import { facilityWallTime } from "./schedulingTime";
 import "./workspace.css";
 
 export type WorkspaceView =
@@ -137,17 +143,61 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
   const tasks = visibleRows(data, "tasks");
   const openTasks = tasks?.filter((task) => task.status !== "done") ?? [];
   const zone = actorFacilityZone(data);
+  const clients = visibleRows(data,"clients") || [];
+  const facilityId = defaultFacilityId(text(data.actor ?? undefined,"facility_id"), data.facilities.map(row => ({id:row.id, active:row.active !== false})));
+  const facility = data.facilities.find(row => row.id === facilityId);
+  const appointments = visibleRows(data, "sessions");
+  const {week, counts} = useMemo(() => {
+    const week = Array.from({length:7}, (_,i) => today ? addDays(today,i-6) : "");
+    const counts = new Map(week.map(day => [day, 0]));
+    const episodes = new Map((visibleRows(data, "episodes") || []).map(row => [row.id, row.facility_id]));
+    const patients = new Map((visibleRows(data, "clients") || []).map(row => [row.id, row.facility_id]));
+    for (const row of appointments || []) {
+      if (facility && (episodes.get(String(row.episode_id)) || patients.get(String(row.client_id))) !== facility.id) continue;
+      const day = facilityWallTime(String(row.starts_at),zone).slice(0,10);
+      if (counts.has(day)) counts.set(day,counts.get(day)!+1);
+    }
+    return {week, counts};
+  }, [data, appointments, today, facility, zone]);
+  const maxCount = Math.max(1,...counts.values());
+  const priorityRank: Record<string,number> = {urgent:0, high:1, normal:2, low:3};
+  openTasks.sort((a,b)=>(priorityRank[String(a.priority)]??4)-(priorityRank[String(b.priority)]??4)
+    || String(a.due_date||"9999").localeCompare(String(b.due_date||"9999")));
   return (
     <div className="ws-clinical">
+        <div className="ws-actions" aria-label="Clinical quick actions">
+          {noteActionsAllowed(data) && (
+            <button type="button" className="ws-action" onClick={() => onCreate("notes")}>
+              <NxIcon name="documentation" size={18}/>New note
+            </button>
+          )}
+          {writeAllowed(data, "sessions") && (
+            <button type="button" className="ws-action quiet" onClick={() => onCreate("sessions")}>
+              <NxIcon name="schedule" size={18}/>Schedule session
+            </button>
+          )}
+          {writeAllowed(data, "tasks") && (
+            <button type="button" className="ws-action quiet" onClick={() => onCreate("tasks")}>
+              <NxIcon name="tasks" size={18}/>New task
+            </button>
+          )}
+          {writeAllowed(data, "clients") && (
+            <button type="button" className="ws-action quiet" onClick={() => onCreate("clients")}>
+              <NxIcon name="clients" size={18}/>New client
+            </button>
+          )}
+        </div>
+      <div className="ws-main-stack">
       <section className="ws-schedule" aria-labelledby="ws-today-heading">
-        <span className="ws-kicker">Facility calendar</span>
+
         <div className="ws-split">
-          <h2 id="ws-today-heading">Today’s schedule</h2>
+          <div className="ws-panel-title"><span className="ws-panel-icon"><NxIcon name="schedule"/></span><div><h2 id="ws-today-heading">Today’s schedule</h2>
+            <small>{now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",timeZone:zone})}</small></div></div>
           <button type="button" className="ws-action quiet" onClick={() => onNavigate("schedule", "today")}>
-            Open calendar
+            Open calendar <NxIcon name="arrow-right" size={15}/>
           </button>
         </div>
-        <p>Today’s care, shown in each facility’s local time.</p>
+
         <Gated
           available={schedule.available}
           empty={schedule.rows.length === 0 && schedule.undated.length === 0}
@@ -155,21 +205,22 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
           emptyDescription="Schedule care or open the calendar to review another date."
           unavailable="Sessions are not included for this access. No schedule was invented."
         >
-          {schedule.rows.map((item) => (
-            <article className="ws-session" key={item.row.id}>
-              <span
-                className="ws-accent-bar"
-                style={{ background: SERVICE_COLORS[text(item.row, "kind")] || "var(--ws-accent)" }}
-              />
-              <div>
-                <PatientLink data={data} id={item.row.client_id} onOpenClient={onOpenClient} />
-                <small className="ws-muted">
-                  {label(text(item.row, "kind") || "session")} · {item.localTime || "Time unavailable"} · {item.timeZone}
-                </small>
-              </div>
-              <strong>{label(text(item.row, "status") || "not set")}</strong>
-            </article>
-          ))}
+          {schedule.rows.map(item => {
+            const person = clients.find(row=>row.id===item.row.client_id);
+            const name = person ? patientName(person) : "Patient unavailable";
+            const clinician = data.staff.find(row=>row.id===item.row.clinician_id);
+            const group = data.groups.find(row=>row.id===item.row.group_id);
+            return <article className="home-visit" key={item.row.id}>
+              <button type="button" className="home-visit-open" aria-label={`Open appointment for ${name} at ${item.localTime}`}
+                onClick={()=>onNavigate("schedule",`record:${item.row.id}`)}><NxIcon name="chevron-right" size={17}/></button>
+              <div className="visit-time"><strong>{item.localTime}</strong><small>{item.timeZone?.split("/").pop()?.replaceAll("_"," ")}</small></div>
+              <div className="visit-patient"><span className="visit-kind">{group ? text(group,"title") : label(text(item.row,"kind"))}</span>
+                {person ? <button type="button" className="visit-chart-name" onClick={()=>onOpenClient(person)}>{name}</button> : <strong>{name}</strong>}<small>{text(clinician,"name")}</small></div>
+              <Badge status={item.row.status}/>
+              {person && <button className="visit-profile" type="button" aria-label={`Open chart for ${name}`} title={`Open chart for ${name}`} onClick={()=>onOpenClient(person)}>
+                <Avatar patient={person} name={name} id={person.id}/></button>}
+            </article>;
+          })}
           {schedule.undated.length > 0 && (
             <p>{schedule.undated.length} loaded session{schedule.undated.length === 1 ? "" : "s"} could not be placed on a facility calendar and {schedule.undated.length === 1 ? "is" : "are"} not counted as away.</p>
           )}
@@ -179,33 +230,21 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
         ) : (
           <p>{groups === 0 ? "No group encounters today." : `${groups} group encounter${groups === 1 ? "" : "s"} today.`}</p>
         )}
-        <div className="ws-actions" aria-label="Clinical quick actions">
-          {noteActionsAllowed(data) && (
-            <button type="button" className="ws-action" onClick={() => onCreate("notes")}>
-              New note
-            </button>
-          )}
-          {writeAllowed(data, "sessions") && (
-            <button type="button" className="ws-action quiet" onClick={() => onCreate("sessions")}>
-              Schedule session
-            </button>
-          )}
-          {writeAllowed(data, "tasks") && (
-            <button type="button" className="ws-action quiet" onClick={() => onCreate("tasks")}>
-              New task
-            </button>
-          )}
-          {writeAllowed(data, "clients") && (
-            <button type="button" className="ws-action quiet" onClick={() => onCreate("clients")}>
-              New client
-            </button>
-          )}
-        </div>
+
       </section>
-      <aside className="ws-rail">
+      {appointments && today && <section className="schedule-activity">
+        <div className="ws-split"><div className="ws-panel-title"><span className="ws-panel-icon"><NxIcon name="reporting"/></span>
+          <div><h2>Appointment volume</h2><small>{text(facility,"name") || zone} · Last 7 days</small></div></div>
+          <div className="volume-total"><b>{Array.from(counts.values()).reduce((n,v)=>n+v,0)}</b><small>patient appointments</small></div></div>
+        <div className="volume-plot" aria-label="Patient appointments by day">{week.map(day=><button type="button" key={day} aria-label={`Open calendar for ${day}, ${counts.get(day)} patient appointments`}
+          onClick={()=>onNavigate("schedule","date:"+day)}><span className="volume-track"><b>{counts.get(day)}</b><i style={{height:`${(counts.get(day)||0)/maxCount*72}%`}}/></span>
+          <small>{new Date(day+"T12:00Z").toLocaleDateString("en-US",{weekday:"short",timeZone:"UTC"})}</small></button>)}</div>
+      </section>}
+      </div>
+      <aside className="ws-rail clinical-rail">
         <section aria-labelledby="ws-notes-heading">
           <div className="ws-split">
-            <h2 id="ws-notes-heading">Unsigned notes</h2>
+            <h2 id="ws-notes-heading"><NxIcon name="documentation" size={19}/>Unsigned notes</h2>
             {notes && (
               <button type="button" className="ws-link" onClick={() => onNavigate("notes", "draft")}>
                 {drafts.length} draft{drafts.length === 1 ? "" : "s"}
@@ -229,7 +268,7 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
           </Gated>
         </section>
         <section aria-labelledby="ws-review-heading">
-          <h2 id="ws-review-heading">Next plan reviews</h2>
+          <h2 id="ws-review-heading"><NxIcon name="care-plan" size={19}/>Next plan reviews</h2>
           <Gated
             available={reviews.available}
             empty={reviews.dated.length === 0 && reviews.undated === 0}
@@ -253,9 +292,9 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
         </section>
         <section aria-labelledby="ws-task-heading">
           <div className="ws-split">
-            <h2 id="ws-task-heading">Task queue</h2>
+            <h2 id="ws-task-heading"><NxIcon name="tasks" size={19}/>Task queue</h2>
             {tasks && (
-              <button type="button" className="ws-link" onClick={() => onNavigate("tasks", "open")}>
+              <button type="button" className="ws-link" onClick={() => onNavigate("tasks", "unfinished")}>
                 Open tasks
               </button>
             )}
@@ -268,13 +307,13 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
             {openTasks.slice(0, 6).map((task) => (
               <button
                 type="button"
-                className="ws-row"
+                className={`ws-row queue-item priority-${task.priority}`}
                 key={task.id}
                 onClick={() => onNavigate("tasks", `record:${task.id}`)}
               >
-                <strong>{text(task, "title") || "Untitled task"}</strong>
+                <span className="queue-rank">{label(text(task,"priority"))}</span><strong>{text(task, "title") || "Untitled task"}</strong>
                 <small className="ws-muted">
-                  {label(text(task, "priority") || "normal")} · {text(task, "due_date") || "No due date"}
+                  {label(text(task,"status"))} · {text(task, "due_date") || "No due date"}
                 </small>
               </button>
             ))}
@@ -298,7 +337,7 @@ function FlowControls({
     <div className="ws-flow-controls">
       <label>
         From
-        <input
+        <FieldInput
           type="date"
           value={from}
           onChange={(event) => onChange({ from: event.target.value, to })}
@@ -306,7 +345,7 @@ function FlowControls({
       </label>
       <label>
         Through
-        <input
+        <FieldInput
           type="date"
           value={to}
           onChange={(event) => onChange({ from, to: event.target.value })}

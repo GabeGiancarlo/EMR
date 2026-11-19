@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useEffect, useRef, useState } from "react";
 import { request, date, label, value, type Bootstrap, type Row } from "./api";
 import { Button } from "./ui";
@@ -313,7 +314,7 @@ export default function ClinicalDrafting({
           </label>
           <label>
             Clinical form
-            <select
+            <Choice
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
             >
@@ -330,11 +331,11 @@ export default function ClinicalDrafting({
                     {value(t, "name")}
                   </option>
                 ))}
-            </select>
+            </Choice>
           </label>
           <label>
             Target episode
-            <select
+            <Choice
               value={episode}
               onChange={(e) => {
                 setEpisode(e.target.value);
@@ -350,11 +351,11 @@ export default function ClinicalDrafting({
                     {label(value(e, "status"))}
                   </option>
                 ))}
-            </select>
+            </Choice>
           </label>
           <label>
             Linked session
-            <select
+            <Choice
               value={session}
               onChange={(e) => setSession(e.target.value)}
             >
@@ -370,7 +371,7 @@ export default function ClinicalDrafting({
                     {label(value(s, "kind"))} · {date(s.starts_at, true)}
                   </option>
                 ))}
-            </select>
+            </Choice>
           </label>
         </div>
         <label>

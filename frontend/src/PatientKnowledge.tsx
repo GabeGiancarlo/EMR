@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { date, label, request, value } from "./api";
@@ -332,7 +333,7 @@ export default function PatientKnowledge({
           </div>
           <div className="form-field">
             <label htmlFor={`${fieldPrefix}-kind`}>Source kind</label>
-            <select
+            <Choice
               id={`${fieldPrefix}-kind`}
               value={kind}
               onChange={(event) => {
@@ -347,11 +348,11 @@ export default function PatientKnowledge({
                   {sourceKindLabel(sourceKind)}
                 </option>
               ))}
-            </select>
+            </Choice>
           </div>
           <div className="form-field">
             <label htmlFor={`${fieldPrefix}-episode`}>Episode</label>
-            <select
+            <Choice
               id={`${fieldPrefix}-episode`}
               value={episodeId}
               onChange={(event) => {
@@ -367,11 +368,11 @@ export default function PatientKnowledge({
                   {date(episode.start_date)}
                 </option>
               ))}
-            </select>
+            </Choice>
           </div>
           <div className="form-field">
             <label htmlFor={`${fieldPrefix}-limit`}>Page size</label>
-            <select
+            <Choice
               id={`${fieldPrefix}-limit`}
               value={String(limit)}
               onChange={(event) => {
@@ -385,7 +386,7 @@ export default function PatientKnowledge({
                   {size}
                 </option>
               ))}
-            </select>
+            </Choice>
             <small>At most 50 extracts per page.</small>
           </div>
           <div className="knowledge-filter-actions">

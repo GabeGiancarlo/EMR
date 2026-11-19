@@ -1,3 +1,4 @@
+import { Choice, FieldInput } from "./nexus-ui/FieldControls";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { date, label, value } from "./api";
@@ -94,7 +95,7 @@ function PlanReview({
                     <label htmlFor={`progress-${goal.id}`}>
                       Current progress
                     </label>
-                    <select
+                    <Choice
                       id={`progress-${goal.id}`}
                       value={progress[goal.id].status}
                       onChange={(e) =>
@@ -114,7 +115,7 @@ function PlanReview({
                           </option>
                         ),
                       )}
-                    </select>
+                    </Choice>
                   </div>
                   <div className="form-field full">
                     <label htmlFor={`observation-${goal.id}`}>
@@ -142,7 +143,7 @@ function PlanReview({
           </div>
           <div className="form-field">
             <label htmlFor="review-next">Next review date</label>
-            <input
+            <FieldInput
               id="review-next"
               type="date"
               value={nextDate}

@@ -1,3 +1,4 @@
+import { Choice, FieldInput } from "./nexus-ui/FieldControls";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { authorizedFetch, date, label, value } from "./api";
@@ -22,6 +23,7 @@ import {
   needsAdultCheck,
   parseMatchResponse,
   planSubmission,
+  validateRegistration,
   readApiError,
   registrationDirty,
   reviewRequired,
@@ -91,6 +93,13 @@ export function ClientRegistration({
   const [errorFocus, setErrorFocus] = useState(0);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [step, setStep] = useState<"identity" | "assignment" | "review">("identity");
+  const assignmentHeading = useRef<HTMLLegendElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (step === "assignment") assignmentHeading.current?.focus();
+    if (step === "review") reviewHeading.current?.focus();
+  }, [step]);
   const [discardArmed, setDiscardArmed] = useState(false);
   const checkRef = useRef<CheckState>({ generation: 0, snapshot: null });
   const [checkState, setCheckState] = useState<CheckState>(checkRef.current);
@@ -157,6 +166,7 @@ export function ClientRegistration({
     setCheckState(cleared);
     setValues(next);
     setSaved(next);
+    setStep("identity");
     setReason("");
     setSavedReason("");
     setError("");
@@ -191,6 +201,7 @@ export function ClientRegistration({
 
   function discard() {
     abortRef.current?.abort();
+    setStep("identity");
     const next = saved;
     valuesRef.current = next;
     setValues(next);
@@ -265,6 +276,21 @@ export function ClientRegistration({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
+    if (step === "identity") {
+      const invalid = matchCheckBlock(values);
+      if (invalid) { showError(invalid, true); return; }
+      setError("");
+      setStep("assignment");
+      return;
+    }
+    if (step === "assignment") {
+      const invalid = validateRegistration({ values, initial, facilities: data.facilities, clinicians: clinicianOptions });
+      if (invalid) { showError(invalid, true); return; }
+      setError("");
+      setStep("review");
+      if (mustReview && !currentSnapshot) void startCheck();
+      return;
+    }
     if (checking) {
       showError("Wait for the match check to finish before saving.", true);
       return;
@@ -308,11 +334,14 @@ export function ClientRegistration({
       onSubmit={submit}
     >
       <div className="form-body client-registration">
+        <ol className="registration-steps" aria-label="Registration steps">
+          <li aria-current={step === "identity" ? "step" : undefined}>1 · Identity</li>
+          <li aria-current={step === "assignment" ? "step" : undefined}>2 · Assignment</li>
+          <li aria-current={step === "review" ? "step" : undefined}>3 · Review</li>
+        </ol>
+        {step === "identity" ? <>
         <fieldset disabled={busy}>
           <legend>Identity</legend>
-          <p className="registration-kicker">
-            Confirm the legal name and date of birth before opening a patient record.
-          </p>
           <div className="form-grid">
             {initial?.id && (
               <div className="form-field">
@@ -341,6 +370,32 @@ export function ClientRegistration({
               autoComplete="off"
               onChange={(next) => update("last_name", next)}
             />
+            <div className="form-field">
+              <label htmlFor={fieldId("birth_date")}>
+                Date of birth<span className="required"> *</span>
+              </label>
+              <FieldInput
+                id={fieldId("birth_date")}
+                type="date"
+                required
+                aria-required="true"
+                aria-describedby={fieldId("birth-hint")}
+                value={values.birth_date}
+                max={birthMax}
+                onChange={(event) => update("birth_date", event.target.value)}
+                onInput={(event) => update("birth_date", event.currentTarget.value)}
+              />
+              <small id={fieldId("birth-hint")}>
+                Adults 18+ only.
+                {localToday
+                  ? ` Age is checked as of ${localToday} at the selected facility.`
+                  : " Choose a facility so age uses that location’s date."}
+              </small>
+            </div>
+          </div>
+        </fieldset>
+        <details className="form-disclosure"><summary>Names, pronouns and language</summary>
+          <fieldset disabled={busy} aria-label="Preferences"><div className="form-grid">
             <TextField
               id={fieldId("preferred_name")}
               label="Preferred name"
@@ -362,31 +417,9 @@ export function ClientRegistration({
               hint="Language the person prefers for care conversations."
               onChange={(next) => update("preferred_language", next)}
             />
-            <div className="form-field">
-              <label htmlFor={fieldId("birth_date")}>
-                Date of birth<span className="required"> *</span>
-              </label>
-              <input
-                id={fieldId("birth_date")}
-                type="date"
-                required
-                aria-required="true"
-                aria-describedby={fieldId("birth-hint")}
-                value={values.birth_date}
-                max={birthMax}
-                onChange={(event) => update("birth_date", event.target.value)}
-                onInput={(event) => update("birth_date", event.currentTarget.value)}
-              />
-              <small id={fieldId("birth-hint")}>
-                Adults 18+ only.
-                {localToday
-                  ? ` Age is checked as of ${localToday} at the selected facility.`
-                  : " Choose a facility so age uses that location’s date."}
-              </small>
-            </div>
-          </div>
-        </fieldset>
-
+          </div></fieldset>
+        </details>
+        <details className="form-disclosure"><summary>Contact and address</summary>
         <fieldset disabled={busy}>
           <legend>Contact</legend>
           <div className="form-grid">
@@ -416,7 +449,6 @@ export function ClientRegistration({
             />
           </div>
         </fieldset>
-
         <fieldset disabled={busy}>
           <legend>Address</legend>
           <div className="form-grid">
@@ -460,9 +492,10 @@ export function ClientRegistration({
             />
           </div>
         </fieldset>
-
+        </details>
+        </> : step === "assignment" ? <>
         <fieldset disabled={busy}>
-          <legend>Assignment</legend>
+          <legend tabIndex={-1} ref={assignmentHeading}>Care assignment</legend>
           <p className="registration-kicker">
             {initial?.id
               ? "Editing keeps the current intake stage. Saving sends the loaded version so a newer edit is not overwritten."
@@ -473,7 +506,7 @@ export function ClientRegistration({
               <label htmlFor={fieldId("facility_id")}>
                 Facility<span className="required"> *</span>
               </label>
-              <select
+              <Choice
                 id={fieldId("facility_id")}
                 value={values.facility_id}
                 aria-required="true"
@@ -485,11 +518,11 @@ export function ClientRegistration({
                     {facilityOptionLabel(row)}
                   </option>
                 ))}
-              </select>
+              </Choice>
             </div>
             <div className="form-field">
               <label htmlFor={fieldId("primary_clinician_id")}>Primary clinician</label>
-              <select
+              <Choice
                 id={fieldId("primary_clinician_id")}
                 value={values.primary_clinician_id}
                 onChange={(event) => update("primary_clinician_id", event.target.value)}
@@ -500,7 +533,7 @@ export function ClientRegistration({
                     {staffOptionLabel(row)}
                   </option>
                 ))}
-              </select>
+              </Choice>
             </div>
             {initial?.id ? (
               <div className="form-field">
@@ -515,7 +548,7 @@ export function ClientRegistration({
                 <label htmlFor={fieldId("status")}>
                   Intake stage<span className="required"> *</span>
                 </label>
-                <select
+                <Choice
                   id={fieldId("status")}
                   value={values.status}
                   aria-required="true"
@@ -523,12 +556,19 @@ export function ClientRegistration({
                 >
                   <option value="inquiry">Inquiry</option>
                   <option value="intake">Intake</option>
-                </select>
+                </Choice>
               </div>
             )}
           </div>
         </fieldset>
-
+        </> : <>
+          <h3 tabIndex={-1} ref={reviewHeading}>Review patient details</h3>
+          <dl className="registration-summary">
+            <dt>Legal name</dt><dd>{values.first_name} {values.last_name}</dd>
+            <dt>Date of birth</dt><dd>{values.birth_date}</dd>
+            <dt>Facility</dt><dd>{value(facilityOptions.find(row => row.id === values.facility_id), "name") || "Facility unavailable"}</dd>
+            <dt>Intake stage</dt><dd>{label(values.status)}</dd>
+          </dl>
         {mustReview && (
           <fieldset disabled={busy}>
             <legend>Possible matches</legend>
@@ -609,6 +649,7 @@ export function ClientRegistration({
           </fieldset>
         )}
 
+        </>}
         {error && (
           <div
             className="error-banner"
@@ -642,8 +683,9 @@ export function ClientRegistration({
             {initial?.id ? "Discard changes" : "Reset form"}
           </Button>
         )}
+        {step !== "identity" && <Button variant="secondary" disabled={busy} onClick={() => { setStep(step === "review" ? "assignment" : "identity"); setError(""); }}>Back</Button>}
         <Button type="submit" disabled={busy || checking}>
-          {busy ? "Saving…" : initial?.id ? "Save changes" : "Save client"}
+          {busy ? "Saving…" : step === "identity" ? "Continue to assignment" : step === "assignment" ? "Review details" : initial?.id ? "Save changes" : "Save client"}
           <Icon name="arrow" size={16} />
         </Button>
       </div>
@@ -704,7 +746,7 @@ function TextField({
         {title}
         {required && <span className="required"> *</span>}
       </label>
-      <input
+      <FieldInput
         id={id}
         type={type}
         value={fieldValue}

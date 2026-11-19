@@ -1,3 +1,4 @@
+import { Choice, DateTimeField, FieldInput } from "./nexus-ui/FieldControls";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { clientName, date, label, value } from "./api";
@@ -484,7 +485,7 @@ function FieldBuilder({
               })
             }
           />
-          <select
+          <Choice
             aria-label={`Field ${i + 1} type`}
             value={field.type}
             onChange={(e) => update(i, { type: e.target.value })}
@@ -495,7 +496,7 @@ function FieldBuilder({
             <option value="number">Number</option>
             <option value="checkbox">Checkbox</option>
             <option value="select">Selection</option>
-          </select>
+          </Choice>
           <label className="check-inline">
             <input
               type="checkbox"
@@ -556,7 +557,7 @@ export function RecordForm({
   onSubmit,
   onCancel,
   fields: customFields,
-  submitLabel = "Save record",
+  submitLabel,
 }: {
   resource?: Resource;
   data: Bootstrap;
@@ -569,6 +570,20 @@ export function RecordForm({
   const baseFields = customFields || (resource ? definitions[resource].fields : []);
   const fields = data.program_configuration && (resource === "sessions" || resource === "groups") && !customFields
     ? [...baseFields.slice(0, resource === "sessions" ? 2 : 2), f("program_service_id", "Program service", {type:"select",catalog:"services",required:!initial.id || !!initial.program_service_id,hint:"The selected service sets the allowed duration, documentation template, and billing defaults."}), ...baseFields.slice(2)] : baseFields;
+  const sections = customFields ? undefined : resource === "tasks" ? [
+    { title: "Task details", keys: ["title", "priority", "description"] },
+    { title: "Assignment", keys: ["assignee_id", "due_date", "client_id", "status"] },
+  ] : resource === "sessions" || resource === "groups" ? [
+    { title: resource === "groups" ? "Group and facilitator" : "Patient and care team", keys: ["title", "facility_id", "client_id", "episode_id", "clinician_id"] },
+    { title: "Appointment details", keys: ["program_service_id", "kind", "starts_at", "ends_at", "location", "capacity", "status"] },
+  ] : resource === "consents" ? [
+    { title: "Consent details", keys: ["client_id", "kind", "scope"] },
+    { title: "Effective dates", keys: ["granted_on", "expires_on"] },
+  ] : undefined;
+  const groups = sections?.map(section => ({ title: section.title, fields: section.keys.flatMap(key => fields.filter(field => field.key === key)) })) || [];
+  const remaining = fields.filter(field => !sections?.some(section => section.keys.includes(field.key)));
+  if (remaining.length) groups.push({ title: "", fields: remaining });
+  const action = submitLabel || (initial.id ? "Save changes" : resource === "tasks" ? "Create task" : resource === "sessions" ? "Schedule session" : resource === "groups" ? "Schedule group" : resource ? "Save " + definitions[resource].title.toLowerCase() : "Save changes");
   const scheduling = resource === "sessions" || resource === "groups";
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     initialFormValues(fields, data, initial, resource),
@@ -588,21 +603,39 @@ export function RecordForm({
   const noShowClaim = claimSession?.status === "no_show";
   const selectedService=scheduling ? values.program_service_id===initial.program_service_id ? serviceSnapshot(initial as Row) : data.program_services?.find(row=>row.id===values.program_service_id) : undefined;
   const set = (key: string, v: unknown) => {
-    setValues((prev) => {
-      const next = { ...prev, [key]: v };
-      if (key === "client_id" && v !== prev.client_id) {
-        for (const field of fields) if (["episode_id", "session_id", "policy_id", "authorization_id"].includes(field.key)) next[field.key] = "";
+    const prev = values;
+    const next = { ...prev, [key]: v };
+    if (key === "client_id" && v !== prev.client_id) {
+      for (const field of fields) if (["episode_id", "session_id", "policy_id", "authorization_id"].includes(field.key)) next[field.key] = "";
+    }
+    if (scheduling && ["client_id","episode_id","facility_id"].includes(key) && v !== prev[key]) next.program_service_id="";
+    if (key === "program_service_id") {
+      const service=data.program_services?.find(row=>row.id===v);
+      if (service && resource === "sessions") next.kind=service.session_kind;
+    }
+    if (resource === "claims" && key === "session_id" && v !== prev.session_id) Object.assign(next,claimFormDefaults(data.sessions.find(row=>row.id===v)));
+    if (scheduling && ["facility_id", "episode_id", "client_id"].includes(key)) {
+      const newZone = schedulingZone(data, { ...initial, ...next }, resource);
+      if (zone !== newZone) {
+        const selected: Record<string, string> = {};
+        for (const field of ["starts_at", "ends_at"]) {
+          const wall = String(prev[field] || "");
+          const candidates = wallTimeCandidates(wall, zone);
+          const instant = candidates.length === 1 ? candidates[0] : occurrences[field];
+          if (candidates.length > 1 && !candidates.includes(instant)) {
+            setError("Choose which occurrence of the repeated appointment time to use before changing facilities.");
+            return;
+          }
+          if (!instant || !candidates.includes(instant)) continue;
+          next[field] = facilityWallTime(instant, newZone);
+          selected[field] = instant;
+        }
+        setOccurrences(selected);
       }
-      if (scheduling && ["client_id","episode_id","facility_id"].includes(key) && v !== prev[key]) next.program_service_id="";
-      if (key === "program_service_id") {
-        const service=data.program_services?.find(row=>row.id===v);
-        if (service && resource === "sessions") next.kind=service.session_kind;
-      }
-      if (resource === "claims" && key === "session_id" && v !== prev.session_id) Object.assign(next,claimFormDefaults(data.sessions.find(row=>row.id===v)));
-      return next;
-    });
-    if (["facility_id", "client_id", "episode_id"].includes(key)) setOccurrences({});
-    else if (key === "starts_at" || key === "ends_at") setOccurrences(prev => ({ ...prev, [key]: "" }));
+    } else if (key === "starts_at" || key === "ends_at") {
+      setOccurrences(old => ({ ...old, [key]: "" }));
+    }
+    setValues(next);
   };
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -671,8 +704,10 @@ export function RecordForm({
         {claimSession && Boolean(initial.id) && <p>Appointment attendance: <strong>{label(value(claimSession, "status"))}</strong></p>}
         {noShowClaim ? <p className="scheduling-zone-note">This appointment was a no-show. A service claim cannot be saved for it.</p>
           : claimSession && serviceSnapshot(claimSession) && <p className="scheduling-zone-note">Service code and suggested charge come from the encounter's saved service. Review the amount, units, diagnosis, and payer requirements before saving.</p>}
-        <div className="form-grid">
-          {fields.map((f) => {
+        {groups.map(group => <fieldset className="record-section" key={group.title} disabled={busy}>
+          {group.title && <legend>{group.title}</legend>}
+          <div className="form-grid">
+          {group.fields.map((f) => {
             let choices = f.ref ? data[f.ref] || [] : [];
             if (f.catalog && scheduling) {
               choices=availableServices(data,resource,{...initial,...values});
@@ -738,7 +773,7 @@ export function RecordForm({
                         required={f.required}
                       />
                     ) : f.type === "select" ? (
-                      <select
+                      <Choice
                         id={id}
                         value={String(values[f.key] ?? "")}
                         onChange={(e) => set(f.key, e.target.value)}
@@ -759,16 +794,18 @@ export function RecordForm({
                             {resource === "claims" && f.ref === "sessions" && ` · ${label(value(row, "status"))}`}
                           </option>
                         ))}
-                      </select>
+                      </Choice>
+                    ) : f.type === "datetime-local" ? (
+                      <DateTimeField id={id} label={f.label} required={f.required} value={String(values[f.key] ?? "")} onChange={next => set(f.key, next)} />
                     ) : (
-                      <input
+                      <FieldInput
                         id={id}
                         type={f.type === "money" ? "number" : f.type || "text"}
                         aria-describedby={f.hint ? `${id}-hint` : undefined}
                         value={String(values[f.key] ?? "")}
                         onChange={(e) => set(f.key, e.target.value)}
                         onInput={
-                          f.type === "date" || f.type === "datetime-local"
+                          f.type === "date"
                             ? (e) => set(f.key, e.currentTarget.value)
                             : undefined
                         }
@@ -805,16 +842,17 @@ export function RecordForm({
                 {f.hint && <small id={`${id}-hint`}>{f.hint}</small>}
                 {scheduling && f.type === "datetime-local" && wallTimeCandidates(String(values[f.key] || ""), zone).length > 1 && (
                   <label className="scheduling-occurrence">This time occurs twice. Choose an occurrence:
-                    <select value={occurrences[f.key] || ""} required onChange={event => setOccurrences(prev => ({ ...prev, [f.key]: event.target.value }))}>
+                    <Choice value={occurrences[f.key] || ""} required onChange={event => setOccurrences(prev => ({ ...prev, [f.key]: event.target.value }))}>
                       <option value="">Choose first or second…</option>
                       {wallTimeCandidates(String(values[f.key]), zone).map((instant, i) => <option key={instant} value={instant}>{occurrenceLabel(instant, zone, i)}</option>)}
-                    </select>
+                    </Choice>
                   </label>
                 )}
               </div>
             );
           })}
-        </div>
+          </div>
+        </fieldset>)}
         {error && (
           <div className="error-banner" role="alert">
             {error}
@@ -830,7 +868,7 @@ export function RecordForm({
           Cancel
         </Button>
         <Button type="submit" disabled={busy || noShowClaim}>
-          {busy ? "Saving…" : submitLabel}
+          {busy ? "Saving…" : action}
           <Icon name="arrow" size={16} />
         </Button>
       </div>

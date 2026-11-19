@@ -44,7 +44,7 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
 export function Brand() {
   return (
     <div className="brand">
-      <Logo size={34} />
+      <Logo size={49} />
     </div>
   );
 }
@@ -170,7 +170,6 @@ export function Modal({
     >
       <div className="modal-head">
         <div>
-          <span className="eyebrow">NEXUS WORKSPACE</span>
           <h2 id="modal-title">{title}</h2>
           {description && <p>{description}</p>}
         </div>

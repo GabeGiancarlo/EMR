@@ -1,3 +1,4 @@
+import { Choice, FieldInput } from "./nexus-ui/FieldControls";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { clientName, date, label, value } from "./api";
@@ -67,10 +68,10 @@ export default function NoteComposer({
         {savedService && <div className="scheduling-zone-note"><strong>{value(savedService,"name")}</strong> · {value(savedService,"service_code")}
           {suggestedTemplate?.active===true ? <><p>The encounter's saved service suggests {value(suggestedTemplate,"name")}. Applying it replaces the current form answers; the narrative remains.</p><Button variant="secondary small" onClick={()=>{if(Object.values(answers).some(Boolean) && !window.confirm("Replace the current form answers with this service's suggested template?"))return;setTemplate(suggestedTemplate.id);setAnswers({});}}>Use suggested template</Button></> : savedService.note_template_id ? <p>The suggested template is inactive or unavailable. Select an available template before documenting.</p> : <p>No note template was configured for this service. Choose the appropriate form for the care delivered.</p>}
         </div>}
-        <div className="form-grid">
+        <fieldset className="record-section"><legend>Patient and visit</legend><div className="form-grid">
           <div className="form-field">
             <label htmlFor="note-client">Client *</label>
-            <select
+            <Choice
               id="note-client"
               required
               value={clientId}
@@ -94,12 +95,12 @@ export default function NoteComposer({
                   {clientName(c)}
                 </option>
               ))}
-            </select>
+            </Choice>
             <small>Changing clients clears this draft's text and source excerpts.</small>
           </div>
           <div className="form-field">
             <label htmlFor="note-session">Linked session</label>
-            <select
+            <Choice
               id="note-session"
               value={sessionId}
               onChange={(e) => setSession(e.target.value)}
@@ -112,8 +113,10 @@ export default function NoteComposer({
                     {label(value(s, "kind"))} · {date(s.starts_at, true)}
                   </option>
                 ))}
-            </select>
+            </Choice>
           </div>
+        </div></fieldset>
+        <fieldset className="record-section"><legend>Documentation</legend><div className="form-grid">
           <div className="form-field">
             <label htmlFor="note-title">Title *</label>
             <input
@@ -125,7 +128,7 @@ export default function NoteComposer({
           </div>
           <div className="form-field">
             <label htmlFor="note-template">Use a form</label>
-            <select
+            <Choice
               id="note-template"
               value={templateId}
               onChange={(e) => {
@@ -141,9 +144,9 @@ export default function NoteComposer({
                     {value(t, "name")}
                   </option>
                 ))}
-            </select>
+            </Choice>
           </div>
-        </div>
+        </div></fieldset>
         <details className="transcript-tool">
           <summary>
             <Icon name="notes" size={17} /> Bring in reviewed source text{" "}
@@ -204,7 +207,7 @@ export default function NoteComposer({
             <div className="excerpt-mapping">
               <div className="form-field">
                 <label htmlFor="excerpt-target">Place excerpt in</label>
-                <select
+                <Choice
                   id="excerpt-target"
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
@@ -217,7 +220,7 @@ export default function NoteComposer({
                         {f.label}
                       </option>
                     ))}
-                </select>
+                </Choice>
               </div>
               <Button
                 variant="secondary small"
@@ -283,8 +286,16 @@ export default function NoteComposer({
                   setAnswers({ ...answers, [f.key]: e.target.value })
                 }
               />
+            ) : f.type === "select" || f.type === "checkbox" ? (
+              <Choice id={`answer-${f.key}`} required={f.required} value={answers[f.key] || ""}
+                onChange={e => setAnswers({...answers, [f.key]:e.target.value})}>
+                <option value="">Choose an answer</option>
+                {(f.type === "checkbox" ? ["Yes","No"] : f.options || []).map(option =>
+                  <option key={option} value={option}>{option}</option>
+                )}
+              </Choice>
             ) : (
-              <input
+              <FieldInput
                 id={`answer-${f.key}`}
                 type={["date", "number"].includes(f.type) ? f.type : "text"}
                 required={f.required}

@@ -1,4 +1,4 @@
-import { wallTimeCandidates } from "./schedulingTime.ts";
+import { facilityWallTime, wallTimeCandidates } from "./schedulingTime.ts";
 export const ALL = "all";
 
 export const SERVICE_CLASS: Record<string, string> = {
@@ -73,22 +73,17 @@ export function weekdayIndex(ymd: string): number {
 }
 
 export function weekDates(anchorYmd: string): string[] {
-  const start = addDays(anchorYmd, -weekdayIndex(anchorYmd));
-  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  const weekday = weekdayIndex(anchorYmd);
+  return Array.from({ length: 7 }, (_, index) => addDays(anchorYmd, index - weekday)).filter(validCalendarDay);
 }
 
 export function monthGrid(anchorYmd: string): string[] {
   const { year, month } = parseYmd(anchorYmd);
   const first = formatYmd(year, month, 1);
-  const start = addDays(first, -weekdayIndex(first));
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const last = formatYmd(year, month, lastDay);
-  const dates: string[] = [];
-  for (let cursor = start; cursor <= last || dates.length % 7 !== 0; cursor = addDays(cursor, 1)) {
-    dates.push(cursor);
-    if (dates.length > 42) break;
-  }
-  return dates;
+  const offset = weekdayIndex(first);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return Array.from({ length: Math.ceil((offset + days) / 7) * 7 }, (_, index) =>
+    addDays(first, index - offset)).filter(validCalendarDay);
 }
 
 export function safeTimeZone(timeZone: string | null | undefined): string {
@@ -192,8 +187,11 @@ export function intervalOverlapsDay(
   const start = new Date(startIso).getTime();
   const end = new Date(endIso).getTime();
   if (!(end > start) || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  const noon = Date.parse(ymd + "T12:00:00Z");
+  if (start >= noon + 2 * 86400000 || end <= noon - 2 * 86400000) return false;
   const dayStart = dayBoundary(ymd, timeZone);
-  const dayEnd = dayBoundary(addDays(ymd, 1), timeZone);
+  const next = addDays(ymd, 1);
+  const dayEnd = validCalendarDay(next) ? dayBoundary(next, timeZone) : dayStart + 86400000;
   return dayEnd > dayStart && start < dayEnd && end > dayStart;
 }
 
@@ -260,19 +258,20 @@ export function createInitial(input: {
   hour: number;
   minute?: number;
   durationMinutes?: number;
+  selectedInstant?: string;
   facilityId: string;
   clinicianId: string;
   timeZone: string;
 }): Record<string, unknown> {
   const minute = input.minute ?? 0;
   const duration = input.durationMinutes ?? 60;
-  const start = zonedLocalToUtc(input.day, input.hour, minute, input.timeZone);
+  const start = input.selectedInstant || zonedLocalToUtc(input.day, input.hour, minute, input.timeZone);
   return {
     facility_id: input.facilityId,
     clinician_id: input.clinicianId,
     starts_at: start,
     ends_at: new Date(Date.parse(start) + duration * 60_000).toISOString(),
-    _require_time_occurrence: true,
+    _require_time_occurrence: !input.selectedInstant,
     status: "scheduled",
     kind: input.kind === "group" ? "process" : "individual",
   };
@@ -289,4 +288,40 @@ export function sessionLockReason(signedNote: boolean, advancedClaim: boolean): 
   if (signedNote) return "This visit has a signed note.";
   if (advancedClaim) return "A claim for this visit has moved past draft.";
   return "A protected record linked to this visit prevents scheduling changes.";
+}
+
+/** Lay out the visible slice of each appointment on a 24-hour facility wall clock. */
+export function dayAppointments<T extends Schedulable>(items: T[], day: string, zone: string) {
+  const minutes = (iso: string) => {
+    const wall = facilityWallTime(iso, zone);
+    return +wall.slice(11,13) * 60 + +wall.slice(14,16);
+  };
+  const segments = items.filter(item => intervalOverlapsDay(item.startsAt, item.endsAt, day, zone)).map(event => {
+    const start = facilityYmd(new Date(event.startsAt), zone) < day ? 0 : minutes(event.startsAt);
+    const end = facilityYmd(new Date(event.endsAt), zone) > day ? 1440 : minutes(event.endsAt);
+    // Across a repeated autumn hour the end label may precede the start on a wall-clock grid.
+    const duration = end > start ? end-start : (Date.parse(event.endsAt)-Date.parse(event.startsAt))/60000;
+    return { event, start, end: Math.min(1440, start + duration), lane: 0, lanes: 1 };
+  }).sort((a,b) => a.start-b.start || b.end-a.end || a.event.id.localeCompare(b.event.id));
+  let cluster: typeof segments = [];
+  let ends: number[] = [];
+  function finish() {
+    for (const item of cluster) item.lanes = ends.length;
+    cluster = []; ends = [];
+  }
+  for (const item of segments) {
+    if (ends.length && ends.every(end => end <= item.start)) finish();
+    const free = ends.findIndex(end => end <= item.start);
+    item.lane = free < 0 ? ends.length : free;
+    ends[item.lane] = item.end;
+    cluster.push(item);
+  }
+  finish();
+  return segments;
+}
+
+export function validCalendarDay(s: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const n = Date.parse(s + "T12:00:00Z");
+  return Number.isFinite(n) && new Date(n).toISOString().slice(0,10) === s && +s.slice(0,4) >= 100;
 }
