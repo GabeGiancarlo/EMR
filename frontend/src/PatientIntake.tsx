@@ -6,14 +6,18 @@ import { facilityLocalToday } from "./adult";
 import { Badge, Button, Empty, Icon, Panel } from "./ui";
 import { allowedIntakeTransitions, isOpenIntake, parseIntake, transitionBlockers } from "./intakeTypes";
 import type { IntakeCase, IntakeData, IntakeStatus } from "./intakeTypes";
+import { ResponseEditor } from "./StructuredForms";
+import { mayEditResponse, savedFormResponse } from "./savedFormResponse";
+import type { WorkflowProps } from "./CarePlanning";
 import "./intake.css";
 
-type Props = { clientId: string; data: Bootstrap; onChanged: () => Promise<void>; onOpenForms: (episodeId: string) => void; onOpenConsent: () => void; onEditPatient: () => void; onDirtyChange: (dirty: boolean) => void };
+type Props = { mutate: WorkflowProps["mutate"]; clientId: string; data: Bootstrap; onChanged: () => Promise<void>; onOpenForms: (episodeId: string) => void; onOpenConsent: () => void; onEditPatient: () => void; onDirtyChange: (dirty: boolean) => void };
 type Editor = { kind: "assign"; row:Row } | { kind: "create" } | { kind: "identity" } | { kind: "edit"; row: IntakeCase } | { kind: "transition"; row: IntakeCase; to: IntakeStatus };
 const actions: Record<IntakeStatus, string> = { open: "Open", screening: "Begin screening", ready: "Mark ready", admitted: "Admit to care", declined: "Decline intake", withdrawn: "Record withdrawal" };
 
-export default function PatientIntake({ clientId, data, onChanged, onOpenForms, onOpenConsent, onEditPatient, onDirtyChange }: Props) {
+export default function PatientIntake({ mutate, clientId, data, onChanged, onOpenForms, onOpenConsent, onEditPatient, onDirtyChange }: Props) {
   const [state, setState] = useState<IntakeData | null>(null);
+  const [draft, setDraft] = useState<Row | null>(null);
   const [selected, setSelected] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -24,7 +28,7 @@ export default function PatientIntake({ clientId, data, onChanged, onOpenForms, 
   const [busy, setBusy] = useState(false);
   const [discard, setDiscard] = useState(false);
   const generation = useRef(0);
-  const dirty = editor !== null || busy;
+  const dirty = editor !== null || draft !== null || busy;
   const patient = data.clients.find(c => c.id === clientId);
   const role = value(data.actor, "role");
   const eligibleStaff = data.staff.filter(s => s.active === true && ["admin", "clinical_lead", "clinician", "support"].includes(value(s, "role")) && (s.role !== "clinician" || s.id === patient?.primary_clinician_id));
@@ -90,6 +94,18 @@ export default function PatientIntake({ clientId, data, onChanged, onOpenForms, 
   const selectField = (key: string, title: string, options: { id: string; name: string }[]) => <div className="form-field"><label htmlFor={`intake-${key}`}>{title} *</label><select id={`intake-${key}`} required value={fields[key] || ""} onChange={e => change(key, e.target.value)}><option value="">Select {title.toLowerCase()}</option>{options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>;
   const narrativeField = (key: string, title: string, minLength = 1) => <div className="form-field"><label htmlFor={`intake-${key}`}>{title} *</label><textarea id={`intake-${key}`} required minLength={minLength} maxLength={2000} rows={3} value={fields[key] || ""} onChange={e => change(key, e.target.value)} /></div>;
 
+  function formAction(episodeId: string, templateId: string) {
+    const template = data.templates.find(row => row.id === templateId);
+    const permissions = data.permissions?.form_responses;
+    if (template?.active && permissions?.read && permissions.write) {
+      const response = savedFormResponse(data.form_responses, clientId, episodeId, templateId, data.actor);
+      if (response?.status === "draft" && mayEditResponse(response, data.actor)) {
+        return <Button variant="secondary small" onClick={() => setDraft(response)}>Continue draft</Button>;
+      }
+    }
+    return <Button variant="text small" onClick={() => onOpenForms(episodeId)}>Open intake forms</Button>;
+  }
+
   return <div className="patient-intake">
     <Panel title="Intake & admission" subtitle="Carry the referral, identity review, and required documents into the next course of care." action={<Button variant="secondary small" disabled={dirty || loading} onClick={() => void load()}><Icon name="refresh" size={16} /> Refresh intake</Button>}>
       <div className="intake-summary"><div><span className="eyebrow">PATIENT IDENTITY</span><strong>{value(patient, "mrn")}</strong><span>{confirmed ? "Current identity confirmed by staff" : "Identity review needed"}</span></div><Button variant="secondary small" disabled={dirty || loading || !state} onClick={() => open({ kind: "identity" })}>Record identity check</Button></div>
@@ -120,7 +136,7 @@ export default function PatientIntake({ clientId, data, onChanged, onOpenForms, 
         <dl className="intake-details"><div><dt>Program</dt><dd>{active.program_name ? `${active.program_name} · v${active.program_version} · ` : "Program assignment needed · "}{label(active.level_of_care)} · {facilityName(active.facility_id)}</dd></div><div><dt>Intended start</dt><dd>{date(active.starts_on)}</dd></div><div><dt>Intake owner</dt><dd>{staffName(active.owner_id)}</dd></div><div><dt>Referral received</dt><dd>{date(active.received_on)} · {label(active.referral_type)}</dd></div><div><dt>Referred by</dt><dd>{active.referrer_name || "Not provided"}{active.referrer_contact && <small>{active.referrer_contact}</small>}</dd></div><div><dt>Reason</dt><dd>{active.referral_reason}</dd></div></dl>
         {isOpenIntake(active.status) && <div className="intake-actions"><Button variant="secondary small" disabled={dirty || loading} onClick={() => open({ kind: "edit", row: active })}>Edit referral</Button></div>}
       </Panel><Panel title={isOpenIntake(active.status) ? "Readiness checklist" : "Current record checks"} subtitle={isOpenIntake(active.status) ? "Required organization forms and record checks are evaluated again when you mark ready or admit." : "These reflect the record today. The recorded disposition remains in history."}>
-        <ul className="intake-checklist">{active.checklist.filter(i => i.required || (isOpenIntake(active.status) && i.code.startsWith("admission_"))).map(i => <li key={i.code}><span className={`check-circle ${i.passed ? "complete" : ""}`}><Icon name={i.passed ? "check" : "clock"} size={15} /></span><div><strong>{i.title}</strong><p>{i.detail}</p>{!i.required && <small>Checked at admission</small>}{!i.passed && !dirty && (i.code.startsWith("intake_form:") ? <Button variant="text small" onClick={() => onOpenForms(active.episode_id)}>Open intake forms</Button> : i.code === "identity_confirmation" ? <Button variant="text small" onClick={() => open({ kind: "identity" })}>Review identity</Button> : i.code === "treatment_consent" ? <Button variant="text small" onClick={onOpenConsent}>Open consents</Button> : i.code === "program_assignment" && !active.program_id ? <Button variant="text small" onClick={() => {const row=data.episodes.find(e=>e.id===active.episode_id);if(row)open({kind:"assign",row:{...row,updated_at:active.episode_updated_at || row.updated_at}});}}>Assign program</Button> : i.code === "primary_clinician" || i.code === "adult_eligibility" ? <Button variant="text small" onClick={onEditPatient}>Review patient details</Button> : null)}</div></li>)}</ul>
+        <ul className="intake-checklist">{active.checklist.filter(i => i.required || (isOpenIntake(active.status) && i.code.startsWith("admission_"))).map(i => <li key={i.code}><span className={`check-circle ${i.passed ? "complete" : ""}`}><Icon name={i.passed ? "check" : "clock"} size={15} /></span><div><strong>{i.title}</strong><p>{i.detail}</p>{!i.required && <small>Checked at admission</small>}{!i.passed && !dirty && (i.code.startsWith("intake_form:") ? formAction(active.episode_id, i.code.slice("intake_form:".length)) : i.code === "identity_confirmation" ? <Button variant="text small" onClick={() => open({ kind: "identity" })}>Review identity</Button> : i.code === "treatment_consent" ? <Button variant="text small" onClick={onOpenConsent}>Open consents</Button> : i.code === "program_assignment" && !active.program_id ? <Button variant="text small" onClick={() => {const row=data.episodes.find(e=>e.id===active.episode_id);if(row)open({kind:"assign",row:{...row,updated_at:active.episode_updated_at || row.updated_at}});}}>Assign program</Button> : i.code === "primary_clinician" || i.code === "adult_eligibility" ? <Button variant="text small" onClick={onEditPatient}>Review patient details</Button> : null)}</div></li>)}</ul>
         <div className="intake-info">{active.checklist.filter(i => !i.required && !i.code.startsWith("admission_")).map(i => <p key={i.code}><strong>{i.title}:</strong> {i.detail}</p>)}</div>
       </Panel></div>
       {isOpenIntake(active.status) && <Panel title="Next step"><div className="intake-next"><p>{active.status === "open" ? "Start screening to review identity, consent, and the intake packet." : active.status === "screening" ? "Resolve the required checks before marking the case ready." : role === "support" ? "A clinical team member can review this case and record admission." : "Review the current checks and record admission when the patient is ready."}</p><div className="intake-actions">{allowedIntakeTransitions(active.status, role).map(to => { const blocked = transitionBlockers(active, to); return <div key={to}><Button variant={to === "declined" || to === "withdrawn" ? "text small" : "secondary"} disabled={dirty || loading || !!blocked.length} onClick={() => open({ kind: "transition", row: active, to })}>{active.status === "ready" && to === "screening" ? "Return to screening" : actions[to]}</Button>{blocked.length > 0 && <small className="intake-blocked">{blocked.length} {blocked.length === 1 ? "check needs" : "checks need"} attention</small>}</div>; })}</div></div></Panel>}
@@ -128,5 +144,7 @@ export default function PatientIntake({ clientId, data, onChanged, onOpenForms, 
       <Panel title="Disposition history"><ol className="intake-history"><li><strong>Intake opened</strong><span>{date(active.created_at, true)}</span></li>{active.events.map(e => <li key={e.id}><strong>{e.from_status === e.to_status ? "Owner reassigned" : `${label(e.from_status)} → ${label(e.to_status)}`}</strong><span>{date(e.created_at, true)} · {staffName(e.actor_id)}</span><p>{e.reason}</p></li>)}</ol></Panel>
     </>}
     {!!state?.identity_checks.length && <Panel title="Identity review history"><ol className="intake-history">{state.identity_checks.map(c => <li key={c.id}><strong>{label(c.outcome)} · {label(c.method)} {c.current ? "· Current identity" : "· Historical review"}</strong><span>{date(c.created_at, true)} · {staffName(c.actor_id)}</span><p>{c.reason}</p></li>)}</ol></Panel>}
+    {draft && <ResponseEditor data={data} clientId={clientId} record={draft} mutate={mutate}
+      onClose={() => setDraft(null)} />}
   </div>;
 }

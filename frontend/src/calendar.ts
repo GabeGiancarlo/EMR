@@ -281,3 +281,12 @@ export function createInitial(input: {
 export function serviceClass(type: string, source: "session" | "group"): string {
   return `cal-chip ${source === "group" ? "is-group" : "is-session"} ${SERVICE_CLASS[type] ?? "svc-other"}`;
 }
+
+
+/** Explain only source records that the operator is allowed to see in the workspace. */
+export function sessionLockReason(signedNote: boolean, advancedClaim: boolean): string {
+  if (signedNote && advancedClaim) return "This visit has a signed note and a claim past draft.";
+  if (signedNote) return "This visit has a signed note.";
+  if (advancedClaim) return "A claim for this visit has moved past draft.";
+  return "A protected record linked to this visit prevents scheduling changes.";
+}

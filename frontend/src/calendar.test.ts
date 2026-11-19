@@ -13,6 +13,7 @@ import {
   monthGrid,
   pad2,
   selectCalendarItems,
+  sessionLockReason,
   visibleParticipantNames,
   weekDates,
   weekdayIndex,
@@ -235,4 +236,11 @@ test("a group suppresses its child only inside the displayed calendar window", (
   }
   assert.deepEqual(selectCalendarItems([child], all, {days:["2026-06-15"], timeZone:"UTC"}), [child]);
   assert.deepEqual(select(["2026-06-16"]), []);
+});
+
+test("a scheduling lock names only the evidence visible to the operator", () => {
+  assert.match(sessionLockReason(true, true), /signed note and a claim past draft/);
+  assert.doesNotMatch(sessionLockReason(true, false), /claim/);
+  assert.doesNotMatch(sessionLockReason(false, true), /note/);
+  assert.doesNotMatch(sessionLockReason(false, false), /claim|note/);
 });

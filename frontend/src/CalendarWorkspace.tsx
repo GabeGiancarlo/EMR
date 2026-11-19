@@ -18,6 +18,7 @@ import {
   safeTimeZone,
   selectCalendarItems,
   serviceClass,
+  sessionLockReason,
   visibleParticipantNames,
   weekDates,
 } from "./calendar.ts";
@@ -42,6 +43,7 @@ type Mode = "day" | "week" | "month" | "agenda";
 type RichEvent = Schedulable & {
   key: string;
   row: Row;
+  lockReason?: string;
   title: string;
   location: string;
   participantNames: string[];
@@ -68,6 +70,22 @@ function sliceText(startIso: string, endIso: string, day: string, timeZone: stri
   if (startDay === day) return `${startLabel} onward`;
   if (lastDay === day) return `Until ${endLabel}`;
   return "All day";
+}
+
+function EventChip({ event, day, timeZone, onOpen, compact }: {
+  event: RichEvent; day: string; timeZone: string; onOpen: (event: RichEvent) => void; compact?: boolean;
+}) {
+  const when = sliceText(event.startsAt, event.endsAt, day, timeZone);
+  const kind = event.source === "group" ? "Group" : label(event.type);
+  const lock = event.lockReason ? ` Locked. ${event.lockReason}` : "";
+  return <button type="button" className={serviceClass(event.type, event.source)}
+    aria-label={`${kind}, ${event.title}, ${when}.${lock} Open details`}
+    title={event.lockReason} onClick={() => onOpen(event)}>
+    {!compact && <span className="cal-chip-kicker">{kind}</span>}
+    <strong>{event.title}</strong>
+    <small>{when}</small>
+    {event.lockReason && <small className="cal-lock-label">Locked</small>}
+  </button>;
 }
 
 export default function CalendarWorkspace({
@@ -159,6 +177,8 @@ export default function CalendarWorkspace({
       const client = clients.get(String(row.client_id ?? ""));
       return client ? value(client, "facility_id") : "";
     };
+    const signedNotes = new Set(data.notes.filter(note => note.status === "signed").map(note => note.session_id));
+    const advancedClaims = new Set(data.claims.filter(claim => claim.status !== "draft").map(claim => claim.session_id));
     const sessions: RichEvent[] = (data.sessions ?? []).flatMap((row) => {
       const startsAt = value(row, "starts_at");
       const endsAt = endOf(row);
@@ -168,6 +188,8 @@ export default function CalendarWorkspace({
       return [{
         id: row.id,
         key: `session:${row.id}`,
+        lockReason: row.edit_locked === true
+          ? sessionLockReason(signedNotes.has(row.id), advancedClaims.has(row.id)) : undefined,
         source: "session" as const,
         facilityId: sessionFacility(row),
         clinicianId: value(row, "clinician_id"),
@@ -308,23 +330,6 @@ export default function CalendarWorkspace({
       return !taskFacility || taskFacility === facilityId;
     })
     .sort((a, b) => value(a, "due_date").localeCompare(value(b, "due_date")));
-
-  function Chip({ event, day }: { event: RichEvent; day: string }) {
-    const when = sliceText(event.startsAt, event.endsAt, day, timeZone);
-    const kicker = event.source === "group" ? "Group" : label(event.type);
-    return (
-      <button
-        type="button"
-        className={serviceClass(event.type, event.source)}
-        aria-label={`${kicker}, ${event.title}, ${when}. Open details`}
-        onClick={() => open(event)}
-      >
-        <span className="cal-chip-kicker">{kicker}</span>
-        <strong>{event.title}</strong>
-        <small>{when}</small>
-      </button>
-    );
-  }
 
   function dayEvents(day: string) {
     return ranged.filter((event) => intervalOverlapsDay(event.startsAt, event.endsAt, day, timeZone));
@@ -470,7 +475,7 @@ export default function CalendarWorkspace({
                 return (
                   <article key={day}>
                     <h4>{formatYmdLong(day)}</h4>
-                    {items.length ? items.map((event) => <Chip key={event.key} event={event} day={day} />) : <p className="cal-empty">Open</p>}
+                    {items.length ? items.map((event) => <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={open} />) : <p className="cal-empty">Open</p>}
                   </article>
                 );
               })}
@@ -499,7 +504,7 @@ export default function CalendarWorkspace({
                         {Number(day.slice(8))}
                         <span className="sr-only">{formatYmdLong(day)}</span>
                       </button>
-                      {items.slice(0, extra ? 2 : 3).map((event) => <Chip key={event.key} event={event} day={day} />)}
+                      {items.slice(0, extra ? 2 : 3).map((event) => <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={open} />)}
                       {extra > 0 && (
                         <button
                           type="button"
@@ -542,7 +547,7 @@ export default function CalendarWorkspace({
                   <div key={`${day}-span`} className="cal-allday">
                     {dayEvents(day)
                       .filter((event) => crossesMidnight(event.startsAt, event.endsAt, timeZone) || facilityYmd(new Date(event.startsAt), timeZone) !== day)
-                      .map((event) => <Chip key={event.key} event={event} day={day} />)}
+                      .map((event) => <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={open} />)}
                   </div>
                 ))}
                 {HOURS.map((hour) => (
@@ -609,9 +614,13 @@ export default function CalendarWorkspace({
                 </>
               )}
             </dl>
+            {openEvent.lockReason && <div className="cal-lock-notice">
+              <strong>Appointment locked</strong>
+              <p>{openEvent.lockReason}</p>
+            </div>}
             <div className="cal-dialog-actions">
               {["admin","clinical_lead","clinician"].includes(value(data.actor,"role")) && (value(data.actor,"role")!=="clinician"||openEvent.clinicianId===data.actor?.id) && <Button onClick={()=>{onTelehealth(openEvent.source==="group"||parentGroup?"groups":"sessions",parentGroup||openEvent.row);setOpenKey(null);}}>{openEvent.status==="scheduled"?"Open telehealth":"Visit records"}</Button>}
-              {openEvent.source === "session" && !parentGroup && canWrite && data.permissions?.sessions?.write && (
+              {openEvent.source === "session" && !openEvent.row.group_id && !parentGroup && !openEvent.lockReason && canWrite && data.permissions?.sessions?.write && (
                 <Button onClick={() => { onEditSession(openEvent.row); setOpenKey(null); }}>Edit session</Button>
               )}
               {openEvent.source === "session" && openEvent.participantRows[0] && (
@@ -677,16 +686,7 @@ function HourRow({
               </button>
             )}
             {items.map((event) => (
-              <button
-                type="button"
-                key={event.key}
-                className={serviceClass(event.type, event.source)}
-                aria-label={`${event.source === "group" ? "Group" : label(event.type)}, ${event.title}, ${sliceText(event.startsAt, event.endsAt, day, timeZone)}. Open details`}
-                onClick={() => onOpen(event)}
-              >
-                <strong>{event.title}</strong>
-                <small>{sliceText(event.startsAt, event.endsAt, day, timeZone)}</small>
-              </button>
+              <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={onOpen} compact />
             ))}
           </div>
         );

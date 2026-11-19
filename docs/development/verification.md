@@ -355,3 +355,13 @@ The first local run encountered existing worker locks on the shared disposable d
 Verified the v0.4 brand assets on macOS arm64 on the feature branch based on `dcfc535`. The running React app used the final master. Its full and small drawings and all five public browser and home-screen icons matched their sources. All nine raster exports had the expected dimensions. A half-degree radial comparison with the approved B proof found a single opening at the top in each master. The full mark retains three rings and the small mark retains one.
 
 Rendered the 29-page guide and the final two-sided business card. The card PDF has a 3.5 × 2 inch trim and 0.125 inch bleed on all sides. Its phone and demo links had the requested destinations. The QR code decoded to the demo address from the rendered back at both 300 and 150 dpi. All 136 frontend tests, TypeScript and the production build passed. Print verification used rendered pages.
+
+### November 19, 2026 — continue an intake draft and explain calendar locks
+
+Verified on macOS 26.6.2 arm64 on `feature/intake-draft-calendar-locks` based on `1ef7b44`. The local app on port 5194 used a dedicated synthetic schema in `nexus_test`.
+
+Opened Taylor's screening checklist, clicked **Continue draft**, edited the saved answer, saved, and reopened it from the checklist. The database-backed API returned one response with the original ID, template snapshot, episode, manual source type, and supporting text. The revised answer persisted in draft. Selection tests cover other patients, episodes, templates, authors, newer reviewed responses, and signed records.
+
+In Week view Alex's protected November 17 card showed **Locked**. Opening it explained that the visit had a signed note and a claim past draft and provided the chart and visit-record actions. Alex's November 18 scheduled visit still offered **Edit session**. Bootstrap checks with support, clinician, and billing operators confirmed each received the lock with their existing note and claim permissions. The PostgreSQL regression checked a protected session and an editable one with a draft claim as support, then confirmed the API still rejected a protected edit.
+
+All 139 frontend tests, TypeScript, the Vite build, Rust formatting, Clippy with warnings denied, the locked API build, and all 162 default Rust tests passed. The opt-in PostgreSQL suites for admissions, form requirements, and persistent workflows each passed. The browser walkthrough covered the local operator workspace and individual appointment cards.

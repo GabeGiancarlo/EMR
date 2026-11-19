@@ -981,7 +981,7 @@ export default function App() {
             { id: "consents", label: "Consents", count: consents.length },
           ]}
         />
-        {chartTab === "intake" && ["admin", "clinical_lead", "clinician", "support"].includes(role) && <PatientIntake key={`${c.id}:${data!.actor!.id}`} clientId={c.id} data={data!} onChanged={async () => { if (!await reload()) throw Error("Workspace refresh failed."); }} onDirtyChange={setIntakeDirty}
+        {chartTab === "intake" && ["admin", "clinical_lead", "clinician", "support"].includes(role) && <PatientIntake mutate={mutate} key={`${c.id}:${data!.actor!.id}`} clientId={c.id} data={data!} onChanged={async () => { if (!await reload()) throw Error("Workspace refresh failed."); }} onDirtyChange={setIntakeDirty}
           onOpenForms={episodeId => { if (!canRead("form_responses", clinical)) { setError("The clinical team must review and sign this patient's intake forms."); return; } if (canLeaveDraftReview()) { setFormEpisodeId(episodeId); setChartTab("forms"); } }}
           onOpenConsent={() => { if (canLeaveDraftReview()) { setChartTab("consents"); if (canConsents) create("consents", { client_id: c.id, kind: "treatment" }); } }}
           onEditPatient={() => { if (canLeaveDraftReview()) edit("clients", c); }}

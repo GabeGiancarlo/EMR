@@ -13,16 +13,17 @@ import { Badge, Button, Empty, Icon, Modal, Panel } from "./ui";
 import type { WorkflowProps } from "./CarePlanning";
 import FormRequirements from "./FormRequirements";
 import SpeechImport from "./SpeechImport";
+import { mayEditResponse } from "./savedFormResponse";
 type StructuredField = FormField & { options?: string[] };
 type Answers = Record<string, string | number | boolean | null>;
 type Provenance = Record<string, { excerpt: string }>;
 
-function ResponseEditor({
+export function ResponseEditor({
   data,
   clientId,
   record,
   onClose,
-  onSave,
+  mutate,
   templateId,
   episodeId,
   templateName,
@@ -31,7 +32,7 @@ function ResponseEditor({
   clientId?: string;
   record?: Row;
   onClose: () => void;
-  onSave: (body: unknown) => Promise<void>;
+  mutate: WorkflowProps["mutate"];
   templateId?: string;
   episodeId?: string | null;
   templateName?: string;
@@ -68,7 +69,7 @@ function ResponseEditor({
     setBusy(true);
     setError("");
     try {
-      await onSave({
+      const body = {
         ...(!record
           ? {
               client_id: client,
@@ -77,12 +78,17 @@ function ResponseEditor({
               template_id: template,
             }
           : {}),
-        transcript_excerpt_id: excerptId || null,
+        ...(!record || source !== value(record, "source_excerpt") || excerptId !== value(record, "transcript_excerpt_id")
+          ? { transcript_excerpt_id: excerptId || null, source_type: source.trim() ? "transcript" : "manual", source_excerpt: source }
+          : {}),
         answers,
-        source_type: source.trim() ? "transcript" : "manual",
-        source_excerpt: source,
         field_provenance: provenance,
-      });
+      };
+      if (record) {
+        await mutate(`/api/form_responses/${record.id}`, withOriginalUpdatedAt(record, body), "PATCH");
+      } else {
+        await mutate("/api/form_responses", body, "POST");
+      }
       onClose();
     } catch (err) {
       setError(
@@ -500,6 +506,8 @@ export default function StructuredForms({
           data={data}
           canStart={canWrite}
           onAuthorRules={onAuthorRules}
+          onContinue={row => { setPreset(null); setEditor(row); }}
+          onView={setView}
           onStart={(templateId, episodeId, templateName) =>
             openNew(
               templateId ? { templateId, episodeId, templateName } : undefined,
@@ -559,7 +567,7 @@ export default function StructuredForms({
                         <Button variant="text small" onClick={() => setView(r)}>
                           View
                         </Button>
-                        {canWrite && r.status !== "signed" && (
+                        {canWrite && mayEditResponse(r, data.actor) && (
                           <Button
                             variant="text small"
                             onClick={() => {
@@ -694,13 +702,7 @@ export default function StructuredForms({
             setPreset(null);
             setEditor(undefined);
           }}
-          onSave={(body) =>
-            mutate(
-              `/api/form_responses${editor ? `/${editor.id}` : ""}`,
-              editor ? withOriginalUpdatedAt(editor, body) : body,
-              editor ? "PATCH" : "POST",
-            )
-          }
+          mutate={mutate}
         />
       )}
       {view && (
