@@ -21,7 +21,7 @@ ring = "0.17"
 # rustls (ring) is needed to fetch the identity provider's signing keys over HTTPS.
 reqwest = { workspace = true, features = ["rustls-tls"] }
 # Hosted sign-in: verifies identity-provider JWTs. No PEM parsing; keys arrive as JWKs.
-jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "12", default-features = false, features = ["aws_lc_rs"] }
 
 # Date/time
 time = { version = "0.3.55", features = ["formatting", "parsing", "macros", "serde-human-readable", "large-dates"] }
