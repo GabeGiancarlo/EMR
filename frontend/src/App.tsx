@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import PatientKnowledge from "./PatientKnowledge";
 import { ClientRegistration } from "./ClientRegistration";
 import PatientIntake from "./PatientIntake";
@@ -11,6 +12,7 @@ import CalendarWorkspace from "./CalendarWorkspace";
 import StaffAvailability from "./StaffAvailability";
 import TelehealthManager from "./TelehealthManager";
 import { schedulingZone, facilityWallTime } from "./schedulingTime";
+import { Avatar } from "./nexus-ui/Avatar";
 import RoleWorkspace from "./RoleWorkspace";
 import { allowedWorkspaceModes, defaultWorkspaceMode, claimMatchesFilter, recordedCharges } from "./workspace";
 import type { WorkspaceMode } from "./workspace";
@@ -186,17 +188,18 @@ function Table({
 function Person({
   name,
   sub,
-  small = false,
+  small = false, patient,
 }: {
+  patient?: Row;
   name: string;
   sub?: string;
   small?: boolean;
 }) {
   return (
     <div className="person">
-      <span className={`avatar ${small ? "small" : ""}`}>
+      {patient ? <Avatar name={name} id={patient.id} patient={patient}/> : <span className={`avatar ${small ? "small" : ""}`}>
         {initials(name) || "N"}
-      </span>
+      </span>}
       <div>
         <strong>{name}</strong>
         {sub && <small>{sub}</small>}
@@ -266,6 +269,7 @@ export default function App() {
   const [recordFocus, setRecordFocus] = useState<SearchResult | null>(null);
   const [queueScope, setQueueScope] = useState<{ ids: string[]; label: string } | null>(null);
   const [workspaceChoice, setWorkspaceChoice] = useState<{ actorId: string; mode: WorkspaceMode } | null>(null);
+  const [calendarDate, setCalendarDate] = useState("");
   const [calendarToday, setCalendarToday] = useState(false);
   const [telehealth, setTelehealth] = useState<{kind:"sessions"|"groups";row:Row}|null>(null);
   const [filter, setFilter] = useState("all");
@@ -370,7 +374,7 @@ export default function App() {
     setView(next);
     setRecordFocus(null);
     setQueueScope(null);
-    setCalendarToday(false);
+    setCalendarToday(false); setCalendarDate("");
     setScheduleFocusId("");
     if (next === "settings" && !data?.permissions?.templates?.read) setSettingsTab("facilities");
     if (next === "billing" && !data?.permissions?.[billingTab as Resource]?.read)
@@ -510,7 +514,7 @@ export default function App() {
   function openWorkspaceQueue(next: View, target = "all") {
     if (!navigate(next)) return;
     if (target.startsWith("record:")) {
-      const resource = next === "notes" ? "notes" : "tasks";
+      const resource = next === "notes" ? "notes" : next === "schedule" ? "sessions" : "tasks";
       const row = data?.[resource].find(row => row.id === target.slice(7));
       if (row) openSearchResult({key:`${resource}:${row.id}`,resource,row,title:value(row,"title"),detail:"",view:next});
     } else if (next === "billing") {
@@ -518,7 +522,7 @@ export default function App() {
       else { setBillingTab("claims"); setFilter(target); }
     } else if (next === "settings" && target === "programs") { setSettingsTab("programs");
     } else if (next === "schedule") {
-      setScheduleTab(target === "pending" ? "pending" : "agenda"); setCalendarToday(target === "today");
+      setScheduleTab(target === "pending" ? "pending" : "agenda"); setCalendarDate(target.startsWith("date:") ? target.slice(5) : ""); setCalendarToday(target === "today" || target.startsWith("date:"));
     } else if (target.startsWith("census:")) {
       const [, facilityId, level] = target.split(":");
       const episodes = data!.episodes.filter(row => row.status === "active" && row.facility_id === facilityId && row.level_of_care === level);
@@ -543,7 +547,7 @@ export default function App() {
     );
   const clientCell = (r: Row) => (
     <Person
-      name={clientName(client(r.client_id))}
+      patient={client(r.client_id)} name={clientName(client(r.client_id))}
       sub={value(r, "service_code") || undefined}
       small
     />
@@ -817,7 +821,7 @@ export default function App() {
       <Panel>
         {toolbar(
           "Search by name, MRN, or email…",
-          <select
+          <Choice
             aria-label="Filter client status"
             className="compact-select"
             value={filter}
@@ -829,7 +833,7 @@ export default function App() {
                 {label(s)}
               </option>
             ))}
-          </select>,
+          </Choice>,
         )}
         <Table
           rows={rows}
@@ -843,7 +847,7 @@ export default function App() {
                   aria-label={`Open chart for ${clientName(c)}`}
                 >
                   <Person
-                    name={clientName(c)}
+                    patient={c} name={clientName(c)}
                     sub={
                       `${value(c, "mrn") || "MRN unavailable"}${value(c, "preferred_name") ? ` · Goes by ${value(c, "preferred_name")}` : ""}`
                     }
@@ -911,7 +915,7 @@ export default function App() {
         </button>
         <div className="chart-banner">
           <Person
-            name={clientName(c)}
+            patient={c} name={clientName(c)}
             sub={
               value(c, "preferred_name")
                 ? `Preferred name: ${value(c, "preferred_name")}`
@@ -1489,7 +1493,8 @@ export default function App() {
             data={data!}
             canWrite={canSessions || can("groups", false)}
             focusSessionId={scheduleFocusId}
-            startView={calendarToday ? "day" : "month"}
+            initialDay={calendarDate || undefined}
+            startView={calendarToday ? "day" : "week"}
             onCreateSession={initial => create("sessions", initial)}
             onCreateGroup={initial => create("groups", initial)}
             onEditSession={row => edit("sessions", row)}
@@ -1571,7 +1576,7 @@ export default function App() {
         <Panel>
           {toolbar(
             "Search documentation…",
-            <select
+            <Choice
               className="compact-select"
               aria-label="Filter notes"
               value={filter}
@@ -1580,7 +1585,7 @@ export default function App() {
               <option value="all">All notes</option>
               <option value="draft">Drafts</option>
               <option value="signed">Signed</option>
-            </select>,
+            </Choice>,
           )}
           <Table
             rows={matching(allNotes).filter(
@@ -1874,7 +1879,7 @@ export default function App() {
           ].filter(tab => canRead(tab.id as Resource, false))}
         />
         <Panel>
-          {toolbar(`Search ${billingTab}…`, billingTab === "claims" ? <select className="compact-select" aria-label="Filter claims" value={filter} onChange={event=>setFilter(event.target.value)}>{["all","draft","ready","submitted","denied","paid","voided","balance","attention"].map(status=><option key={status} value={status}>{status === "all" ? "All claims" : status === "balance" ? "Current balances" : status === "attention" ? "Needs attention" : label(status)}</option>)}</select> : undefined)}
+          {toolbar(`Search ${billingTab}…`, billingTab === "claims" ? <Choice className="compact-select" aria-label="Filter claims" value={filter} onChange={event=>setFilter(event.target.value)}>{["all","draft","ready","submitted","denied","paid","voided","balance","attention"].map(status=><option key={status} value={status}>{status === "all" ? "All claims" : status === "balance" ? "Current balances" : status === "attention" ? "Needs attention" : label(status)}</option>)}</Choice> : undefined)}
           <Table
             rows={rows}
             columns={cols[billingTab]}
@@ -1956,7 +1961,7 @@ export default function App() {
         <Panel>
           {toolbar(
             "Search tasks…",
-            <select
+            <Choice
               aria-label="Filter tasks"
               className="compact-select"
               value={filter}
@@ -1967,7 +1972,7 @@ export default function App() {
               <option value="unfinished">Open & in progress</option>
               <option value="in_progress">In progress</option>
               <option value="done">Completed</option>
-            </select>,
+            </Choice>,
           )}
           <Table
             rows={matching(data!.tasks).filter(
@@ -2422,7 +2427,7 @@ export default function App() {
             <span>Recovery workspace</span>
           </div>
         </div>
-        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<select aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode) || !canLeaveDraftReview()) return; writeStored("local",`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</select></label>}
+        {workspaceModes.length > 1 && <label className="workspace-mode-select">Workspace<Choice aria-label="Workspace" value={workspaceMode} onChange={event => { const mode = event.target.value as WorkspaceMode; if (!workspaceModes.includes(mode) || !canLeaveDraftReview()) return; writeStored("local",`nexus.workspace.${data.actor!.id}`,mode); setWorkspaceChoice({actorId:data.actor!.id,mode}); navigate("overview"); }}>{workspaceModes.map(mode=><option key={mode} value={mode}>{mode === "clinical" ? "Clinical" : label(mode)}</option>)}</Choice></label>}
         <nav aria-label="Primary navigation">
           {nav.filter(item => visibleViews(data).includes(item.id)).sort((a,b)=>navOrder.indexOf(a.id)-navOrder.indexOf(b.id)).map((item) => (
             <div key={item.id}>

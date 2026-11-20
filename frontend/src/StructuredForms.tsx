@@ -1,3 +1,4 @@
+import { Choice, FieldInput } from "./nexus-ui/FieldControls";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
@@ -64,6 +65,24 @@ export function ResponseEditor({
   const snapshot = (record?.template_snapshot ||
     data.templates.find((t) => t.id === template)) as Row | undefined;
   const fields = (snapshot?.fields || []) as StructuredField[];
+  const [section, setSection] = useState(0);
+  const pageSize = 4;
+  const pages = Math.ceil(fields.length / pageSize);
+  const page = Math.max(0, Math.min(section, pages - 1));
+  const shownFields = fields.slice(page * pageSize, (page + 1) * pageSize);
+  const requiredFields = fields.filter(field => field.required);
+  const completed = requiredFields.filter(field => {
+    const answer = answers[field.key];
+    return answer !== null && answer !== undefined && (typeof answer !== "string" || !!answer.trim());
+  }).length;
+
+  const answersPanel = useRef<HTMLDivElement>(null);
+  function changePage(next: number) {
+    const invalid = answersPanel.current?.querySelector<HTMLInputElement>("input:invalid");
+    if (invalid) { invalid.reportValidity(); return; }
+    setSection(next);
+    requestAnimationFrame(() => document.getElementById("response-field-" + fields[next * pageSize]?.key)?.focus());
+  }
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -113,7 +132,7 @@ export function ResponseEditor({
             <div className="form-grid">
               <div className="form-field">
                 <label htmlFor="response-client">Client *</label>
-                <select
+                <Choice
                   id="response-client"
                   required
                   value={client}
@@ -136,15 +155,16 @@ export function ResponseEditor({
                       {clientName(c)}
                     </option>
                   ))}
-                </select>
+                </Choice>
               </div>
               <div className="form-field">
                 <label htmlFor="response-template">Form template *</label>
-                <select
+                <Choice
                   id="response-template"
                   required
                   value={template}
                   onChange={(e) => {
+                    setSection(0);
                     setTemplate(e.target.value);
                     setAnswers({});
                     setProvenance({});
@@ -167,11 +187,11 @@ export function ResponseEditor({
                         {templateName || "Selected form"}
                       </option>
                     )}
-                </select>
+                </Choice>
               </div>
               <div className="form-field">
                 <label htmlFor="response-episode">Care episode</label>
-                <select
+                <Choice
                   id="response-episode"
                   disabled={!!excerptId}
                   value={episode}
@@ -186,11 +206,11 @@ export function ResponseEditor({
                         {date(ep.start_date)}
                       </option>
                     ))}
-                </select>
+                </Choice>
               </div>
               <div className="form-field">
                 <label htmlFor="response-session">Session</label>
-                <select
+                <Choice
                   id="response-session"
                   disabled={!!excerptId}
                   value={session}
@@ -204,7 +224,7 @@ export function ResponseEditor({
                         {label(value(s, "kind"))} · {date(s.starts_at, true)}
                       </option>
                     ))}
-                </select>
+                </Choice>
               </div>
             </div>
           ) : (
@@ -244,7 +264,7 @@ export function ResponseEditor({
                   </p>
                   <div className="form-field">
                     <label htmlFor="response-excerpt">Reviewed patient excerpt</label>
-                    <select id="response-excerpt" value={excerptId} onChange={e=>{
+                    <Choice id="response-excerpt" value={excerptId} onChange={e=>{
                       const next=excerpts.find(x=>x.id===e.target.value);sourceVersion.current++;
                       setExcerptId(e.target.value);setSource(next?value(next,"text"):"");setAnswers({});setProvenance({});setSelected("");setTarget("");
                       if(next){setEpisode(value(next,"episode_id"));setSession(value(next,"session_id"));}
@@ -252,7 +272,7 @@ export function ResponseEditor({
                       {!record?.transcript_excerpt_id&&<option value="">Manual source or uploaded speech</option>}
                       {excerptId&&!excerpts.some(x=>x.id===excerptId)&&<option value={excerptId}>Previously linked excerpt · check current version</option>}
                       {excerpts.filter(x=>!record||(x.episode_id===record.episode_id&&x.session_id===record.session_id)).map(x=><option key={x.id} value={x.id}>{date(value(x,"created_at"))} · {value(x,"text").slice(0,90)}</option>)}
-                    </select>
+                    </Choice>
                     <small>Choose an excerpt to preserve its reviewed transcript version and visit. Changing it clears answers and evidence links for a fresh review.</small>
                     {excerptError&&<p role="alert">{excerptError}</p>}
                   </div>
@@ -318,7 +338,7 @@ export function ResponseEditor({
                   <div className="excerpt-mapping">
                     <div className="form-field">
                       <label htmlFor="response-target">Destination field</label>
-                      <select
+                      <Choice
                         id="response-target"
                         value={target}
                         onChange={(e) => setTarget(e.target.value)}
@@ -331,7 +351,7 @@ export function ResponseEditor({
                               {f.label}
                             </option>
                           ))}
-                      </select>
+                      </Choice>
                     </div>
                     <Button
                       variant="secondary small"
@@ -350,8 +370,13 @@ export function ResponseEditor({
                   </div>
                 </div>
               </details>
-              <div className="structured-answers">
-                {fields.map((f) => (
+              <div className="answer-progress">
+                <strong>Form answers</strong>
+                {requiredFields.length > 0 && <span>{completed} of {requiredFields.length} required answered</span>}
+                {requiredFields.length > 0 && <progress value={completed} max={requiredFields.length} aria-label="Required answers completed" />}
+              </div>
+              <div ref={answersPanel} className="structured-answers">
+                {shownFields.map((f) => (
                   <div className="form-field" key={f.key}>
                     <label htmlFor={`response-field-${f.key}`}>
                       {f.label}
@@ -370,7 +395,7 @@ export function ResponseEditor({
                         Confirmed
                       </label>
                     ) : f.type === "select" ? (
-                      <select
+                      <Choice
                         id={`response-field-${f.key}`}
                         value={String(answers[f.key] ?? "")}
                         onChange={(e) => update(f.key, e.target.value || null)}
@@ -381,7 +406,7 @@ export function ResponseEditor({
                             {o}
                           </option>
                         ))}
-                      </select>
+                      </Choice>
                     ) : f.type === "textarea" ? (
                       <textarea
                         id={`response-field-${f.key}`}
@@ -390,7 +415,7 @@ export function ResponseEditor({
                         onChange={(e) => update(f.key, e.target.value)}
                       />
                     ) : (
-                      <input
+                      <FieldInput
                         id={`response-field-${f.key}`}
                         type={
                           ["date", "number"].includes(f.type) ? f.type : "text"
@@ -438,6 +463,11 @@ export function ResponseEditor({
                   </div>
                 ))}
               </div>
+              {pages > 1 && <div className="form-page-actions">
+                <Button variant="secondary small" disabled={page===0} onClick={()=>changePage(page-1)}>Previous</Button>
+                <span aria-live="polite">Questions {page * pageSize + 1}–{Math.min(fields.length, (page + 1) * pageSize)} of {fields.length}</span>
+                <Button variant="secondary small" disabled={page===pages-1} onClick={()=>changePage(page+1)}>Next</Button>
+              </div>}
             </>
           )}
           {error && (
@@ -496,8 +526,8 @@ export default function StructuredForms({
     value(r.template_snapshot as Row, "name") || "Form response";
   return (
     <>
-      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><select id="forms-episode-context" value={contextEpisodeId} onChange={event=>{setContextEpisodeId(event.target.value);setWorkflowStage("");}}><option value="">Current care context · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</select></div>}
-      {clientId && contextEpisodeId && <div className="form-field form-rules-context"><label htmlFor="forms-workflow-stage">Workflow requirements</label><select id="forms-workflow-stage" value={workflowStage} onChange={event=>setWorkflowStage(event.target.value)}><option value="">Current episode stage</option><option value="intake">Intake review</option><option value="active">Active care</option><option value="discharge">Prepare for discharge</option></select></div>}
+      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><Choice id="forms-episode-context" value={contextEpisodeId} onChange={event=>{setContextEpisodeId(event.target.value);setWorkflowStage("");}}><option value="">Current care context · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</Choice></div>}
+      {clientId && contextEpisodeId && <div className="form-field form-rules-context"><label htmlFor="forms-workflow-stage">Workflow requirements</label><Choice id="forms-workflow-stage" value={workflowStage} onChange={event=>setWorkflowStage(event.target.value)}><option value="">Current episode stage</option><option value="intake">Intake review</option><option value="active">Active care</option><option value="discharge">Prepare for discharge</option></Choice></div>}
       {clientId && (
         <FormRequirements
           clientId={clientId}

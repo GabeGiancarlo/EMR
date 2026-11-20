@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useCallback,useEffect,useState } from "react";
 import type { Bootstrap,Row } from "./api";
 import { request,value,clientName } from "./api";
@@ -29,7 +30,7 @@ export default function TelehealthManager({data,encounter,kind,onClose}:{data:Bo
     <div className="form-body visit-management">
       <div className="visit-context"><strong>{kind==="groups"?value(encounter,"title"):clientName(clients[0])}</strong><span>{date(value(encounter,"starts_at"),true)}</span><Badge status={value(encounter,"status")} /></div>
       {error&&<p className="error-banner" role="alert">{error}</p>}
-      {!loaded&&!error&&<p role="status">Loading visit history…</p>}{loaded&&!managed&&!error&&<p>No telehealth rooms were created for this encounter.</p>}{rooms.length>1&&<label>Visit room<select disabled={reviewDirty} value={managed?.room.id||""} onChange={e=>{setInvitation(null);void reload(e.target.value).catch(e=>setError(e.message));}}>{rooms.map(r=><option key={r.id} value={r.id}>{date(value(r,"created_at"))}{r.ended_at?" · ended":""}</option>)}</select></label>}
+      {!loaded&&!error&&<p role="status">Loading visit history…</p>}{loaded&&!managed&&!error&&<p>No telehealth rooms were created for this encounter.</p>}{rooms.length>1&&<label>Visit room<Choice disabled={reviewDirty} value={managed?.room.id||""} onChange={e=>{setInvitation(null);void reload(e.target.value).catch(e=>setError(e.message));}}>{rooms.map(r=><option key={r.id} value={r.id}>{date(value(r,"created_at"))}{r.ended_at?" · ended":""}</option>)}</Choice></label>}
       {managed&&<>
         <p>Room access expires {date(value(managed.room,"expires_at"),true)}. Each invitation is for one participant. It does not verify their identity.</p>
         {authMode()==="local"&&<p className="visit-local-note">Local review · Use separate browser windows on this computer. Remote connectivity and identity are not configured.</p>}

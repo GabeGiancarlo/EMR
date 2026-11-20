@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useState } from "react";
 import {
   clientName,
@@ -231,7 +232,7 @@ export default function GroupEncounters({
                         </small>
                       </div>
                       {canWrite && selected.status === "scheduled" ? (
-                        <select
+                        <Choice
                           aria-label={`Attendance for ${clientName(client)}`}
                           className="compact-select"
                           value={pendingStatus[a.id] ?? value(a, "status")}
@@ -245,7 +246,7 @@ export default function GroupEncounters({
                               </option>
                             ),
                           )}
-                        </select>
+                        </Choice>
                       ) : (
                         <Badge status={a.status} />
                       )}

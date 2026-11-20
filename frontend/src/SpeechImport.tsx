@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useEffect, useRef, useState } from "react";
 import { authorizedFetch, date, value } from "./api";
 import type { Bootstrap } from "./api";
@@ -86,10 +87,10 @@ export default function SpeechImport({ clientId, data, onTranscript }: {
         !consents.length ? <p>No active recording consent is on file. Record consent in the client chart before transcribing.</p> :
         <div className="form-field">
           <label htmlFor="speech-consent">Recording consent</label>
-          <select id="speech-consent" value={consentId} disabled={busy} onChange={(e) => { setConsentId(e.target.value); setDone(false); }}>
+          <Choice id="speech-consent" value={consentId} disabled={busy} onChange={(e) => { setConsentId(e.target.value); setDone(false); }}>
             <option value="">Choose a recording consent</option>
             {consents.map((row) => <option key={row.id} value={row.id}>{value(row, "scope").slice(0, 80)} · {date(row.granted_on)}</option>)}
-          </select>
+          </Choice>
         </div>}
       <label className="file-import">Choose WAV audio
         <input type="file" accept=".wav,audio/wav" disabled={busy || !clientId || !consents.length}

@@ -6,6 +6,8 @@ import {
   addMonths,
   createInitial,
   crossesMidnight,
+  dayAppointments,
+  validCalendarDay,
   defaultFacilityId,
   facilityYmd,
   formatYmd,
@@ -243,4 +245,39 @@ test("a scheduling lock names only the evidence visible to the operator", () => 
   assert.doesNotMatch(sessionLockReason(true, false), /claim/);
   assert.doesNotMatch(sessionLockReason(false, true), /note/);
   assert.doesNotMatch(sessionLockReason(false, false), /claim|note/);
+});
+
+test("timed cards clip overnight visits and reserve lanes only for true overlaps", () => {
+  const make = (id: string, start: string, end: string): Schedulable => ({
+    id, source:"session", facilityId:"clinic", clinicianId:"staff", type:"individual", status:"scheduled",
+    startsAt:start, endsAt:end,
+  });
+  const items = [
+    make("overnight", "2026-11-16T23:50Z", "2026-11-17T00:10Z"),
+    make("first", "2026-11-17T09:00Z", "2026-11-17T09:05Z"),
+    make("second", "2026-11-17T09:05Z", "2026-11-17T09:10Z"),
+    make("overlap", "2026-11-17T09:06Z", "2026-11-17T10:00Z"),
+  ];
+  assert.deepEqual(dayAppointments(items,"2026-11-17","UTC").map(({start,end,lane,lanes})=>[start,end,lane,lanes]),
+    [[0,10,0,1],[540,545,0,1],[545,550,0,2],[546,600,1,2]]);
+});
+
+test("typed dates and endpoint months stay within calendar bounds", () => {
+  assert.ok(validCalendarDay("2028-02-29"));
+  for (const invalid of ["2026-02-29","2026-13-01","2026-0","0001-01-01"]) assert.equal(validCalendarDay(invalid),false);
+  for (const boundary of ["0100-01-01","9999-12-31"]) {
+    assert.ok(monthGrid(boundary).includes(boundary));
+    assert.ok(weekDates(boundary).every(validCalendarDay));
+    assert.ok(monthGrid(boundary).every(validCalendarDay));
+  }
+});
+
+test("a selected repeated grid minute keeps its instant when viewed in another zone", () => {
+  for (const selectedInstant of ["2026-11-01T05:30:00.000Z","2026-11-01T06:30:00.000Z"]) {
+    const initial = createInitial({ kind:"session", day:"2026-11-01", hour:1, minute:30,
+      timeZone:"America/New_York",facilityId:"west",clinicianId:"c",selectedInstant });
+    assert.equal(initial.starts_at, selectedInstant);
+    assert.equal(Date.parse(String(initial.ends_at))-Date.parse(selectedInstant),3600000);
+    assert.equal(initial._require_time_occurrence,false);
+  }
 });

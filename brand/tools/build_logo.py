@@ -81,10 +81,15 @@ def main():
     off = (512 - 512 * k) / 2
     write("nexus-app-icon-maskable.svg", 512, 512,
           f'<rect width="512" height="512" fill="{PINE}"/>' + placed(small, off, off, k, LINEN), "Nexus")
-    # favicon: small-size symbol that follows the browser theme
-    write("nexus-favicon.svg", 512, 512,
-          "<style>path{fill:#2F4631}@media(prefers-color-scheme:dark){path{fill:#DCE5C3}}</style>"
-          f'<path fill-rule="evenodd" d="{small}"/>', "Nexus")
+    # At tab size, keep the open bark path and heartwood readable at a two-pixel stroke.
+    write("nexus-favicon.svg", 32, 32,
+          f'<path fill="{PINE}" d="{tile_path(0, 0, 32, 32, 5, 9)}"/>'
+          f'<path fill="none" stroke="{LINEN}" stroke-width="2.8" stroke-linecap="round" '
+          'd="M19 5.5C15 3.8 10.4 6 7.9 9.6C5.6 12.9 4.8 18 7.3 21.7'
+          'C9.7 25.5 15.5 28.2 20 26C25.7 23.5 27 19 26 14.1C25.5 12 24.6 10.2 23.3 9'
+          'M17.4 11C14.3 9.7 11.6 12.5 11.1 15.3C10.5 18.6 13.4 21.8 16.5 21.5'
+          'C20.3 21.4 22.2 17.8 20.6 14.7"/>'
+          f'<circle cx="16.2" cy="16.1" r="1.8" fill="{LINEN}"/>', "Nexus")
     export_png()
     print("logo family written:", len([f for f in os.listdir(OUT) if f.endswith(".svg")]), "files")
 
@@ -101,8 +106,8 @@ def export_png():
     jobs = [("nexus-app-icon.svg", "nexus-app-icon-512.png", 512), ("nexus-app-icon.svg", "nexus-app-icon-192.png", 192),
             ("nexus-app-icon-maskable.svg", "nexus-app-icon-maskable-512.png", 512),
             ("nexus-app-icon-maskable.svg", "nexus-apple-touch-icon-180.png", 180),
-            ("nexus-app-icon.svg", "nexus-favicon-48.png", 48), ("nexus-app-icon.svg", "nexus-favicon-32.png", 32),
-            ("nexus-symbol-small-pine.svg", "nexus-favicon-16.png", 16),
+            ("nexus-favicon.svg", "nexus-favicon-48.png", 48), ("nexus-favicon.svg", "nexus-favicon-32.png", 32),
+            ("nexus-favicon.svg", "nexus-favicon-16.png", 16),
             ("nexus-logo-horizontal-pine.svg", "nexus-logo-horizontal-pine-800.png", 800),
             ("nexus-logo-horizontal-linen.svg", "nexus-logo-horizontal-linen-800.png", 800)]
     with tempfile.TemporaryDirectory() as tmp:

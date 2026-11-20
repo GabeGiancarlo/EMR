@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useEffect, useState } from "react";
 import { date, label, request, value } from "./api";
 import type { Bootstrap, Row } from "./api";
@@ -27,7 +28,7 @@ export default function EpisodeProgramAssignment({data,clientId,onChanged,onDirt
       try{await request(`/api/episodes/${episode.id}/assign-program`,"POST",{program_id:program,reason:reason.trim(),attested,_expected_updated_at:episode.updated_at});close();setNotice("Program assigned. The episode's original status and dates are preserved.");try{await onChanged();}catch{setError("The assignment was saved. Refresh the workspace before continuing.");}}
       catch(error){setError(error instanceof Error?error.message:"The program assignment could not be saved.");}finally{setBusy(false);}
     }}><fieldset disabled={busy}><p>{label(value(episode,"level_of_care"))} · {date(episode.start_date)} · {value(data.facilities.find(f=>f.id===episode.facility_id),"name")}</p>
-      <div className="form-field"><label htmlFor="episode-program">Care program *</label><select id="episode-program" required value={program} onChange={event=>setProgram(event.target.value)}><option value="">Select a matching program</option>{programs.map(p=><option key={p.id} value={p.id}>{value(p,"name")} · {value(p,"available_places")} places available</option>)}</select>{!programs.length && <small>An administrator must configure an active program for this facility and care level.</small>}</div>
+      <div className="form-field"><label htmlFor="episode-program">Care program *</label><Choice id="episode-program" required value={program} onChange={event=>setProgram(event.target.value)}><option value="">Select a matching program</option>{programs.map(p=><option key={p.id} value={p.id}>{value(p,"name")} · {value(p,"available_places")} places available</option>)}</Choice>{!programs.length && <small>An administrator must configure an active program for this facility and care level.</small>}</div>
       <div className="form-field"><label htmlFor="episode-program-reason">Assignment reason *</label><textarea id="episode-program-reason" required minLength={10} maxLength={2000} value={reason} onChange={event=>setReason(event.target.value)} /></div>
       <label className="intake-attestation"><input type="checkbox" required checked={attested} onChange={event=>setAttested(event.target.checked)} />I reviewed this care episode and confirm the program assignment. It cannot be remapped.</label>
       <div className="intake-actions"><Button type="submit" disabled={busy || !programs.length}>{busy?"Assigning…":"Assign program"}</Button><Button variant="text" disabled={busy} onClick={()=>setDiscard(true)}>Discard changes</Button></div>

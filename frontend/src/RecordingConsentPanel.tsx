@@ -1,3 +1,4 @@
+import { Choice } from "./nexus-ui/FieldControls";
 import { useState } from "react";
 import { Button } from "./ui";
 import type { RecordingContext } from "./recordingTypes";
@@ -131,11 +132,11 @@ export function RecordingConsentPanel({
         >
           <label htmlFor="rec-policy">
             Active policy
-            <select id="rec-policy" aria-label="Active recording policy" value={policy?.id ?? ""} disabled={busy || !policy} onChange={(e) => setPolicyId(e.target.value)}>
+            <Choice id="rec-policy" aria-label="Active recording policy" value={policy?.id ?? ""} disabled={busy || !policy} onChange={(e) => setPolicyId(e.target.value)}>
               {active.map((p) => (
                 <option key={p.id} value={p.id}>{p.title}</option>
               ))}
-            </select>
+            </Choice>
           </label>
           {policy && <p className="rec-meta">Purpose: {policy.purpose} Retention review: {policy.retention_days} days.</p>}
           <fieldset>

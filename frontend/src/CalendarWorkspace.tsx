@@ -1,11 +1,16 @@
+import { Choice, FieldInput } from "./nexus-ui/FieldControls";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Bootstrap, Row } from "./api";
 import { clientName, date, label, value } from "./api";
-import { Badge, Button } from "./ui";
+import { NxIcon } from "./nexus-ui/Icon";
+import { readStored, writeStored } from "./safeStorage";
+import { Avatar } from "./nexus-ui/Avatar";
+import { Badge, Button, Modal } from "./ui";
 import "./calendar.css";
 import {
   ALL,
   addDays,
+  dayAppointments,
   addMonths,
   createInitial,
   crossesMidnight,
@@ -21,9 +26,11 @@ import {
   sessionLockReason,
   visibleParticipantNames,
   weekDates,
+  weekdayIndex,
+  validCalendarDay,
 } from "./calendar.ts";
 import type { Schedulable } from "./calendar.ts";
-import { wallTimeCandidates } from "./schedulingTime";
+import { facilityWallTime, wallTimeCandidates, occurrenceLabel } from "./schedulingTime";
 
 export type CalendarWorkspaceProps = {
   data: Bootstrap;
@@ -37,6 +44,7 @@ export type CalendarWorkspaceProps = {
   onOpenTasks: (row?: Row) => void;
   focusSessionId?: string;
   startView?: Mode;
+  initialDay?: string;
 };
 
 type Mode = "day" | "week" | "month" | "agenda";
@@ -72,19 +80,19 @@ function sliceText(startIso: string, endIso: string, day: string, timeZone: stri
   return "All day";
 }
 
-function EventChip({ event, day, timeZone, onOpen, compact }: {
-  event: RichEvent; day: string; timeZone: string; onOpen: (event: RichEvent) => void; compact?: boolean;
+function EventChip({ event, day, timeZone, onOpen }: {
+  event: RichEvent; day: string; timeZone: string; onOpen: (event: RichEvent) => void;
 }) {
   const when = sliceText(event.startsAt, event.endsAt, day, timeZone);
   const kind = event.source === "group" ? "Group" : label(event.type);
   const lock = event.lockReason ? ` Locked. ${event.lockReason}` : "";
-  return <button type="button" className={serviceClass(event.type, event.source)}
-    aria-label={`${kind}, ${event.title}, ${when}.${lock} Open details`}
+  return <button type="button" className={`${serviceClass(event.type, event.source)} state-${event.status}`}
+    aria-label={`${kind}, ${event.title}, ${when}. ${label(event.status)}.${lock} Open details`}
     title={event.lockReason} onClick={() => onOpen(event)}>
-    {!compact && <span className="cal-chip-kicker">{kind}</span>}
+    <span className="cal-chip-kicker">{kind}{event.status && event.status !== "scheduled" && ` · ${label(event.status)}`}</span>
     <strong>{event.title}</strong>
     <small>{when}</small>
-    {event.lockReason && <small className="cal-lock-label">Locked</small>}
+    {event.lockReason && <small className="cal-lock-label"><NxIcon name="lock" size={12}/> <span>Locked</span></small>}
   </button>;
 }
 
@@ -99,7 +107,7 @@ export default function CalendarWorkspace({
   onOpenClient,
   onOpenTasks,
   focusSessionId,
-  startView = "month",
+  startView = "week", initialDay,
 }: CalendarWorkspaceProps) {
   const facilities = data.facilities ?? [];
   const facilityChoices = facilities.map((facility) => ({
@@ -116,6 +124,9 @@ export default function CalendarWorkspace({
   const [clinicianId, setClinicianId] = useState(ALL);
   const [type, setType] = useState(ALL);
   const [status, setStatus] = useState(ALL);
+  const [colorBy, setColorBy] = useState<"service" | "attendance">(() =>
+    readStored("local","nexus.calendar.colorBy") === "attendance" ? "attendance" : "service"
+  );
   const [mode, setMode] = useState<Mode>(startView);
   const [displayTimeZone, setDisplayTimeZone] = useState(() =>
     safeTimeZone(facilityChoices.find((facility) => facility.id === defaultFacilityId(actorFacility, facilityChoices))?.timezone),
@@ -126,9 +137,18 @@ export default function CalendarWorkspace({
     facilityId === ALL
       ? safeTimeZone(zoneChoices.includes(displayTimeZone) ? displayTimeZone : zoneChoices[0])
       : safeTimeZone(selectedFacility?.timezone);
-  const today = facilityYmd(new Date(), timeZone);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(tick);
+  }, []);
+  const today = facilityYmd(now, timeZone);
+  const [jumpNow, setJumpNow] = useState(0);
   const [anchor, setAnchor] = useState(today);
   const [selectedDay, setSelectedDay] = useState(today);
+  const [jumpDate, setJumpDate] = useState(today);
+  useEffect(() => setJumpDate(selectedDay), [selectedDay]);
+  const [repeatedSlot, setRepeatedSlot] = useState<{kind:"session"|"group"; day:string; hour:number; minute:number; candidates:string[]} | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -138,11 +158,11 @@ export default function CalendarWorkspace({
     const nextZone = safeTimeZone(facilityChoices.find((facility) => facility.id === nextFacility)?.timezone);
     setDisplayTimeZone(nextZone);
     const nextToday = facilityYmd(new Date(), nextZone);
-    setAnchor(nextToday);
-    setSelectedDay(nextToday);
+    setAnchor(initialDay || nextToday);
+    setSelectedDay(initialDay || nextToday);
     // Reset only when the operator changes; facilityChoices is derived from that bootstrap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actorId]);
+  }, [actorId,initialDay]);
 
   const events = useMemo(() => {
     const names: Record<string, string> = {};
@@ -287,6 +307,7 @@ export default function CalendarWorkspace({
   function shift(direction: number) {
     const nextAnchor = mode === "month" ? addMonths(anchor, direction) : addDays(anchor, mode === "day" ? direction : direction * 7);
     const nextDay = mode === "month" ? addMonths(selectedDay, direction) : addDays(selectedDay, mode === "day" ? direction : direction * 7);
+    if (!validCalendarDay(nextAnchor) || !validCalendarDay(nextDay)) return;
     setAnchor(nextAnchor);
     setSelectedDay(nextDay);
   }
@@ -294,21 +315,35 @@ export default function CalendarWorkspace({
     const current = facilityYmd(new Date(), timeZone);
     setAnchor(current);
     setSelectedDay(current);
+    setJumpDate(current);
+    setJumpNow(tick => tick + 1);
   }
-  function schedule(kind: "session" | "group", day = selectedDay, hour = 9) {
+  function schedule(kind: "session" | "group", day = selectedDay, hour = 9, minute = 0, chosen?:string) {
+    const wall = day + "T" + String(hour).padStart(2,"0") + ":" + String(minute).padStart(2,"0");
+    const candidates = wallTimeCandidates(wall,timeZone);
+    if (!candidates.length) return;
+    if (candidates.length > 1 && !chosen) {
+      setRepeatedSlot({kind,day,hour,minute,candidates});
+      return;
+    }
     const initial = createInitial({
+      selectedInstant: chosen,
       kind,
       day,
-      hour,
+      hour, minute,
       facilityId: createFacility === ALL ? "" : createFacility,
       clinicianId: clinicianId !== ALL ? clinicianId : schedulingClinician,
-      timeZone: safeTimeZone(facilityChoices.find(facility => facility.id === createFacility)?.timezone),
+      timeZone,
     });
     if (!initial.facility_id) delete initial.facility_id;
     if (!initial.clinician_id) delete initial.clinician_id;
     if (kind === "group") onCreateGroup(initial);
     else onCreateSession(initial);
   }
+  function openDay(day: string) {
+    setSelectedDay(day); setAnchor(day); setMode("day");
+  }
+  const canAdd = !!(canWrite && data.permissions?.sessions?.write);
   function open(event: RichEvent) {
     setOpenKey(event.key);
   }
@@ -318,7 +353,7 @@ export default function CalendarWorkspace({
       ? formatYmdLong(anchor)
       : mode === "month"
         ? new Intl.DateTimeFormat("en-US", {month:"long", year:"numeric",timeZone:"UTC"}).format(new Date(`${anchor}T12:00:00Z`))
-        : `${formatYmdLong(range[0])} – ${formatYmdLong(range[range.length - 1])}`;
+        : new Intl.DateTimeFormat("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" }).formatRange(new Date(range[0]+"T12:00Z"),new Date(range[range.length-1]+"T12:00Z"));
   const tasks = (data.tasks ?? [])
     .filter((task) => value(task, "status") !== "done")
     .filter((task) => {
@@ -344,15 +379,14 @@ export default function CalendarWorkspace({
     : undefined;
 
   return (
-    <div className="calendar-workspace" data-calendar-root>
+    <div className="calendar-workspace" data-calendar-root data-color-by={colorBy}>
       <header className="cal-toolbar">
         <div>
-          <span className="cal-kicker">CLINICIAN SCHEDULE</span>
           <h2>{rangeLabel}</h2>
           <p className="cal-tz">
             Times shown in {timeZone}
             {facilityId === ALL ? " for all facilities" : selectedFacility ? ` · ${selectedFacility.name}` : ""}.
-            Scheduling date {formatYmdLong(selectedDay)}.
+
           </p>
           <div className="cal-views" role="group" aria-label="Calendar view">
             {MODES.map((item) => (
@@ -370,79 +404,90 @@ export default function CalendarWorkspace({
         </div>
         <div className="cal-nav">
           <button type="button" className="button secondary small" onClick={() => shift(-1)}>
-            Previous <span className="sr-only">{mode}</span>
+            <NxIcon name="chevron-left" size={16}/><span className="sr-only">Previous {mode}</span>
           </button>
           <button type="button" className="button secondary small" onClick={goToday}>Today</button>
           <button type="button" className="button secondary small" onClick={() => shift(1)}>
-            Next <span className="sr-only">{mode}</span>
+            <NxIcon name="chevron-right" size={16}/><span className="sr-only">Next {mode}</span>
           </button>
-          <label>
-            <span className="sr-only">Choose date</span>
-            <input
+          <div>
+            <FieldInput
+              aria-label="Choose date"
               className="cal-date"
               type="date"
-              value={selectedDay}
+              value={jumpDate}
               onChange={(event) => {
                 const next = event.target.value;
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+                setJumpDate(next);
+                if (!validCalendarDay(next)) return;
                 setSelectedDay(next);
                 setAnchor(next);
               }}
             />
-          </label>
+          </div>
           {canWrite && (
             <div className="cal-create">
-              {data.permissions?.sessions?.write && <Button onClick={() => schedule("session")}>Schedule session</Button>}
+              {data.permissions?.sessions?.write && <Button onClick={() => schedule("session")}><NxIcon name="add" size={16}/>Schedule session</Button>}
               {data.permissions?.groups?.write && <Button variant="secondary" onClick={() => schedule("group")}>Schedule group</Button>}
             </div>
           )}
         </div>
       </header>
+      <details className="cal-options"><summary>Filters and display
+        <span>{[facilityId !== ALL ? selectedFacility?.name : "All facilities", clinicianId !== ALL && value(data.staff.find(row => row.id === clinicianId), "name"), type !== ALL && label(type), status !== ALL && label(status)].filter(Boolean).join(" · ")}</span>
+      </summary>
       <fieldset className="cal-filters">
         <legend className="sr-only">Filter schedule</legend>
         <label>
           Facility
-          <select aria-label="Facility" value={facilityId} onChange={(event) => setFacilityId(event.target.value)}>
+          <Choice aria-label="Facility" value={facilityId} onChange={(event) => setFacilityId(event.target.value)}>
             <option value={ALL}>All facilities</option>
             {facilityChoices.map((facility) => (
               <option key={facility.id} value={facility.id}>
                 {facility.name}{facility.active ? "" : " (inactive)"}
               </option>
             ))}
-          </select>
+          </Choice>
         </label>
         <label>
           Clinician
-          <select aria-label="Clinician" value={clinicianId} onChange={(event) => setClinicianId(event.target.value)}>
+          <Choice aria-label="Clinician" value={clinicianId} onChange={(event) => setClinicianId(event.target.value)}>
             <option value={ALL}>All clinicians</option>
             {clinicianOptions.map((staff) => (
               <option key={staff.id} value={staff.id}>{value(staff, "name") || "Unnamed team member"}</option>
             ))}
-          </select>
+          </Choice>
         </label>
         <label>
           Type
-          <select aria-label="Type" value={type} onChange={(event) => setType(event.target.value)}>
+          <Choice aria-label="Type" value={type} onChange={(event) => setType(event.target.value)}>
             <option value={ALL}>All types</option>
             {typeOptions.map((item) => <option key={item} value={item}>{label(item)}</option>)}
-          </select>
+          </Choice>
         </label>
         <label>
           Status
-          <select aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <Choice aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value={ALL}>All statuses</option>
             {statusOptions.map((item) => <option key={item} value={item}>{label(item)}</option>)}
-          </select>
+          </Choice>
         </label>
         {facilityId === ALL && zoneChoices.length > 0 && (
           <label>
             Display timezone
-            <select aria-label="Display timezone" value={timeZone} onChange={(event) => setDisplayTimeZone(event.target.value)}>
+            <Choice aria-label="Display timezone" value={timeZone} onChange={(event) => setDisplayTimeZone(event.target.value)}>
               {zoneChoices.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
-            </select>
+            </Choice>
           </label>
         )}
-      </fieldset>
+        <label>Card color
+          <Choice aria-label="Card color" value={colorBy} onChange={e => {
+            const next = e.target.value === "attendance" ? "attendance" : "service";
+            setColorBy(next);
+            writeStored("local", "nexus.calendar.colorBy", next);
+          }}><option value="service">Service type</option><option value="attendance">Attendance</option></Choice>
+        </label>
+      </fieldset></details>
       <div className="cal-layout">
         <aside className="cal-tasks" aria-label="Task queue">
           <h3>Task queue</h3>
@@ -474,7 +519,7 @@ export default function CalendarWorkspace({
                 const items = dayEvents(day);
                 return (
                   <article key={day}>
-                    <h4>{formatYmdLong(day)}</h4>
+                    <h4><button type="button" className="cal-day-link" onClick={()=>openDay(day)}>{formatYmdLong(day)}</button></h4>
                     {items.length ? items.map((event) => <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={open} />) : <p className="cal-empty">Open</p>}
                   </article>
                 );
@@ -492,14 +537,17 @@ export default function CalendarWorkspace({
                   return (
                     <div
                       key={day}
+                      style={{gridColumnStart: weekdayIndex(day) + 1}}
                       className={`cal-cell ${day === today ? "is-today" : ""} ${day === selectedDay ? "is-selected" : ""} ${day.slice(0, 7) === anchor.slice(0, 7) ? "" : "is-outside"}`}
                     >
+                      <button type="button" className="cal-month-space" aria-label={`${canAdd ? "Schedule session on" : "Open"} ${formatYmdLong(day)}`}
+                        onClick={()=>canAdd ? schedule("session",day) : openDay(day)} />
                       <button
                         type="button"
                         className="cal-daynum"
                         aria-pressed={day === selectedDay}
                         aria-current={day === today ? "date" : undefined}
-                        onClick={() => setSelectedDay(day)}
+                        onClick={() => openDay(day)}
                       >
                         {Number(day.slice(8))}
                         <span className="sr-only">{formatYmdLong(day)}</span>
@@ -525,53 +573,25 @@ export default function CalendarWorkspace({
               </div>
             </>
           ) : (
-            <div className="cal-scroll">
-              <div className={mode === "day" ? "cal-day-grid" : "cal-week"}>
-                <span />
-                {(mode === "day" ? [anchor] : range).map((day) => (
-                  <button
-                    type="button"
-                    key={day}
-                    className="cal-daynum"
-                    aria-pressed={day === selectedDay}
-                    onClick={() => {
-                      setSelectedDay(day);
-                      setAnchor(day);
-                    }}
-                  >
-                    {formatYmdLong(day)}
-                  </button>
-                ))}
-                <span className="cal-hour">Span</span>
-                {(mode === "day" ? [anchor] : range).map((day) => (
-                  <div key={`${day}-span`} className="cal-allday">
-                    {dayEvents(day)
-                      .filter((event) => crossesMidnight(event.startsAt, event.endsAt, timeZone) || facilityYmd(new Date(event.startsAt), timeZone) !== day)
-                      .map((event) => <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={open} />)}
-                  </div>
-                ))}
-                {HOURS.map((hour) => (
-                  <HourRow
-                    key={hour}
-                    hour={hour}
-                    days={mode === "day" ? [anchor] : range}
-                    events={ranged}
-                    timeZone={timeZone}
-                    canWrite={canWrite && data.permissions?.sessions?.write === true}
-                    onAdd={(day) => schedule("session", day, hour)}
-                    onOpen={open}
-                  />
-                ))}
-              </div>
-            </div>
+            <TimeGrid days={mode === "day" ? [anchor] : range} events={ranged} timeZone={timeZone} now={now}
+              canAdd={canAdd} jumpNow={jumpNow} onDay={openDay} onOpen={open}
+              onCreate={(day, minute) => schedule("session", day, Math.floor(minute/60), minute%60)} />
           )}
           <ul className="cal-legend">
-            {[...new Set(ranged.map((event) => event.type))].map((item) => (
-              <li key={item} className={serviceClass(item, "session")}>{label(item)}</li>
-            ))}
+            {[...new Set(ranged.map(event => colorBy === "attendance" ? event.status : event.type))].map(item =>
+              <li key={item} className={colorBy === "attendance" ? "cal-chip state-" + item : serviceClass(item, "session")}>{label(item)}</li>
+            )}
           </ul>
         </section>
       </div>
+      {repeatedSlot && <Modal title="Choose an appointment time" description={`This time occurs twice in ${timeZone} on ${formatYmdLong(repeatedSlot.day)}.`} onClose={()=>setRepeatedSlot(null)}>
+        <div className="cal-dialog-actions">{repeatedSlot.candidates.map((instant,index) =>
+          <Button key={instant} variant="secondary" onClick={()=>{
+            const {kind,day,hour,minute} = repeatedSlot;
+            setRepeatedSlot(null);
+            schedule(kind,day,hour,minute,instant);
+          }}>{occurrenceLabel(instant,timeZone,index)}</Button>)}</div>
+      </Modal>}
       <dialog
         ref={dialogRef}
         className="cal-dialog"
@@ -583,9 +603,13 @@ export default function CalendarWorkspace({
       >
         {openEvent && (
           <div className="cal-dialog-body">
-            <span className="cal-kicker">{openEvent.source === "group" ? "GROUP" : "SESSION"}</span>
-            <h3 id="cal-dialog-title">{openEvent.title}</h3>
-            <Badge status={openEvent.status || "scheduled"} />
+            <header className={`cal-event-head state-${openEvent.status} ${serviceClass(openEvent.type,openEvent.source).split(" ").at(-1)}`}>
+              <div className="cal-event-type"><span className="cal-service-dot"/>{label(openEvent.type)} {openEvent.source === "group" ? "group" : "session"}</div>
+              <button type="button" className="icon-button cal-detail-close" aria-label="Close appointment" onClick={()=>setOpenKey(null)}><NxIcon name="close" size={20}/></button>
+              <div className="cal-event-person">{openEvent.source === "group" ? <span className="group-avatar"><NxIcon name="group" size={28}/></span> :
+                <Avatar patient={openEvent.participantRows[0]} name={openEvent.title} id={String(openEvent.row.client_id || openEvent.id)}/>}
+                <div><h3 id="cal-dialog-title">{openEvent.title}</h3><Badge status={openEvent.status || "scheduled"}/></div></div>
+            </header>
             <dl className="cal-facts">
               <dt>When</dt>
               <dd>
@@ -615,7 +639,7 @@ export default function CalendarWorkspace({
               )}
             </dl>
             {openEvent.lockReason && <div className="cal-lock-notice">
-              <strong>Appointment locked</strong>
+              <strong><NxIcon name="lock" size={16}/> Appointment locked</strong>
               <p>{openEvent.lockReason}</p>
             </div>}
             <div className="cal-dialog-actions">
@@ -646,51 +670,65 @@ export default function CalendarWorkspace({
   );
 }
 
-function HourRow({
-  hour,
-  days,
-  events,
-  timeZone,
-  canWrite,
-  onAdd,
-  onOpen,
-}: {
-  hour: number;
-  days: string[];
-  events: RichEvent[];
-  timeZone: string;
-  canWrite: boolean;
-  onAdd: (day: string) => void;
-  onOpen: (event: RichEvent) => void;
+function clockLabel(minute: number) {
+  const hour = Math.floor(minute/60);
+  return `${hour % 12 || 12}:${String(minute%60).padStart(2,"0")} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+function TimeGrid({ days, events, timeZone, now, canAdd, jumpNow, onDay, onCreate, onOpen }: {
+  days: string[]; events: RichEvent[]; timeZone: string; now: Date; canAdd: boolean; jumpNow: number;
+  onDay: (day: string)=>void; onCreate: (day: string, minute: number)=>void; onOpen: (event: RichEvent)=>void;
 }) {
-  const labelText = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, hour)));
-  return (
-    <>
-      <span className="cal-hour">{labelText}</span>
-      {days.map((day) => {
-        const items = events.filter((event) => {
-          if (crossesMidnight(event.startsAt, event.endsAt, timeZone)) return false;
-          if (facilityYmd(new Date(event.startsAt), timeZone) !== day) return false;
-          const startHour = Number(new Intl.DateTimeFormat("en-US", {
-            timeZone,
-            hour: "2-digit",
-            hourCycle: "h23",
-          }).format(new Date(event.startsAt)));
-          return startHour === hour;
-        });
-        return (
-          <div key={`${day}-${hour}`} className="cal-slot">
-            {canWrite && (
-              <button type="button" className="cal-slot-add" disabled={!wallTimeCandidates(`${day}T${String(hour).padStart(2,"0")}:00`,timeZone).length} aria-label={`Schedule session on ${formatYmdLong(day)} at ${labelText}`} onClick={() => onAdd(day)}>
-                Add
-              </button>
-            )}
-            {items.map((event) => (
-              <EventChip key={event.key} event={event} day={day} timeZone={timeZone} onOpen={onOpen} compact />
-            ))}
-          </div>
-        );
+  const scroll = useRef<HTMLDivElement>(null);
+  const [cursor,setCursor] = useState<{day:string; minute:number} | null>(null);
+  const today = facilityYmd(now,timeZone);
+  const wall = facilityWallTime(now.toISOString(),timeZone);
+  const minuteNow = +wall.slice(11,13)*60 + +wall.slice(14,16);
+  const firstDay = days[0];
+  const dayCount = days.length;
+  useEffect(() => {
+    const view = scroll.current;
+    if (!view) return;
+    const hourSize = parseFloat(getComputedStyle(view).getPropertyValue("--cal-hour-size"));
+    const start = jumpNow && days.includes(today) ? Math.max(0,minuteNow/60-1.5) : 7;
+    view.scrollTop = Math.max(0, start * hourSize);
+  },[firstDay, dayCount, jumpNow]);
+  const layout = useMemo(()=>days.map(day=>dayAppointments(events,day,timeZone)),[events,firstDay,dayCount,timeZone]);
+  const available = (day: string, minute: number) => wallTimeCandidates(
+    day+"T"+String(Math.floor(minute/60)).padStart(2,"0")+":"+String(minute%60).padStart(2,"0"),timeZone).length>0;
+  function minuteAt(e: React.PointerEvent<HTMLButtonElement> | React.MouseEvent<HTMLButtonElement>) {
+    const r=e.currentTarget.getBoundingClientRect();
+    return Math.max(0,Math.min(1410, Math.floor((e.clientY-r.top)/r.height*48)*30));
+  }
+  return <div className="time-scroll" ref={scroll}>
+    <div className={`time-board ${days.length===1?"is-day":""}`} style={{gridTemplateColumns:`54px repeat(${days.length},minmax(0,1fr))`}}>
+      <div className="time-corner"><NxIcon name="clock" size={15}/></div>
+      {days.map(day=><button type="button" key={day} className="time-date" aria-label={formatYmdLong(day)} aria-current={day===today?"date":undefined}
+        onClick={()=>onDay(day)}><span>{new Intl.DateTimeFormat("en",{weekday:"short",timeZone:"UTC"}).format(new Date(day+"T12:00Z"))}</span><strong>{+day.slice(8)}</strong></button>)}
+      <div className="time-rail">{HOURS.map(h=><span key={h}>{h%12||12} {h<12?"AM":"PM"}</span>)}</div>
+      {days.map((day,index)=>{
+        const here = cursor?.day===day;
+        const minute = here ? cursor.minute : 540;
+        const valid = here && available(day,minute);
+        return <div className="time-column" key={day} data-today={day===today}>
+          {canAdd && <button type="button" className="time-create" aria-label={`Schedule session on ${formatYmdLong(day)} at ${clockLabel(minute)}. Use up and down arrows to choose a time.`}
+            onFocus={()=>setCursor(prev=>prev?.day===day?prev:{day,minute:540})}
+            onBlur={()=>setCursor(null)} onPointerLeave={()=>setCursor(null)}
+            onPointerMove={e=>{const n=minuteAt(e); if(!here || minute!==n)setCursor({day,minute:n});}}
+            onKeyDown={e=>{
+              if(e.key==="ArrowUp"||e.key==="ArrowDown"){e.preventDefault();const n=Math.min(1410,Math.max(0,minute+(e.key==="ArrowUp"?-30:30)));setCursor({day,minute:n});
+                const view=scroll.current;if(view){const y=n/1440*e.currentTarget.offsetHeight;if(y<view.scrollTop || y>view.scrollTop+view.clientHeight-100)view.scrollTop=Math.max(0,y-100);}}
+            }}
+            onClick={e=>{const n=e.detail ? minuteAt(e) : minute;if(available(day,n))onCreate(day,n);}}>
+            {here && <span className="time-preview" style={{top:`${minute/1440*100}%`}}>{valid ? "+ "+clockLabel(minute) : "Time unavailable"}</span>}
+          </button>}
+          {layout[index].map(({event,start,end,lane,lanes})=><div key={event.key} className="time-event" data-short={end-start<44}
+            style={{top:`${start/1440*100}%`,height:`${(end-start)/1440*100}%`,left:`${lane/lanes*100}%`,width:`${100/lanes}%`}}>
+            <EventChip event={event} day={day} timeZone={timeZone} onOpen={onOpen}/>
+          </div>)}
+          {day===today && <div className="time-now" aria-label={`Current time ${clockLabel(minuteNow)}`} style={{top:`${minuteNow/1440*100}%`}}><span>{clockLabel(minuteNow)}</span></div>}
+        </div>;
       })}
-    </>
-  );
+    </div>
+  </div>;
 }

@@ -1,3 +1,5 @@
+import { validCalendarDay } from "./calendar";
+import { FieldInput } from "./nexus-ui/FieldControls";
 import { useState } from "react";
 import { authorizedFetch } from "./api";
 import { Button, Icon, Panel } from "./ui";
@@ -18,7 +20,7 @@ export default function ExportReports({ role }: { role: string }) {
     setError("");
     setBusy(kind);
     try {
-      if (!from || !to || from > to)
+      if (!validCalendarDay(from) || !validCalendarDay(to) || from > to)
         throw new Error("Choose a valid start and end date.");
       const response = await authorizedFetch(
         `/api/exports/${kind}.csv?${new URLSearchParams({ from, to })}`,
@@ -57,7 +59,7 @@ export default function ExportReports({ role }: { role: string }) {
       <div className="export-controls">
         <div className="form-field">
           <label htmlFor="export-from">From</label>
-          <input
+          <FieldInput
             id="export-from"
             type="date"
             value={from}
@@ -67,7 +69,7 @@ export default function ExportReports({ role }: { role: string }) {
         </div>
         <div className="form-field">
           <label htmlFor="export-to">Through</label>
-          <input
+          <FieldInput
             id="export-to"
             type="date"
             value={to}
