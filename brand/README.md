@@ -4,7 +4,7 @@ Start with [Nexus-Brand-Guidelines-v0.4.pdf](Nexus-Brand-Guidelines-v0.4.pdf) (2
 index), or open [guidelines/index.html](guidelines/index.html) in a browser. The HTML edition is the same
 document with live hover states.
 
-The app uses this kit: `brand/tools/build_frontend.py` copies the tokens, icons, artwork and subset fonts into
+The app uses this kit: `brand/tools/build_frontend.py` copies the tokens, icons, artwork (including the ten motifs, which the app uses as default profile pictures) and subset fonts into
 `frontend/src/brand`, and the component library in `frontend/src/nexus-ui` is built on them.
 
 ## What is in it
@@ -13,7 +13,7 @@ The app uses this kit: `brand/tools/build_frontend.py` copies the tokens, icons,
 | --- | --- |
 | `logo/` | Horizontal and stacked lockups, symbol, small-size symbol and wordmark in Pine, Linen and Ink; app tiles; favicon. SVG, with PNG exports in `logo/png/`. |
 | `logo/masters/` | The two symbol drawings (full and small-size), the wordmark, and the four build steps shown in the guide, in `currentColor`. |
-| `icons/` | 49 icons: one SVG each in `svg/`, a sprite, and `nexus-icons.ts` with the path data and a `NexusIconName` type. |
+| `icons/` | 53 icons (leaf, upload, camera and print were added on November 21, 2026): one SVG each in `svg/`, a sprite, and `nexus-icons.ts` with the path data and a `NexusIconName` type. |
 | `patterns/` | Ring press, ring field, bark, contour, understory, and the leaf vein. Carved SVG; pressed PNG for the ring and bark prints (`-pressed-pine.png` is coloured, `-pressed-mask.png` is an alpha mask for CSS `mask-image`). |
 | `illustrations/` | Four cut-paper scenes, each with a day and a night form in one file, and ten motifs. SVG. |
 | `tokens/` | `nexus-tokens.css`, `.json`, `.ts`, and `contrast-audit.csv` (72 pairings, all passing). |

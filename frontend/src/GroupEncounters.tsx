@@ -1,3 +1,4 @@
+import { Avatar } from "./nexus-ui/Avatar";
 import { Choice } from "./nexus-ui/FieldControls";
 import { useState } from "react";
 import {
@@ -221,9 +222,7 @@ export default function GroupEncounters({
                   const client = data.clients.find((c) => c.id === a.client_id);
                   return (
                     <article key={a.id}>
-                      <span className="avatar">
-                        {initials(clientName(client))}
-                      </span>
+                      {client ? <Avatar id={client.id} patient={client} /> : <span className="avatar">{initials(clientName(client))}</span>}
                       <div className="grow">
                         <strong>{clientName(client)}</strong>
                         <small>

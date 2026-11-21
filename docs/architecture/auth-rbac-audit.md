@@ -10,6 +10,8 @@ Hosted identity is the staff email. It is not multi-factor policy, session revoc
 
 Implemented policies enforce organization scope, resource read/write access, primary-client assignment for clinicians, expiring/revocable exceptions, and signed-record/financial transition restrictions. Administrative grants and staff management require an administrator. Billing and executive roles do not ordinarily read clinical narrative. The frontend exposes actions from effective permissions; the backend remains authoritative.
 
+Profile pictures follow the person they belong to: a client's is read and changed by whoever may read and change that client, within clinician assignment; a staff member sets their own, and only an administrator sets another's. Superbills are limited to admin and billing, like the bulk exports, and no exception widens that. Both write audit events for every change or statement produced; reading a stored photo does not.
+
 Facility references are operational context, not a complete facility ACL. Primary assignment is not a multi-member care-team policy. These require application work regardless of sign-in.
 
 Mutations and exports write audit events transactionally with actor, organization, action, resource, record identifier and time. Ordinary bootstrap/resource reads do not yet provide a complete sensitive-read audit trail. Events omit clinical text. Local audit storage is not an independently protected production audit system.

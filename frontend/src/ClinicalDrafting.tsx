@@ -214,7 +214,7 @@ export default function ClinicalDrafting({
     if (r.note) {
       await onNoteCreated(r.note);
       setNotice(
-        "Your reviewed statements were saved as an unsigned clinical note. Open Documentation to edit and sign it after the encounter is complete.",
+        "Your reviewed statements were saved as an unsigned clinical note. Open Documentation to edit and sign it after the session is complete.",
       );
     } else
       setNotice(
@@ -382,7 +382,7 @@ export default function ClinicalDrafting({
             maxLength={2000}
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
-            placeholder="Describe the encounter and the documentation you need, using only selected evidence."
+            placeholder="Describe the session and the documentation you need, using only selected evidence."
           />
         </label>
         <Button

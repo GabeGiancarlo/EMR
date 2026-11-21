@@ -1,8 +1,8 @@
 """Copy the parts of the brand kit the app needs into frontend/src/brand.
 
 The frontend must build on its own (no imports from outside frontend/), so this step writes a
-self-contained copy: tokens, icon paths, logo and illustration artwork, the leaf vein, the
-contour tile, and subset web fonts. Run after the other generators:
+self-contained copy: tokens, icon paths, logo and illustration artwork, the motifs, the leaf
+vein, the contour tile, and subset web fonts. Run after the other generators:
 
     python3 brand/tools/build_frontend.py
 
@@ -84,6 +84,10 @@ def main():
         vb, inner = svg_parts(read("illustrations", f"nexus-scene-{name}.svg"))
         scenes[name] = inner
     contour_vb, contour = svg_parts(read("patterns", "nexus-pattern-contour.svg"))
+    # the cut-paper motifs, one path each: default profile tiles and small brand marks
+    motifs = {}
+    for name in ("sprig", "fern", "sprout", "pine", "hill", "river", "cairn", "slab", "sun", "moon"):
+        motifs[name] = path_of(read("illustrations", "motifs", f"nexus-motif-{name}.svg"))
     art = {
         "symbol": {"viewBox": sym_vb, "d": path_of(read("logo", "masters", "nexus-symbol-convergence.svg"))},
         "symbolSmall": {"viewBox": sym_vb, "d": path_of(read("logo", "masters", "nexus-symbol-convergence-small.svg"))},
@@ -91,11 +95,14 @@ def main():
         "sceneViewBox": "0 0 480 320",
         "scenes": scenes,
         "contour": {"size": float(contour_vb.split()[2]), "markup": contour},
+        "motifViewBox": "0 0 240 240",
+        "motifs": motifs,
     }
     with open(os.path.join(OUT, "art.ts"), "w") as f:
         f.write(f"// {NOTE}\n// Logo, illustration and pattern artwork from the Nexus brand kit.\n"
                 "export const nexusArt = " + json.dumps(art, indent=1) + " as const;\n\n"
-                "export type NexusSceneName = keyof typeof nexusArt.scenes;\n")
+                "export type NexusSceneName = keyof typeof nexusArt.scenes;\n"
+                "export type NexusMotifName = keyof typeof nexusArt.motifs;\n")
     shutil.copy(os.path.join(BRAND, "patterns", "nexus-leaf-vein.svg"), os.path.join(OUT, "leaf-vein.svg"))
     fonts()
 

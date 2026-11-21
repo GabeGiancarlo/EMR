@@ -121,6 +121,7 @@ export function ResponseEditor({
     setAnswers((a) => ({ ...a, [key]: answer }));
   return (
     <Modal
+      icon="documentation"
       title={record ? "Edit form response" : "Start a form response"}
       description="Save a partial draft, review each answer, then sign. The form definition is preserved with the response."
       onClose={onClose}
@@ -263,7 +264,7 @@ export function ResponseEditor({
                     excerpt for traceability.
                   </p>
                   <div className="form-field">
-                    <label htmlFor="response-excerpt">Reviewed patient excerpt</label>
+                    <label htmlFor="response-excerpt">Reviewed client excerpt</label>
                     <Choice id="response-excerpt" value={excerptId} onChange={e=>{
                       const next=excerpts.find(x=>x.id===e.target.value);sourceVersion.current++;
                       setExcerptId(e.target.value);setSource(next?value(next,"text"):"");setAnswers({});setProvenance({});setSelected("");setTarget("");
@@ -504,7 +505,13 @@ export default function StructuredForms({
 }: WorkflowProps & { clientId?: string; episodeId?: string; onAuthorRules?: () => void }) {
   const all =
     (data as Bootstrap & { form_responses?: Row[] }).form_responses || [];
-  const [contextEpisodeId, setContextEpisodeId] = useState(episodeId || "");
+  // Open on the client's current course of care, so the forms it requires are listed at once.
+  const [contextEpisodeId, setContextEpisodeId] = useState(() => {
+    if (episodeId || !clientId) return episodeId || "";
+    const theirs = data.episodes.filter((row) => row.client_id === clientId);
+    const current = theirs.filter((row) => row.status === "active");
+    return current.length === 1 ? current[0].id : theirs.length === 1 ? theirs[0].id : "";
+  });
   const [workflowStage,setWorkflowStage]=useState("");
   const responses = all.filter((r) => (!clientId || r.client_id === clientId) && (!contextEpisodeId || r.episode_id === contextEpisodeId));
   const [editor, setEditor] = useState<Row | null | undefined>(undefined);
@@ -526,7 +533,7 @@ export default function StructuredForms({
     value(r.template_snapshot as Row, "name") || "Form response";
   return (
     <>
-      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><Choice id="forms-episode-context" value={contextEpisodeId} onChange={event=>{setContextEpisodeId(event.target.value);setWorkflowStage("");}}><option value="">Current care context · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</Choice></div>}
+      {clientId && <div className="form-field form-rules-context"><label htmlFor="forms-episode-context">Care episode</label><Choice id="forms-episode-context" value={contextEpisodeId} onChange={event=>{setContextEpisodeId(event.target.value);setWorkflowStage("");}}><option value="">Every episode · all responses</option>{data.episodes.filter(row=>row.client_id===clientId).map(row=><option key={row.id} value={row.id}>{label(value(row,"level_of_care"))} · {date(row.start_date)} · {label(value(row,"status"))}</option>)}</Choice></div>}
       {clientId && contextEpisodeId && <div className="form-field form-rules-context"><label htmlFor="forms-workflow-stage">Workflow requirements</label><Choice id="forms-workflow-stage" value={workflowStage} onChange={event=>setWorkflowStage(event.target.value)}><option value="">Current episode stage</option><option value="intake">Intake review</option><option value="active">Active care</option><option value="discharge">Prepare for discharge</option></Choice></div>}
       {clientId && (
         <FormRequirements
@@ -737,6 +744,7 @@ export default function StructuredForms({
       )}
       {view && (
         <Modal
+          icon="documentation"
           title={rowTitle(view)}
           description={`${clientName(data.clients.find((c) => c.id === view.client_id))} · ${date(view.created_at, true)}`}
           onClose={() => setView(null)}

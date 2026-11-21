@@ -12,7 +12,9 @@ import CalendarWorkspace from "./CalendarWorkspace";
 import StaffAvailability from "./StaffAvailability";
 import TelehealthManager from "./TelehealthManager";
 import { schedulingZone, facilityWallTime } from "./schedulingTime";
-import { Avatar } from "./nexus-ui/Avatar";
+import { Avatar, AvatarProvider, forgetPhotos } from "./nexus-ui/Avatar";
+import type { AvatarKind } from "./nexus-ui/Avatar";
+import { PhotoPicker } from "./nexus-ui/PhotoPicker";
 import RoleWorkspace from "./RoleWorkspace";
 import { allowedWorkspaceModes, defaultWorkspaceMode, claimMatchesFilter, recordedCharges } from "./workspace";
 import type { WorkspaceMode } from "./workspace";
@@ -24,6 +26,7 @@ import {
   ReversalHistory,
 } from "./FinancialActions";
 import ClaimReadiness from "./ClaimReadiness";
+import Superbill from "./Superbill";
 import ThemeControl from "./ThemeControl";
 import ProfileMenu from "./ProfileMenu";
 import { NoAccessScreen, useAuth } from "./SignIn";
@@ -52,8 +55,8 @@ import {
 import type { Bootstrap, Resource, Row } from "./api";
 import { definitions, RecordForm } from "./forms";
 import type { Field } from "./forms";
-import { Badge, Brand, Button, Empty, Icon, Modal, Panel, Tabs } from "./ui";
-import { ContourPattern } from "./nexus-ui";
+import { Badge, Brand, Button, Empty, Icon, Modal, Panel, Tabs, recordIcon } from "./ui";
+import { ContourPattern, NxIcon } from "./nexus-ui";
 import type { IconName } from "./ui";
 
 type View =
@@ -188,16 +191,20 @@ function Table({
 function Person({
   name,
   sub,
-  small = false, patient,
+  small = false, patient, staff, large = false,
 }: {
   patient?: Row;
+  /** A staff row: their picture is drawn instead of initials. */
+  staff?: Row;
   name: string;
   sub?: string;
   small?: boolean;
+  large?: boolean;
 }) {
+  const size = large ? "lg" : small ? "sm" : "md";
   return (
     <div className="person">
-      {patient ? <Avatar name={name} id={patient.id} patient={patient}/> : <span className={`avatar ${small ? "small" : ""}`}>
+      {patient ? <Avatar id={patient.id} patient={patient} size={size}/> : staff ? <Avatar kind="staff" id={staff.id} size={size}/> : <span className={`avatar ${small ? "small" : ""}`}>
         {initials(name) || "N"}
       </span>}
       <div>
@@ -274,6 +281,8 @@ export default function App() {
   const [telehealth, setTelehealth] = useState<{kind:"sessions"|"groups";row:Row}|null>(null);
   const [filter, setFilter] = useState("all");
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [picture, setPicture] = useState<{ kind: AvatarKind; row: Row } | null>(null);
+  const [superbillClaim, setSuperbillClaim] = useState("");
   const [readinessClaim, setReadinessClaim] = useState<Row | null>(null);
   const [mobile, setMobile] = useState(false);
   const [actor, setActor] = useState(
@@ -349,6 +358,9 @@ export default function App() {
     }
     ++requestVersion.current;
     writeStored("local", actorStorageKey, id || null);
+    forgetPhotos();
+    setPicture(null);
+    setSuperbillClaim("");
     setActor(id);
     setData(null);
     setLoading(true);
@@ -474,7 +486,15 @@ export default function App() {
     await request(path, method, body);
     setDialog(null);
     await reload();
-    setToast("Saved. Your workspace is up to date.");
+    // Say what happened, in the brand's voice, for the moments people wait on.
+    setToast(
+      /^\/api\/notes\/[^/]+\/sign$/.test(path) ? "Signed. Billing can see it now."
+      : /\/sign$/.test(path) ? "Signed."
+      : /^\/api\/payments$/.test(path) ? "Payment recorded."
+      : /^\/api\/sessions$/.test(path) && method === "POST" ? "Session scheduled."
+      : /\/record-submission$/.test(path) ? "Submission recorded. Nexus did not send anything to the payer."
+      : "Saved.",
+    );
   }
   async function quick(path: string, body: unknown, method = "PATCH") {
     try {
@@ -733,6 +753,7 @@ export default function App() {
               .map((s) => (
                 <button key={s.id} onClick={() => changeActor(s.id)}>
                   <Person
+                    staff={s}
                     name={value(s, "name")}
                     sub={label(value(s, "role"))}
                   />
@@ -754,7 +775,7 @@ export default function App() {
   const preferredMode = workspaceChoice?.actorId === data.actor.id ? workspaceChoice.mode : readStored("local", `nexus.workspace.${data.actor.id}`) as WorkspaceMode | null;
   const workspaceMode = preferredMode && workspaceModes.includes(preferredMode) ? preferredMode : defaultWorkspaceMode(data);
   const workspaceTitle = {clinical:"Clinical workspace",billing:"Billing workspace",executive:"Executive workspace"}[workspaceMode];
-  const workspaceDescription = {clinical:"Appointments, documentation, and follow-through for your care team.",billing:"Coverage, claims, and payments in one place.",executive:"Care delivery, workforce, and financial oversight."}[workspaceMode];
+  const workspaceDescription = {clinical:"Sessions, documentation, and follow-through for your care team.",billing:"Coverage, claims, and payments in one place.",executive:"Care delivery, workforce, and financial oversight."}[workspaceMode];
   const navOrder: View[] = workspaceMode === "billing" ? ["overview","billing","clients","tasks","schedule","notes","team","settings"] : workspaceMode === "executive" ? ["overview","clients","billing","tasks","schedule","notes","team","settings"] : ["overview","schedule","notes","clients","tasks","billing","team","settings"];
   const metric = data.metrics;
   const allNotes = data.notes;
@@ -914,14 +935,18 @@ export default function App() {
           <Icon name="back" size={16} /> All clients
         </button>
         <div className="chart-banner">
-          <Person
-            patient={c} name={clientName(c)}
-            sub={
-              value(c, "preferred_name")
-                ? `Preferred name: ${value(c, "preferred_name")}`
-                : "Client record"
-            }
-          />
+          <div className="person chart-person">
+            {canClients ? (
+              <button type="button" className="avatar-button" aria-label={`Change picture for ${clientName(c)}`} title="Change picture" onClick={() => setPicture({ kind: "clients", row: c })}>
+                <Avatar id={c.id} patient={c} size="lg" />
+                <span className="avatar-edit" aria-hidden="true"><NxIcon name="camera" size={13} /></span>
+              </button>
+            ) : <Avatar id={c.id} patient={c} size="lg" />}
+            <div>
+              <strong>{clientName(c)}</strong>
+              <small>{value(c, "preferred_name") ? `Goes by ${value(c, "preferred_name")}` : "Client record"}</small>
+            </div>
+          </div>
           <div className="chart-key">
             <span>Medical record</span>
             <strong>{value(c, "mrn") || "Not assigned"}</strong>
@@ -986,7 +1011,7 @@ export default function App() {
           ]}
         />
         {chartTab === "intake" && ["admin", "clinical_lead", "clinician", "support"].includes(role) && <PatientIntake mutate={mutate} key={`${c.id}:${data!.actor!.id}`} clientId={c.id} data={data!} onChanged={async () => { if (!await reload()) throw Error("Workspace refresh failed."); }} onDirtyChange={setIntakeDirty}
-          onOpenForms={episodeId => { if (!canRead("form_responses", clinical)) { setError("The clinical team must review and sign this patient's intake forms."); return; } if (canLeaveDraftReview()) { setFormEpisodeId(episodeId); setChartTab("forms"); } }}
+          onOpenForms={episodeId => { if (!canRead("form_responses", clinical)) { setError("The clinical team must review and sign this client's intake forms."); return; } if (canLeaveDraftReview()) { setFormEpisodeId(episodeId); setChartTab("forms"); } }}
           onOpenConsent={() => { if (canLeaveDraftReview()) { setChartTab("consents"); if (canConsents) create("consents", { client_id: c.id, kind: "treatment" }); } }}
           onEditPatient={() => { if (canLeaveDraftReview()) edit("clients", c); }}
         />}
@@ -1456,7 +1481,7 @@ export default function App() {
             { id: "agenda", label: "Calendar" },
             {
               id: "groups",
-              label: "Group encounters",
+              label: "Group sessions",
               count: data!.groups.length,
             },
             ...(canRead("sessions", false) ? [{ id: "availability", label: "Staff availability" }] : []),
@@ -1476,14 +1501,14 @@ export default function App() {
             mutate={mutate}
           />
         ) : scheduleTab === "pending" ? (
-          <Panel title="Client appointments awaiting attendance" subtitle="All scheduled client appointments, including past dates that still need attendance. Shared groups have one entry per enrolled client.">
-            {toolbar("Search scheduled client appointments")}
+          <Panel title="Sessions awaiting attendance" subtitle="All scheduled client appointments, including past dates that still need attendance. Shared groups have one entry per enrolled client.">
+            {toolbar("Search scheduled sessions")}
             <Table rows={matching(data!.sessions).filter(row => row.status === "scheduled").sort((a,b)=>value(a,"starts_at").localeCompare(value(b,"starts_at")))} columns={[
               {label:"Client",render:row=><Button variant="text small" onClick={()=>{const person=client(row.client_id); if(person) openChart(person);}}>{clientName(client(row.client_id))}</Button>},
-              {label:"Appointment",render:row=>{const zone=schedulingZone(data!,row,"sessions"); return <><strong>{facilityWallTime(value(row,"starts_at"),zone).replace("T"," ")}</strong><small>{zone} · {label(value(row,"kind"))}</small></>;}},
+              {label:"Session",render:row=>{const zone=schedulingZone(data!,row,"sessions"); return <><strong>{facilityWallTime(value(row,"starts_at"),zone).replace("T"," ")}</strong><small>{zone} · {label(value(row,"kind"))}</small></>;}},
               {label:"Clinician",render:row=>value(data!.staff.find(person=>person.id===row.clinician_id),"name")},
-              {label:"Action",render:row=><Button variant="text small" onClick={()=>{setScheduleFocusId(row.id);setScheduleTab("agenda");}}>Open appointment</Button>},
-            ]} empty={<Empty icon="schedule" title="Attendance is up to date" description="Appointments with scheduled status will appear here until attendance is resolved." />} />
+              {label:"Action",render:row=><Button variant="text small" onClick={()=>{setScheduleFocusId(row.id);setScheduleTab("agenda");}}>Open session</Button>},
+            ]} empty={<Empty icon="schedule" title="Attendance is up to date" description="Sessions with scheduled status will appear here until attendance is resolved." />} />
           </Panel>
         ) : scheduleTab === "availability" ? (
           <StaffAvailability key={data!.actor!.id} data={data!} />
@@ -1728,6 +1753,12 @@ export default function App() {
                     onClick={() => create("payments", { claim_id: r.id })}
                   >
                     Payment
+                  </Button>
+                )}
+                {["admin", "billing"].includes(role) && ["ready", "submitted", "denied", "paid"].includes(value(r, "status")) &&
+                  data!.sessions.find((s) => s.id === r.session_id)?.status === "completed" && (
+                  <Button variant="text small" onClick={() => setSuperbillClaim(r.id)}>
+                    Superbill
                   </Button>
                 )}
                 {billing && (
@@ -2022,7 +2053,7 @@ export default function App() {
                 {
                   label: "Team member",
                   render: (r) => (
-                    <Person name={value(r, "name")} sub={value(r, "email")} />
+                    <Person staff={r} name={value(r, "name")} sub={value(r, "email")} />
                   ),
                 },
                 { label: "Role", render: (r) => <Badge status={r.role} /> },
@@ -2041,15 +2072,21 @@ export default function App() {
                 {
                   label: "Actions",
                   render: (r) =>
-                    admin ? (
+                    admin || r.id === data!.actor?.id ? (
                       <div className="row-actions">
                         <Button
+                          variant="text small"
+                          onClick={() => setPicture({ kind: "staff", row: r })}
+                        >
+                          {r.id === data!.actor?.id ? "Your picture" : "Picture"}
+                        </Button>
+                        {admin && <Button
                           variant="text small"
                           onClick={() => edit("staff", r)}
                         >
                           Edit
-                        </Button>
-                        {Boolean(r.active) && r.id !== data!.actor?.id && (
+                        </Button>}
+                        {admin && Boolean(r.active) && r.id !== data!.actor?.id && (
                           <Button
                             variant="text small danger"
                             onClick={() =>
@@ -2354,7 +2391,7 @@ export default function App() {
             <div className="info-strip">
               <Icon name="shield" size={20} />
               <p>
-                Keep real patient information out of this local prototype until
+                Keep real client information out of this local prototype until
                 identity, deployment, data handling, and the organization’s
                 required controls have been validated.
               </p>
@@ -2414,6 +2451,7 @@ export default function App() {
   }
 
   return (
+    <AvatarProvider value={data.avatars ?? {}}>
     <div className="app-shell" onKeyDown={(event) => {
       if (event.key === "Escape" && mobile) setMobile(false);
     }}>
@@ -2460,6 +2498,8 @@ export default function App() {
           <ProfileMenu
             key={data.actor.id}
             name={value(data.actor, "name")}
+            actorId={data.actor.id}
+            onChangePicture={() => { setPicture({ kind: "staff", row: data.actor! }); return true; }}
             roleLabel={label(role)}
             canOpenSettings={visibleViews(data).includes("settings")}
             onOpenSettings={() => {
@@ -2607,6 +2647,7 @@ export default function App() {
         <Modal
           title={dialog.title}
           description={dialog.description}
+          icon={dialog.kind === "viewnote" ? "documentation" : dialog.resource ? recordIcon[dialog.resource] : /\/sign$/.test(dialog.path ?? "") ? "edit" : /\/(void|deny|reverse|offboard|discharge)$/.test(dialog.path ?? "") ? "warning" : dialog.path ? recordIcon[dialog.path.split("/")[2]] ?? "edit" : undefined}
           onClose={() => { if (registrationDirty) setRegistrationNotice("Save your registration or discard its changes before closing."); else { setDialog(null); setRegistrationNotice(""); } }}
           wide={
             dialog.resource === "clients" ||
@@ -2620,7 +2661,7 @@ export default function App() {
             <ClientRegistration key={dialog.record?.id || "new-client"} data={data} initial={dialog.record}
               onDirtyChange={setRegistrationDirty}
               onOpenExisting={id=>{ if(draftReviewDirty || intakeDirty) {setRegistrationNotice("Finish or discard the open chart review before changing patients.");return;} const found=data.clients.find(row=>row.id===id);if(!found){setRegistrationNotice("Refresh the workspace to open that record.");return;} setRegistrationDirty(false);setRegistrationNotice("");setDialog(null);setClientId(id);setChartTab("overview");setView("clients");setQuery(""); }}
-              onSubmit={async body=>{const saved=await request<Row>(`/api/clients${dialog.record ? `/${dialog.record.id}` : ""}`,dialog.record ? "PATCH" : "POST",body);setRegistrationDirty(false);setRegistrationNotice("");setDialog(null);await reload();setClientId(saved.id);setChartTab("intake");setView("clients");setToast("Patient registration saved.");}}
+              onSubmit={async body=>{const saved=await request<Row>(`/api/clients${dialog.record ? `/${dialog.record.id}` : ""}`,dialog.record ? "PATCH" : "POST",body);setRegistrationDirty(false);setRegistrationNotice("");setDialog(null);await reload();setClientId(saved.id);setChartTab("intake");setView("clients");setToast("Registration saved. Intake is next.");}}
             />
           </> : dialog.kind === "note" ? (
             <NoteComposer
@@ -2677,8 +2718,8 @@ export default function App() {
                       onClick={() =>
                         action(
                           `/api/notes/${dialog.record!.id}/sign`,
-                          "Sign clinical note",
-                          "Confirm that you have reviewed this documentation. The signed original cannot be edited; future corrections are recorded as amendments.",
+                          "Sign this note?",
+                          "After signing, changes are added as amendments. The signed original is kept as it is.",
                           [],
                           {},
                           "Sign note",
@@ -2762,6 +2803,25 @@ export default function App() {
           )}
         </Modal>
       )}
+      {superbillClaim && <Superbill key={superbillClaim} claimId={superbillClaim} onClose={() => setSuperbillClaim("")} />}
+      {picture && (
+        <PhotoPicker
+          key={`${picture.kind}-${picture.row.id}`}
+          kind={picture.kind}
+          id={picture.row.id}
+          name={picture.kind === "clients" ? clientName(picture.row) : value(picture.row, "name")}
+          current={data.avatars?.[picture.row.id]}
+          patient={picture.kind === "clients" ? picture.row : undefined}
+          own={picture.kind === "staff" && picture.row.id === data.actor.id}
+          onClose={() => setPicture(null)}
+          onSaved={async () => {
+            setPicture(null);
+            await reload();
+            setToast("Picture saved.");
+          }}
+        />
+      )}
     </div>
+    </AvatarProvider>
   );
 }

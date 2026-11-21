@@ -66,9 +66,9 @@ export default function NoteComposer({
     <form onSubmit={save}>
       <div className="form-body">
         {savedService && <div className="scheduling-zone-note"><strong>{value(savedService,"name")}</strong> · {value(savedService,"service_code")}
-          {suggestedTemplate?.active===true ? <><p>The encounter's saved service suggests {value(suggestedTemplate,"name")}. Applying it replaces the current form answers; the narrative remains.</p><Button variant="secondary small" onClick={()=>{if(Object.values(answers).some(Boolean) && !window.confirm("Replace the current form answers with this service's suggested template?"))return;setTemplate(suggestedTemplate.id);setAnswers({});}}>Use suggested template</Button></> : savedService.note_template_id ? <p>The suggested template is inactive or unavailable. Select an available template before documenting.</p> : <p>No note template was configured for this service. Choose the appropriate form for the care delivered.</p>}
+          {suggestedTemplate?.active===true ? <><p>This session's service suggests {value(suggestedTemplate,"name")}. Applying it replaces the current form answers; the narrative remains.</p><Button variant="secondary small" onClick={()=>{if(Object.values(answers).some(Boolean) && !window.confirm("Replace the current form answers with this service's suggested template?"))return;setTemplate(suggestedTemplate.id);setAnswers({});}}>Use suggested template</Button></> : savedService.note_template_id ? <p>The suggested template is inactive or unavailable. Select an available template before documenting.</p> : <p>No note template was configured for this service. Choose the appropriate form for the care delivered.</p>}
         </div>}
-        <fieldset className="record-section"><legend>Patient and visit</legend><div className="form-grid">
+        <fieldset className="record-section"><legend>Client and session</legend><div className="form-grid">
           <div className="form-field">
             <label htmlFor="note-client">Client *</label>
             <Choice

@@ -1,4 +1,5 @@
 import { Choice, DateTimeField } from "./nexus-ui/FieldControls";
+import { zoneLabel } from "./dateText";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { request, value, withOriginalUpdatedAt } from "./api";
@@ -35,7 +36,7 @@ export default function StaffAvailability({data}: {data: Bootstrap}) {
     finally { setBusy(false); }
   }
   const shown = rows.filter(row => (!filter || row.staff_id === filter) && (inactive || row.active === true)).sort((a,b)=>value(a,"starts_at").localeCompare(value(b,"starts_at")));
-  return <Panel title="Staff availability" subtitle="Record time away from care. Active blocks prevent conflicting appointments and group assignments." action={manages(data) ? <Button onClick={()=>setEditing(null)}>Add unavailable time</Button> : undefined}>
+  return <Panel title="Staff availability" subtitle="Record time away from care. Active blocks prevent conflicting sessions and group assignments." action={manages(data) ? <Button onClick={()=>setEditing(null)}>Add unavailable time</Button> : undefined}>
     <div className="toolbar">
       <label>Team member <Choice className="compact-select" value={filter} onChange={event=>setFilter(event.target.value)}><option value="">All team members</option>{data.staff.filter(row => ["admin","clinical_lead","clinician"].includes(value(row,"role"))).map(row=><option key={row.id} value={row.id}>{value(row,"name")}</option>)}</Choice></label>
       <label><input type="checkbox" checked={inactive} onChange={event=>setInactive(event.target.checked)} /> Include cancelled blocks</label>
@@ -46,7 +47,7 @@ export default function StaffAvailability({data}: {data: Bootstrap}) {
       const zone=zoneFor(data,value(row,"staff_id"));
       return <tr key={row.id}><td>{value(data.staff.find(staff=>staff.id===row.staff_id),"name")}</td><td><strong>{facilityWallTime(value(row,"starts_at"),zone).replace("T"," ")}</strong><small>to {facilityWallTime(value(row,"ends_at"),zone).replace("T"," ")} · {zone}</small></td><td>{value(row,"reason")}</td><td><Badge status={row.active ? "active" : "cancelled"} /></td><td>{manages(data,row) && <div className="row-actions"><Button variant="text small" disabled={busy} onClick={()=>setEditing(row)}>Edit</Button><Button variant="text small" disabled={busy} onClick={()=>void changeActive(row)}>{row.active ? "Cancel block" : "Reactivate"}</Button></div>}</td></tr>;
     })}</tbody></table></div>}
-    {editing !== undefined && <Modal title={editing ? "Edit unavailable time" : "Add unavailable time"} description="Use a brief scheduling reason. Keep personal and clinical details out of this field." onClose={()=>setEditing(undefined)}>
+    {editing !== undefined && <Modal icon="clock" title={editing ? "Edit unavailable time" : "Add unavailable time"} description="Use a brief scheduling reason. Keep personal and clinical details out of this field." onClose={()=>setEditing(undefined)}>
       <AvailabilityForm key={editing?.id || "new"} data={data} record={editing} onClose={()=>setEditing(undefined)} onSaved={async()=>{setEditing(undefined); await reload();}} />
     </Modal>}
   </Panel>;
@@ -78,7 +79,7 @@ function AvailabilityForm({data,record,onClose,onSaved}:{data:Bootstrap;record:R
     } catch(error) {setError(error instanceof Error ? error.message : "Unavailable time could not be saved.");}
     finally {setBusy(false);}
   }
-  return <form onSubmit={submit}><div className="form-body"><p className="scheduling-zone-note">Times use <strong>{zone}</strong>.</p><div className="form-grid">
+  return <form onSubmit={submit}><div className="form-body"><p className="scheduling-zone-note">Times are <strong>{zoneLabel(zone)}</strong>, from the team member's facility.</p><div className="form-grid">
     <label className="form-field full">Team member<Choice required value={staffId} disabled={Boolean(record)} onChange={event=>{setStaffId(event.target.value);setStartChoice("");setEndChoice("");}}><option value="">Choose…</option>{choices.map(row=><option key={row.id} value={row.id}>{value(row,"name")}</option>)}</Choice></label>
     {([{label:"Start",text:start,set:setStart,choice:startChoice,setChoice:setStartChoice},{label:"End",text:end,set:setEnd,choice:endChoice,setChoice:setEndChoice}]).map(field=><div className="form-field" key={field.label}><label htmlFor={"availability-"+field.label}>{field.label}</label><DateTimeField id={"availability-"+field.label} label={field.label} required value={field.text} onChange={next=>{field.set(next);field.setChoice("");}} />{wallTimeCandidates(field.text,zone).length>1 && <label>{field.label} occurrence<Choice required value={field.choice} onChange={event=>field.setChoice(event.target.value)}><option value="">Choose first or second…</option>{wallTimeCandidates(field.text,zone).map((instant,index)=><option key={instant} value={instant}>{occurrenceLabel(instant,zone,index)}</option>)}</Choice></label>}</div>)}
     <label className="form-field full">Scheduling reason<input required maxLength={200} value={reason} onChange={event=>setReason(event.target.value)} placeholder="For example, training or time away" /></label>

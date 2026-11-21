@@ -4,6 +4,7 @@ import type { Bootstrap,Row } from "./api";
 import { request,value,clientName } from "./api";
 import { authMode } from "./authSession";
 import { schedulingZone } from "./schedulingTime";
+import { zoneLabel } from "./dateText";
 import { Button,Modal,Badge } from "./ui";
 import { visitLink } from "./telehealthApi";
 import type { VisitParticipant } from "./telehealthTypes";
@@ -15,7 +16,7 @@ type Invitation={token:string;expires_at:string;participant:VisitParticipant};
 export default function TelehealthManager({data,encounter,kind,onClose}:{data:Bootstrap;encounter:Row;kind:"sessions"|"groups";onClose:()=>void}) {
   const [reviewDirty,setReviewDirty]=useState(false);
   const zone=schedulingZone(data,encounter,kind);
-  const date=(input:string,_time=true)=>`${new Intl.DateTimeFormat("en-US",{timeZone:zone,dateStyle:"medium",timeStyle:"short"}).format(new Date(input))} ${zone}`;
+  const date=(input:string,_time=true)=>`${new Intl.DateTimeFormat("en-US",{timeZone:zone,dateStyle:"medium",timeStyle:"short"}).format(new Date(input))} ${zoneLabel(zone)}`;
   const[managed,setManaged]=useState<Managed|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[invitation,setInvitation]=useState<Invitation|null>(null),[copied,setCopied]=useState(false);
   useEffect(()=>{if(!reviewDirty)setError(previous=>previous==="Save or discard transcript edits before closing this visit."?"":previous);},[reviewDirty]);
   const[rooms,setRooms]=useState<Row[]>([]),[loaded,setLoaded]=useState(false);
@@ -26,18 +27,18 @@ export default function TelehealthManager({data,encounter,kind,onClose}:{data:Bo
   async function command(action:string){if(!managed)return;setBusy(true);setError("");try{await request(`/api/telehealth/rooms/${managed.room.id}/${action}`,"POST",{});setInvitation(null);await reload(managed.room.id);}catch(error){setError(error instanceof Error?error.message:"The visit could not be updated.");}finally{setBusy(false);}}
   const ended=managed?.room.ended_at|| (managed&&Date.parse(value(managed.room,"expires_at"))<=Date.now());
   const close=()=>{if(reviewDirty){setError("Save or discard transcript edits before closing this visit.");return;}onClose();};
-  return <Modal title="Telehealth visit" description="Prepare participant access for this encounter. Admission happens inside the clinician's visit." onClose={close} wide>
+  return <Modal icon="telehealth" title="Telehealth visit" description="Set up who can join this session. You admit each person from inside your own visit." onClose={close} wide>
     <div className="form-body visit-management">
       <div className="visit-context"><strong>{kind==="groups"?value(encounter,"title"):clientName(clients[0])}</strong><span>{date(value(encounter,"starts_at"),true)}</span><Badge status={value(encounter,"status")} /></div>
       {error&&<p className="error-banner" role="alert">{error}</p>}
-      {!loaded&&!error&&<p role="status">Loading visit history…</p>}{loaded&&!managed&&!error&&<p>No telehealth rooms were created for this encounter.</p>}{rooms.length>1&&<label>Visit room<Choice disabled={reviewDirty} value={managed?.room.id||""} onChange={e=>{setInvitation(null);void reload(e.target.value).catch(e=>setError(e.message));}}>{rooms.map(r=><option key={r.id} value={r.id}>{date(value(r,"created_at"))}{r.ended_at?" · ended":""}</option>)}</Choice></label>}
+      {!loaded&&!error&&<p role="status">Loading visit history…</p>}{loaded&&!managed&&!error&&<p>No telehealth room was created for this session.</p>}{rooms.length>1&&<label>Visit room<Choice disabled={reviewDirty} value={managed?.room.id||""} onChange={e=>{setInvitation(null);void reload(e.target.value).catch(e=>setError(e.message));}}>{rooms.map(r=><option key={r.id} value={r.id}>{date(value(r,"created_at"))}{r.ended_at?" · ended":""}</option>)}</Choice></label>}
       {managed&&<>
         <p>Room access expires {date(value(managed.room,"expires_at"),true)}. Each invitation is for one participant. It does not verify their identity.</p>
         {authMode()==="local"&&<p className="visit-local-note">Local review · Use separate browser windows on this computer. Remote connectivity and identity are not configured.</p>}
         {ended?<p role="status">This room has ended. The participation history and saved recordings remain available below.</p>:<>
           <Button disabled={busy} onClick={()=>void issue()}>Prepare my clinician access</Button>
           <h3>Client invitations</h3>
-          {!clients.length?<p>No eligible client is enrolled in this encounter. Check the episode and group enrollment before inviting a participant.</p>:clients.map(client=><div className="visit-invite-row" key={client.id}><span>{clientName(client)}</span><Button variant="secondary small" disabled={busy} onClick={()=>void issue(client)}>Create invitation</Button></div>)}
+          {!clients.length?<p>No client can be invited to this session yet. Check the care episode and the group's participants first.</p>:clients.map(client=><div className="visit-invite-row" key={client.id}><span>{clientName(client)}</span><Button variant="secondary small" disabled={busy} onClick={()=>void issue(client)}>Create invitation</Button></div>)}
       </>}
         {invitation&&<section className="visit-invitation" aria-label="New visit invitation"><strong>{invitation.participant.role==="host"?"Your clinician visit":"Participant invitation"} · {invitation.participant.label}</strong><p>This link replaces any earlier invitation for this participant. Share it only with the intended person.</p><div className="visit-actions"><a className="button" href={visitLink(invitation.token)} target="_blank" rel="noopener noreferrer">Open visit in new window</a><Button variant="secondary" onClick={async()=>{try{await navigator.clipboard.writeText(visitLink(invitation.token));setCopied(true);}catch{setError("Copy is unavailable. Open the visit link in a new window.");}}}>{copied?"Invitation copied":"Copy invitation"}</Button></div><small>Expires {date(invitation.expires_at,true)}. Copy it now; Nexus does not retain a retrievable copy of this link.</small></section>}
         <div className="visit-section-heading"><h3>Participation</h3><Button variant="text small" disabled={busy} onClick={()=>void reload(managed.room.id).catch(e=>setError(e.message))}>Refresh participation</Button></div>

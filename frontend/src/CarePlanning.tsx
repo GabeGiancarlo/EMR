@@ -65,6 +65,7 @@ function PlanReview({
   }
   return (
     <Modal
+      icon="care-plan"
       title="Review treatment progress"
       description="Record the client’s progress against the signed goals. The original plan remains unchanged."
       onClose={onClose}

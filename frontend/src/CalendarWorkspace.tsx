@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Bootstrap, Row } from "./api";
 import { clientName, date, label, value } from "./api";
 import { NxIcon } from "./nexus-ui/Icon";
+import { zoneLabel } from "./dateText";
 import { readStored, writeStored } from "./safeStorage";
 import { Avatar } from "./nexus-ui/Avatar";
 import { Badge, Button, Modal } from "./ui";
@@ -250,7 +251,7 @@ export default function CalendarWorkspace({
         endsAt,
         linkedSessionIds: links.get(row.id) ?? [],
         row,
-        title: value(row, "title") || "Group encounter",
+        title: value(row, "title") || "Group session",
         location: value(row, "location"),
         participantNames: disclosure.names,
         hiddenParticipants: disclosure.hiddenCount,
@@ -384,7 +385,7 @@ export default function CalendarWorkspace({
         <div>
           <h2>{rangeLabel}</h2>
           <p className="cal-tz">
-            Times shown in {timeZone}
+            Times are {zoneLabel(timeZone)}
             {facilityId === ALL ? " for all facilities" : selectedFacility ? ` · ${selectedFacility.name}` : ""}.
 
           </p>
@@ -584,7 +585,7 @@ export default function CalendarWorkspace({
           </ul>
         </section>
       </div>
-      {repeatedSlot && <Modal title="Choose an appointment time" description={`This time occurs twice in ${timeZone} on ${formatYmdLong(repeatedSlot.day)}.`} onClose={()=>setRepeatedSlot(null)}>
+      {repeatedSlot && <Modal icon="clock" title="Which of the two times?" description={`This time occurs twice in ${timeZone} on ${formatYmdLong(repeatedSlot.day)}.`} onClose={()=>setRepeatedSlot(null)}>
         <div className="cal-dialog-actions">{repeatedSlot.candidates.map((instant,index) =>
           <Button key={instant} variant="secondary" onClick={()=>{
             const {kind,day,hour,minute} = repeatedSlot;
@@ -605,15 +606,15 @@ export default function CalendarWorkspace({
           <div className="cal-dialog-body">
             <header className={`cal-event-head state-${openEvent.status} ${serviceClass(openEvent.type,openEvent.source).split(" ").at(-1)}`}>
               <div className="cal-event-type"><span className="cal-service-dot"/>{label(openEvent.type)} {openEvent.source === "group" ? "group" : "session"}</div>
-              <button type="button" className="icon-button cal-detail-close" aria-label="Close appointment" onClick={()=>setOpenKey(null)}><NxIcon name="close" size={20}/></button>
+              <button type="button" className="icon-button cal-detail-close" aria-label="Close session" onClick={()=>setOpenKey(null)}><NxIcon name="close" size={20}/></button>
               <div className="cal-event-person">{openEvent.source === "group" ? <span className="group-avatar"><NxIcon name="group" size={28}/></span> :
-                <Avatar patient={openEvent.participantRows[0]} name={openEvent.title} id={String(openEvent.row.client_id || openEvent.id)}/>}
+                <Avatar patient={openEvent.participantRows[0]} id={String(openEvent.row.client_id || openEvent.id)} size="lg"/>}
                 <div><h3 id="cal-dialog-title">{openEvent.title}</h3><Badge status={openEvent.status || "scheduled"}/></div></div>
             </header>
             <dl className="cal-facts">
               <dt>When</dt>
               <dd>
-                {formatYmdLong(facilityYmd(new Date(openEvent.startsAt), timeZone))} · {formatFacilityTime(new Date(openEvent.startsAt), timeZone)}–{formatFacilityTime(new Date(openEvent.endsAt), timeZone)} {timeZone}
+                {formatYmdLong(facilityYmd(new Date(openEvent.startsAt), timeZone))} · {formatFacilityTime(new Date(openEvent.startsAt), timeZone)}–{formatFacilityTime(new Date(openEvent.endsAt), timeZone)} {zoneLabel(timeZone)}
                 {crossesMidnight(openEvent.startsAt, openEvent.endsAt, timeZone) ? ". Continues across midnight." : ""}
               </dd>
               <dt>Type</dt>
@@ -639,13 +640,13 @@ export default function CalendarWorkspace({
               )}
             </dl>
             {openEvent.lockReason && <div className="cal-lock-notice">
-              <strong><NxIcon name="lock" size={16}/> Appointment locked</strong>
+              <strong><NxIcon name="lock" size={16}/> Session locked</strong>
               <p>{openEvent.lockReason}</p>
             </div>}
             <div className="cal-dialog-actions">
               {["admin","clinical_lead","clinician"].includes(value(data.actor,"role")) && (value(data.actor,"role")!=="clinician"||openEvent.clinicianId===data.actor?.id) && <Button onClick={()=>{onTelehealth(openEvent.source==="group"||parentGroup?"groups":"sessions",parentGroup||openEvent.row);setOpenKey(null);}}>{openEvent.status==="scheduled"?"Open telehealth":"Visit records"}</Button>}
               {openEvent.source === "session" && !openEvent.row.group_id && !parentGroup && !openEvent.lockReason && canWrite && data.permissions?.sessions?.write && (
-                <Button onClick={() => { onEditSession(openEvent.row); setOpenKey(null); }}>Edit session</Button>
+                <Button variant="secondary" onClick={() => { onEditSession(openEvent.row); setOpenKey(null); }}>Edit session</Button>
               )}
               {openEvent.source === "session" && openEvent.participantRows[0] && (
                 <Button variant="secondary" onClick={() => { onOpenClient(openEvent.participantRows[0]); setOpenKey(null); }}>Open chart</Button>

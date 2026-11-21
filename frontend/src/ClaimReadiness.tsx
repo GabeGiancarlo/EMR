@@ -107,6 +107,7 @@ export default function ClaimReadiness({
 
   return (
     <Modal
+      icon="claim"
       title="Billing readiness"
       description="Internal validation only. A passing checklist does not transmit the claim."
       onClose={onClose}

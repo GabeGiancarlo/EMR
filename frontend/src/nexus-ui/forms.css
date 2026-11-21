@@ -1,0 +1,1117 @@
+/*
+ * Nexus forms: every field, menu, calendar, dialog and form action.
+ *
+ * The brand guide sets the shapes. Anything that holds data or input is square (3 to 6 px):
+ * fields, menus, dialogs. The primary button, counts, the chosen day's neighbours and profile
+ * tiles take the one soft corner, top right. The leaf is kept for the chosen day in a calendar
+ * and for cards that summarise. Colour comes only from --nx-* role tokens, so both themes follow.
+ *
+ * Imported last, after interactions.css, so these rules settle the cascade for forms.
+ */
+:root {
+  --nx-field-radius: 4px;
+  --nx-field-height: 40px;
+  --nx-field-line: var(--nx-border-control);
+  --nx-field-line-hover: var(--nx-text-secondary);
+  --nx-menu-shadow: 0 12px 34px color-mix(in srgb, var(--nx-night) 16%, transparent), 0 1px 2px color-mix(in srgb, var(--nx-night) 10%, transparent);
+}
+
+/* ---------------------------------------------------------------- buttons */
+/* Rest: soft corner. Hover: the corner opens and the ink deepens. Pressed: the corner closes
+   and the button drops a pixel. Nothing around a button moves. */
+.button,
+.nx-button,
+.ws-action {
+  transition:
+    border-radius var(--nx-motion-press) var(--nx-ease),
+    background-color var(--nx-motion-press) var(--nx-ease),
+    border-color var(--nx-motion-press) var(--nx-ease),
+    transform var(--nx-motion-press) var(--nx-ease);
+}
+.button:not(.secondary):not(.text),
+.ws-action:not(.quiet) {
+  border-radius: var(--nx-corner-control);
+}
+.button:not(.secondary):not(.text):hover:enabled,
+.ws-action:not(.quiet):hover:enabled {
+  border-radius: var(--nx-corner-control-hover);
+  transform: none;
+  box-shadow: none;
+}
+.button:active:enabled,
+.ws-action:active:enabled,
+.icon-button:active:enabled {
+  transform: translateY(1px);
+}
+.button:not(.secondary):not(.text):active:enabled,
+.ws-action:not(.quiet):active:enabled {
+  border-radius: var(--nx-radius-control);
+}
+.button.secondary,
+.ws-action.quiet {
+  border-radius: var(--nx-radius-control);
+}
+.button.secondary:hover:enabled,
+.ws-action.quiet:hover:enabled {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--nx-field-line-hover);
+}
+.button.text,
+.button.text.small,
+button.ws-link {
+  border-radius: var(--nx-radius-control);
+}
+.button svg,
+.ws-action svg {
+  flex: none;
+}
+/* Busy: the sun turns and the width holds. */
+.button[data-busy] {
+  cursor: progress;
+  opacity: 1;
+}
+.button[data-busy] .nx-spin {
+  color: var(--nx-highlight);
+}
+.button.danger.secondary:hover:enabled {
+  border-color: var(--nx-danger);
+  background: var(--nx-danger-bg);
+}
+
+/* ----------------------------------------------------------------- fields */
+.form-field {
+  gap: 6px;
+}
+.form-field > label,
+.form-field > span:first-child,
+.nx-field > label {
+  display: block;
+  font: 600 13.5px/1.3 var(--nx-font-ui);
+  color: var(--nx-text);
+}
+.form-field .required,
+.required {
+  color: var(--nx-accent);
+  font-weight: 600;
+}
+.form-field small,
+.nx-field-hint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--nx-text-secondary);
+}
+/* :where keeps the base rule light, so the control-specific rules below (room for a chevron,
+   a calendar button or a dollar sign) are not out-ranked by it. */
+.form-field :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea),
+.nx-choice > select,
+.nx-date > input:not([hidden]),
+.nx-time > input,
+.nx-affix > input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--nx-field-height);
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--nx-field-line);
+  border-radius: var(--nx-field-radius);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: 400 15px/1.4 var(--nx-font-ui);
+  transition: border-color var(--nx-motion-feedback) var(--nx-ease), background-color var(--nx-motion-feedback) var(--nx-ease);
+}
+.form-field textarea {
+  min-height: 88px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.form-field :is(input, select, textarea):hover:enabled,
+.nx-choice > select:hover:enabled,
+.nx-date > input:hover:enabled,
+.nx-time > input:hover:enabled {
+  border-color: var(--nx-field-line-hover);
+}
+.form-field :is(input, select, textarea)::placeholder,
+.nx-date > input::placeholder,
+.nx-time > input::placeholder {
+  color: color-mix(in srgb, var(--nx-text-secondary) 78%, var(--nx-surface));
+}
+.form-field :is(input, select, textarea):disabled,
+.nx-choice > select:disabled,
+.nx-date > input:disabled,
+.nx-time > input:disabled {
+  background: var(--nx-surface-subtle);
+  color: var(--nx-text-secondary);
+  cursor: not-allowed;
+}
+:is(.nx-date, .nx-time)[data-invalid] > input,
+.form-field :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--nx-danger);
+  box-shadow: inset 0 0 0 1px var(--nx-danger);
+}
+.nx-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font: 400 13px/1.35 var(--nx-font-ui);
+  color: var(--nx-danger);
+}
+.nx-field-error svg {
+  margin-top: 2px;
+}
+
+/* A leading mark inside a field: the dollar sign on an amount. */
+.nx-affix {
+  position: relative;
+  display: flex;
+}
+.nx-affix > span {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 700 14px/1 var(--nx-font-figure);
+  color: var(--nx-text-secondary);
+  pointer-events: none;
+}
+.nx-affix > input {
+  padding-left: 26px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Tick boxes: a square that fills with ink. */
+.form-field input[type="checkbox"],
+.check-inline input[type="checkbox"],
+.review-check input[type="checkbox"],
+input[type="checkbox"].nx-check {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--nx-field-line);
+  border-radius: 3px;
+  background: var(--nx-surface);
+  cursor: pointer;
+  transition: background-color var(--nx-motion-press) var(--nx-ease), border-color var(--nx-motion-press) var(--nx-ease);
+}
+.form-field input[type="checkbox"]::after,
+.check-inline input[type="checkbox"]::after,
+.review-check input[type="checkbox"]::after,
+input[type="checkbox"].nx-check::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border: solid var(--nx-on-action);
+  border-width: 0 0 2.2px 2.2px;
+  transform: rotate(-45deg) scale(0);
+  transition: transform var(--nx-motion-press) var(--nx-ease);
+}
+.form-field input[type="checkbox"]:checked,
+.check-inline input[type="checkbox"]:checked,
+.review-check input[type="checkbox"]:checked,
+input[type="checkbox"].nx-check:checked {
+  border-color: var(--nx-action);
+  background: var(--nx-action);
+}
+.form-field input[type="checkbox"]:checked::after,
+.check-inline input[type="checkbox"]:checked::after,
+.review-check input[type="checkbox"]:checked::after,
+input[type="checkbox"].nx-check:checked::after {
+  transform: rotate(-45deg) scale(1);
+}
+.form-field input[type="checkbox"]:hover:enabled,
+.check-inline input[type="checkbox"]:hover:enabled {
+  border-color: var(--nx-action);
+}
+.checkbox-field {
+  justify-content: flex-start;
+}
+.checkbox-field > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--nx-field-height);
+  padding: 0 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--nx-field-radius);
+  background: var(--nx-surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+.checkbox-field > label:has(:checked) {
+  border-color: var(--nx-brand-mid);
+  background: color-mix(in srgb, var(--nx-selected) 45%, var(--nx-surface));
+}
+.check-inline {
+  font-size: 13px !important;
+  gap: 6px;
+}
+
+/* --------------------------------------------- choice, date and time fields */
+.nx-choice,
+.nx-date,
+.nx-time {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.form-field :is(.nx-choice, .nx-date),
+label > :is(.nx-choice, .nx-date) {
+  width: 100%;
+}
+.nx-choice > select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 36px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+.nx-choice > svg {
+  position: absolute;
+  top: calc(var(--nx-field-height) / 2);
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--nx-text-secondary);
+  pointer-events: none;
+}
+.nx-choice[data-open] > select,
+.nx-date[data-open] > input:not([hidden]),
+.nx-time[data-open] > input {
+  border-color: var(--nx-brand);
+  box-shadow: inset 0 0 0 1px var(--nx-brand);
+}
+.nx-choice[data-open] > svg {
+  color: var(--nx-brand);
+}
+.nx-date > input:not([hidden]),
+.nx-time > input {
+  flex: 1 1 0;
+  padding-right: 40px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.nx-date > button,
+.nx-time > button {
+  position: absolute;
+  top: calc((var(--nx-field-height) - 30px) / 2);
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--nx-brand);
+  cursor: pointer;
+  transition: background-color var(--nx-motion-feedback) var(--nx-ease);
+}
+.nx-date > button:hover:enabled,
+.nx-time > button:hover:enabled,
+:is(.nx-date, .nx-time)[data-open] > button {
+  background: var(--nx-selected);
+  color: var(--nx-on-selected);
+}
+.nx-date > button:disabled,
+.nx-time > button:disabled {
+  color: var(--nx-text-secondary);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+:is(.nx-date, .nx-time) > .nx-field-error {
+  flex: 1 0 100%;
+  margin-top: 5px;
+}
+.nx-datetime {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 0.62fr);
+  gap: 8px;
+  align-items: start;
+}
+.nx-datetime > .nx-date,
+.nx-datetime > .nx-time {
+  width: 100%;
+}
+/* Small selects in toolbars keep the field shape at a tighter size. */
+.nx-choice > select.compact-select {
+  min-height: 36px;
+  max-width: 220px;
+  padding: 6px 34px 6px 11px;
+  font-size: 14px;
+  color: var(--nx-text);
+}
+.nx-choice:has(> select.compact-select) > svg {
+  top: 18px;
+}
+
+/* ------------------------------------------------------------------ menus */
+.nx-flyout {
+  position: fixed;
+  inset: auto;
+  z-index: 1000;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--nx-field-line);
+  border-radius: var(--nx-radius-overlay);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  box-shadow: var(--nx-menu-shadow);
+  font: 400 15px/1.35 var(--nx-font-ui);
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+}
+/* Opening upward covers the fields above, so the menu says which field it belongs to. */
+.nx-flyout-caption {
+  display: none;
+  padding: 6px 10px 5px;
+  font: 600 11px/1.3 var(--nx-font-ui);
+  letter-spacing: var(--nx-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-secondary);
+}
+.nx-flyout[data-side="above"] > .nx-flyout-caption {
+  display: block;
+}
+.nx-options [role="option"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--nx-text);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.nx-options [role="option"][data-active="true"],
+.nx-options button[role="option"]:hover,
+.nx-options button[role="option"]:focus-visible {
+  background: var(--nx-surface-subtle);
+}
+.nx-options [role="option"][aria-selected="true"] {
+  background: var(--nx-selected);
+  color: var(--nx-on-selected);
+  font-weight: 600;
+}
+.nx-options [role="option"][aria-selected="true"][data-active="true"] {
+  background: color-mix(in srgb, var(--nx-selected) 82%, var(--nx-brand-mid));
+}
+.nx-options [role="option"][data-empty] {
+  color: var(--nx-text-secondary);
+}
+.nx-options [role="option"][aria-disabled="true"] {
+  color: var(--nx-text-secondary);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.nx-options [role="option"] svg {
+  flex: none;
+  color: var(--nx-on-selected);
+}
+.nx-options-empty {
+  padding: 10px;
+  color: var(--nx-text-secondary);
+  font-size: 14px;
+}
+.nx-time-menu [role="option"] {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.nx-time-menu button[role="option"]:focus-visible {
+  outline-offset: -2px;
+}
+
+/* --------------------------------------------------------------- calendar */
+.nx-date-menu {
+  padding: 12px 12px 8px;
+}
+.nx-month-nav {
+  display: grid;
+  grid-template-columns: 32px 1fr auto 32px;
+  align-items: center;
+  gap: 8px;
+}
+.nx-month-nav > strong {
+  padding-left: 2px;
+  font: 600 17px/1.2 var(--nx-font-display);
+  letter-spacing: var(--nx-tracking-display);
+  color: var(--nx-brand);
+}
+.nx-date-menu button {
+  border: 0;
+  background: transparent;
+  color: var(--nx-text);
+  font: 600 14px/1 var(--nx-font-ui);
+  cursor: pointer;
+}
+.nx-month-nav > button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 3px;
+  color: var(--nx-text-secondary);
+}
+.nx-month-nav > button:hover:enabled {
+  background: var(--nx-surface-subtle);
+  color: var(--nx-text);
+}
+.nx-date-menu .nx-month-nav input {
+  box-sizing: border-box;
+  width: 74px;
+  min-height: 32px;
+  height: 32px;
+  padding: 2px 6px 2px 9px;
+  border: 1px solid var(--ui-line);
+  border-radius: 3px;
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: 700 14px/1 var(--nx-font-figure);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.nx-date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  margin: 10px 0 8px;
+}
+.nx-date-grid small {
+  padding: 4px 0 6px;
+  font: 600 11px/1.3 var(--nx-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--nx-text-secondary);
+}
+.nx-date-grid button {
+  position: relative;
+  aspect-ratio: 1;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 3px;
+  font: 600 14px/1 var(--nx-font-figure);
+  font-variant-numeric: lining-nums tabular-nums;
+  transition: background-color var(--nx-motion-press) var(--nx-ease), border-radius var(--nx-motion-press) var(--nx-ease);
+}
+.nx-date-grid button:hover:enabled {
+  background: var(--nx-surface-subtle);
+  border-radius: 2px 12px 2px 12px;
+}
+.nx-date-grid [data-outside="true"] {
+  color: var(--nx-text-secondary);
+  font-weight: 500;
+  opacity: 0.72;
+}
+/* Today grows a short stem under its number. */
+.nx-date-grid [aria-current="date"] {
+  color: var(--nx-brand);
+}
+.nx-date-grid [aria-current="date"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 12px;
+  height: 2.5px;
+  margin-left: -6px;
+  border-radius: 2px;
+  background: var(--nx-accent);
+}
+/* The chosen day is a leaf: tip top left, stem bottom right. */
+.nx-date-grid [aria-pressed="true"],
+.nx-date-grid [aria-pressed="true"]:hover:enabled {
+  border-radius: 2px 14px 2px 14px;
+  background: var(--nx-action);
+  color: var(--nx-on-action);
+}
+.nx-date-grid [aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--nx-brand-mid);
+  transform: rotate(38deg);
+  transform-origin: 0 50%;
+}
+.nx-date-grid [aria-pressed="true"][aria-current="date"]::after {
+  background: var(--nx-on-action);
+}
+.nx-date-grid button:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+.nx-date-grid button:focus-visible {
+  outline-offset: 1px;
+}
+.nx-picker-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ui-line);
+}
+.nx-picker-foot button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 3px;
+  color: var(--nx-link);
+}
+.nx-picker-foot button:hover:enabled {
+  background: var(--nx-surface-subtle);
+}
+.nx-picker-foot .nx-picker-today svg {
+  color: var(--nx-brand-mid);
+}
+.nx-picker-foot button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ----------------------------------------------------------------- dialog */
+.modal {
+  width: min(720px, calc(100vw - 28px));
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-overlay);
+  box-shadow: 0 28px 80px color-mix(in srgb, var(--nx-night) 26%, transparent);
+}
+.modal.wide {
+  width: min(880px, calc(100vw - 28px));
+}
+.modal-head {
+  align-items: center;
+  gap: 14px;
+  padding: 18px clamp(16px, 3vw, 26px) 16px;
+  border-bottom: 1px solid var(--nx-border);
+  background: linear-gradient(105deg, var(--nx-surface) 30%, color-mix(in srgb, var(--nx-brand-soft) 46%, var(--nx-surface)));
+}
+.modal-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.modal-head h2 {
+  margin: 0;
+  font: 600 clamp(20px, 2vw, 24px) / 1.2 var(--nx-font-display);
+  letter-spacing: var(--nx-tracking-display);
+  color: var(--nx-brand);
+}
+.modal-head p {
+  max-width: 62ch;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--nx-text-secondary);
+}
+/* The tile that says what kind of record this is. */
+.modal-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 4px 14px 4px 4px;
+  background: var(--nx-brand);
+  color: var(--nx-page);
+}
+.modal-head > .icon-button {
+  align-self: flex-start;
+}
+.form-body {
+  padding: 20px clamp(16px, 3vw, 26px) 22px;
+}
+.form-grid {
+  gap: 16px 20px;
+}
+.modal-foot {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px clamp(16px, 3vw, 26px);
+  border-top: 1px solid var(--nx-border);
+  background: var(--nx-surface);
+}
+.modal-foot .button {
+  min-height: 38px;
+}
+.form-assurance {
+  max-width: none;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--nx-text-secondary);
+}
+.form-assurance svg {
+  flex: none;
+  color: var(--nx-brand-mid);
+}
+
+/* --------------------------------------------------------------- sections */
+.record-section,
+.client-registration fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.record-section + .record-section,
+.client-registration fieldset + fieldset {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-line);
+}
+.record-section > legend,
+.client-registration legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  font: 600 16px/1.3 var(--nx-font-display);
+  letter-spacing: -0.005em;
+  color: var(--nx-brand);
+}
+.record-section > legend + *,
+.client-registration legend + * {
+  clear: both;
+}
+.record-section > legend small {
+  display: block;
+  margin-top: 2px;
+  font: 400 13px/1.4 var(--nx-font-ui);
+  letter-spacing: 0;
+  color: var(--nx-text-secondary);
+}
+/* A section's number sits in a count tile, soft corner top right. */
+.nx-step {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-right: 9px;
+  padding: 0 4px;
+  border-radius: 3px 8px 3px 3px;
+  background: var(--nx-selected);
+  color: var(--nx-on-selected);
+  font: 800 11.5px/1 var(--nx-font-figure);
+  vertical-align: 2px;
+}
+
+/* Notes inside a form: what the form already knows, said once. */
+.form-note,
+.scheduling-zone-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 6px 8px;
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 0;
+  border-left: 3px solid var(--nx-brand-mid);
+  border-radius: 0 var(--nx-field-radius) var(--nx-field-radius) 0;
+  background: color-mix(in srgb, var(--nx-selected) 50%, var(--nx-surface));
+  color: var(--nx-text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.form-note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nx-brand);
+}
+/* Anything after the sentence, such as "Use 60 min", sits under it and never beside the icon. */
+.form-note > :not(svg) {
+  grid-column: 2;
+  justify-self: start;
+}
+.scheduling-zone-note:not(.form-note) {
+  display: block;
+}
+.scheduling-zone-note:not(.form-note) > p {
+  margin: 4px 0 8px;
+}
+.form-note.is-warning {
+  border-left-color: var(--nx-warning);
+  background: var(--nx-warning-bg);
+}
+.form-body .error-banner,
+.modal .error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--nx-danger);
+  border-radius: var(--nx-field-radius);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------ steps and review */
+.registration-steps,
+.nx-steps {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+.registration-steps li,
+.nx-steps li {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+  border-bottom: 3px solid var(--ui-line);
+  font: 400 14px/1.3 var(--nx-font-ui);
+  color: var(--nx-text-secondary);
+}
+.registration-steps li[data-done],
+.nx-steps li[data-done] {
+  border-color: var(--nx-brand-mid);
+  color: var(--nx-text);
+}
+.registration-steps [aria-current],
+.nx-steps [aria-current] {
+  border-color: var(--nx-brand);
+  font-weight: 600;
+  color: var(--nx-brand);
+}
+.registration-steps .nx-step,
+.nx-steps .nx-step {
+  margin: 0;
+}
+.registration-steps [aria-current] .nx-step,
+.nx-steps [aria-current] .nx-step {
+  background: var(--nx-brand);
+  color: var(--nx-page);
+}
+.form-disclosure {
+  margin-top: 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--nx-field-radius);
+  background: var(--nx-surface);
+}
+.form-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  font: 600 14px/1.3 var(--nx-font-ui);
+  color: var(--nx-text);
+  cursor: pointer;
+  list-style: none;
+}
+.form-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.form-disclosure > summary::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 3px 2px 2px;
+  border: solid var(--nx-text-secondary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform var(--nx-motion-disclosure) var(--nx-ease);
+}
+.form-disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+.form-disclosure > summary small {
+  margin-left: auto;
+  font: 400 13px/1.3 var(--nx-font-ui);
+  color: var(--nx-text-secondary);
+}
+.form-disclosure > summary:hover {
+  background: var(--nx-surface-subtle);
+}
+.form-disclosure[open] > summary {
+  border-bottom: 1px solid var(--ui-line);
+}
+.form-disclosure > :not(summary) {
+  padding: 14px 13px 15px;
+}
+.client-registration .form-disclosure fieldset + fieldset {
+  margin-top: 16px;
+  padding-top: 14px;
+}
+.registration-summary,
+.nx-summary {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 0;
+  margin: 12px 0 18px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--nx-field-radius);
+  overflow: hidden;
+}
+.registration-summary dt,
+.registration-summary dd,
+.nx-summary dt,
+.nx-summary dd {
+  margin: 0;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--ui-line);
+}
+.registration-summary dt,
+.nx-summary dt {
+  font-size: 13.5px;
+  color: var(--nx-text-secondary);
+  background: color-mix(in srgb, var(--nx-surface-subtle) 55%, var(--nx-surface));
+}
+.registration-summary dd,
+.nx-summary dd {
+  font-weight: 600;
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
+}
+.registration-summary :is(dt, dd):nth-last-child(-n + 2),
+.nx-summary :is(dt, dd):nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+/* ---------------------------------------------------------------- sidebar */
+/* The contour sits under the navigation and rises out of the page: it has no top edge. */
+.sidebar > .sidebar-art {
+  height: 380px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgb(0 0 0 / 0.28) 34%, #000 78%);
+  mask-image: linear-gradient(to bottom, transparent 0, rgb(0 0 0 / 0.28) 34%, #000 78%);
+}
+
+@media (max-width: 640px) {
+  .nx-datetime {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 0.7fr);
+  }
+  .modal-mark {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .nx-button,
+  .ws-action,
+  .nx-date-grid button,
+  .form-disclosure > summary::before {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------- suggestions and small details */
+.nx-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nx-chip {
+  min-height: 26px;
+  padding: 2px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 3px 9px 3px 3px;
+  background: var(--nx-surface);
+  color: var(--nx-text-secondary);
+  font: 400 13px/1.3 var(--nx-font-ui);
+  cursor: pointer;
+  transition: background-color var(--nx-motion-feedback) var(--nx-ease), border-color var(--nx-motion-feedback) var(--nx-ease);
+}
+.nx-chip:hover:enabled {
+  border-color: var(--nx-brand-mid);
+  background: var(--nx-surface-subtle);
+  color: var(--nx-text);
+}
+.nx-chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--nx-selected);
+  color: var(--nx-on-selected);
+  font-weight: 600;
+}
+.form-field small.nx-length {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 12.5px/1.3 var(--nx-font-figure);
+  color: var(--nx-text-secondary);
+}
+.scheduling-occurrence {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--nx-warning);
+  border-radius: 0 var(--nx-field-radius) var(--nx-field-radius) 0;
+  background: var(--nx-warning-bg);
+  font: 400 13.5px/1.4 var(--nx-font-ui);
+  color: var(--nx-text);
+}
+
+/* ------------------------------------------------- building a form's questions */
+.field-builder {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--nx-field-radius);
+  background: color-mix(in srgb, var(--nx-surface-subtle) 40%, var(--nx-surface));
+}
+.field-builder-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nx-text-secondary);
+}
+.field-builder-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.6fr) minmax(132px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--nx-field-radius);
+  background: var(--nx-surface);
+}
+.field-builder-row > .nx-step {
+  margin: 0;
+}
+.field-builder-row .field-options {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 5px;
+}
+.field-builder-row .field-options label {
+  font: 600 13px/1.3 var(--nx-font-ui);
+  color: var(--nx-text-secondary);
+}
+.field-builder > .button {
+  justify-self: start;
+}
+@media (max-width: 640px) {
+  .field-builder-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .field-builder-row > .nx-choice {
+    grid-column: 2 / -1;
+  }
+  .field-builder-row .field-options {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ------------------------------------------------------------ registration */
+.optional-mark,
+legend .optional-mark {
+  display: inline;
+  margin-left: 8px;
+  font: 400 12.5px/1 var(--nx-font-ui);
+  letter-spacing: 0;
+  color: var(--nx-text-secondary);
+}
+.registration-kicker,
+.registration-status {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--nx-text-secondary);
+}
+.registration-status {
+  margin: 10px 0 0;
+  color: var(--nx-text);
+}
+.registration-review-title {
+  margin: 0 0 4px;
+  font: 600 18px/1.3 var(--nx-font-display);
+  letter-spacing: var(--nx-tracking-display);
+  color: var(--nx-brand);
+}
+.registration-review-title:focus {
+  outline: none;
+}
+.client-registration input[readonly] {
+  background: var(--nx-surface-subtle);
+  color: var(--nx-text-secondary);
+  font-family: var(--nx-font-figure);
+  font-weight: 700;
+}
+.match-list {
+  gap: 8px;
+}
+.match-card {
+  border: 1px solid var(--ui-line);
+  border-left: 3px solid var(--nx-warning);
+  border-radius: 0 var(--nx-field-radius) var(--nx-field-radius) 0;
+  background: var(--nx-surface);
+}
+.registration-block {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border-left: 3px solid var(--nx-danger);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
+  font-size: 14px;
+}
+.registration-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.registration-confirm p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nx-text);
+}
+.form-body[hidden] {
+  display: none;
+}
+.intake-editor > fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.intake-editor > fieldset > p:first-child {
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--nx-brand-mid);
+  border-radius: 0 var(--nx-field-radius) var(--nx-field-radius) 0;
+  background: color-mix(in srgb, var(--nx-selected) 50%, var(--nx-surface));
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--nx-text);
+}
+/* The question builder's tick box keeps the tick-box size inside its grid row. */
+.field-builder-row .check-inline input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+}
+.field-builder-row .check-inline {
+  font-weight: 600;
+  color: var(--nx-text);
+}

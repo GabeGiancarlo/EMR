@@ -1688,7 +1688,7 @@ td small {
   min-width: 110px;
 }
 .check-inline {
-  font-size: 9px !important;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -2671,7 +2671,7 @@ td small {
     width: 90px;
   }
   .field-builder-row .check-inline {
-    font-size: 8px !important;
+    font-size: 13px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -13,7 +13,7 @@ export const MAX_LIMIT = 50;
 export const PAGE_SIZES = [25, 50] as const;
 
 export const KNOWLEDGE_DISCLAIMER =
-  "Approved notes, forms, plans and reviewed patient excerpts. Check each source date and encounter before using historical information in new documentation.";
+  "Approved notes, forms, plans and reviewed client excerpts. Check each source date and encounter before using historical information in new documentation.";
 
 export const STAT_LABELS = {
   documents: "Indexed documents",

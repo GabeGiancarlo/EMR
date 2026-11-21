@@ -21,6 +21,7 @@ mod note_lineage;
 pub mod observe;
 mod patient_identity;
 mod payload;
+mod profile_pictures;
 mod programs;
 mod readiness;
 mod records;
@@ -28,6 +29,7 @@ mod routes;
 mod scheduling;
 mod service_codes;
 mod speech;
+mod superbill;
 mod telehealth;
 pub mod workers;
 mod workflow;
@@ -317,6 +319,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .configure(patient_identity::configure)
                 .configure(admissions::configure)
                 .configure(programs::configure)
+                // Before the generic record routes: its path has their three-segment shape.
+                .configure(profile_pictures::configure)
                 .route(
                     "/exports/accounting.csv",
                     web::get().to(exports::accounting),
@@ -350,6 +354,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                     "/claims/{id}/readiness",
                     web::get().to(readiness::claim_readiness),
                 )
+                .route("/claims/{id}/superbill", web::get().to(superbill::show))
                 .route(
                     "/{resource}/{id}/{action}",
                     web::post().to(workflow::action),

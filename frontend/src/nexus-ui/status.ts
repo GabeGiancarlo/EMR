@@ -9,6 +9,8 @@ const STATUS: Record<string, { tone: Tone; icon: NexusIconName }> = {
   signed: { tone: "ok", icon: "success" }, paid: { tone: "ok", icon: "success" }, posted: { tone: "ok", icon: "success" },
   ready: { tone: "ok", icon: "success" }, achieved: { tone: "ok", icon: "success" }, attended: { tone: "ok", icon: "success" },
   on_track: { tone: "ok", icon: "success" }, normal: { tone: "neutral", icon: "check" },
+  passed: { tone: "ok", icon: "success" }, admitted: { tone: "ok", icon: "success" }, reviewed: { tone: "info", icon: "check" },
+  failed: { tone: "bad", icon: "error" }, needed: { tone: "warn", icon: "warning" }, withdrawn: { tone: "neutral", icon: "history" }, declined: { tone: "neutral", icon: "history" },
   // waiting on someone
   draft: { tone: "warn", icon: "edit" }, in_progress: { tone: "warn", icon: "clock" }, partially_paid: { tone: "warn", icon: "payment" },
   at_risk: { tone: "warn", icon: "warning" }, high: { tone: "warn", icon: "warning" }, intake: { tone: "warn", icon: "consent" },
