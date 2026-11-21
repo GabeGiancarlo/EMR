@@ -139,7 +139,7 @@ pub async fn rows(
     })
 }
 pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<HttpResponse> {
-    let mut data = json!({"setup_required":false,"program_configuration":true,"authentication":state.auth.label(),"actor":null,"organizations":[],"audit":[],"metrics":{}});
+    let mut data = json!({"setup_required":false,"program_configuration":true,"authentication":state.auth.label(),"actor":null,"organizations":[],"audit":[],"metrics":{},"avatars":{}});
     for resource in RESOURCES {
         data[*resource] = json!([]);
     }
@@ -278,6 +278,7 @@ pub async fn bootstrap(req: HttpRequest, state: web::Data<AppState>) -> Result<H
         .await?;
         data["metrics"]["draft_notes"] = json!(draft_count);
     }
+    data["avatars"] = crate::profile_pictures::for_workspace(&mut tx, &actor, &data).await?;
     access::audit(&mut tx, &actor, "read", "workspace", None).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(data))

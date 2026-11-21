@@ -1,9 +1,11 @@
 import { Choice, FieldInput } from "./nexus-ui/FieldControls";
+import { NxIcon } from "./nexus-ui/Icon";
+import { formatDateText } from "./dateText";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { authorizedFetch, date, label, value } from "./api";
 import type { Bootstrap, Row } from "./api";
-import { facilityLocalToday } from "./adult.ts";
+import { facilityLocalToday, parseIsoDate } from "./adult.ts";
 import { Badge, Button, Icon } from "./ui";
 import "./clientRegistration.css";
 import {
@@ -16,6 +18,7 @@ import {
   facilityZone,
   invalidateCheck,
   isAbortError,
+  isPlausibleEmail,
   isIdentityField,
   matchCheckBlock,
   matchRequestFromValues,
@@ -85,8 +88,16 @@ export function ClientRegistration({
   const loadedKey = `${initial?.id ?? ""}:${String(initial?.updated_at ?? "")}`;
   const initialRef = useRef(initial);
   initialRef.current = initial;
-  const [values, setValues] = useState<RegistrationValues>(() => valuesFromRow(initial));
-  const [saved, setSaved] = useState<RegistrationValues>(() => valuesFromRow(initial));
+  // A new chart starts at the registrar's own facility, or the only one there is.
+  const starting = (row: Row | undefined): RegistrationValues => {
+    const start = valuesFromRow(row);
+    if (row?.id || start.facility_id) return start;
+    const open = activeFacilityChoices(data.facilities);
+    const own = open.find((facility) => facility.id === data.actor?.facility_id);
+    return { ...start, facility_id: own?.id ?? (open.length === 1 ? open[0].id : "") };
+  };
+  const [values, setValues] = useState<RegistrationValues>(() => starting(initial));
+  const [saved, setSaved] = useState<RegistrationValues>(() => starting(initial));
   const [reason, setReason] = useState("");
   const [savedReason, setSavedReason] = useState("");
   const [error, setError] = useState("");
@@ -94,6 +105,10 @@ export function ClientRegistration({
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [step, setStep] = useState<"identity" | "assignment" | "review">("identity");
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof RegistrationValues, string>>>({});
+  const contactKeys = ["email", "phone", "emergency_contact", "address_line1", "address_line2", "city", "region", "postal_code", "country"] as const;
+  // Contact details open by themselves when there is something in them to see or fix.
+  const [contactOpen, setContactOpen] = useState(() => contactKeys.some((key) => valuesFromRow(initial)[key].trim() !== ""));
   const assignmentHeading = useRef<HTMLLegendElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -159,7 +174,7 @@ export function ClientRegistration({
   }, [discardArmed]);
 
   useEffect(() => {
-    const next = valuesFromRow(initialRef.current);
+    const next = starting(initialRef.current);
     abortRef.current?.abort();
     const cleared = invalidateCheck(checkRef.current);
     checkRef.current = cleared;
@@ -167,6 +182,8 @@ export function ClientRegistration({
     setValues(next);
     setSaved(next);
     setStep("identity");
+    setFieldErrors({});
+    setContactOpen(contactKeys.some((key) => next[key].trim() !== ""));
     setReason("");
     setSavedReason("");
     setError("");
@@ -196,7 +213,15 @@ export function ClientRegistration({
     setValues(updated);
     setDiscardArmed(false);
     setError("");
+    if (fieldErrors[key]) setFieldErrors(({ [key]: _fixed, ...rest }) => rest);
     if (isIdentityField(key)) invalidate();
+  }
+  /** Mark one field, say what to enter, and put the cursor there. */
+  function fieldProblem(key: keyof RegistrationValues, message: string) {
+    setFieldErrors({ [key]: message });
+    setError("");
+    if ((contactKeys as readonly string[]).includes(key)) setContactOpen(true);
+    requestAnimationFrame(() => document.getElementById(fieldId(key))?.focus());
   }
 
   function discard() {
@@ -277,16 +302,24 @@ export function ClientRegistration({
     event.preventDefault();
     if (busy) return;
     if (step === "identity") {
+      // Each problem is shown on its own field, on the step where that field is.
+      if (!values.first_name.trim()) return fieldProblem("first_name", "Enter the legal first name.");
+      if (!values.last_name.trim()) return fieldProblem("last_name", "Enter the legal last name.");
+      if (!parseIsoDate(values.birth_date.trim())) return fieldProblem("birth_date", "Enter the date of birth, like 6/15/1990.");
+      if (!isPlausibleEmail(values.email)) return fieldProblem("email", "Enter an email address, like name@example.org, or leave it blank.");
       const invalid = matchCheckBlock(values);
       if (invalid) { showError(invalid, true); return; }
       setError("");
+      setFieldErrors({});
       setStep("assignment");
       return;
     }
     if (step === "assignment") {
+      if (!values.facility_id) return fieldProblem("facility_id", "Choose a facility.");
       const invalid = validateRegistration({ values, initial, facilities: data.facilities, clinicians: clinicianOptions });
       if (invalid) { showError(invalid, true); return; }
       setError("");
+      setFieldErrors({});
       setStep("review");
       if (mustReview && !currentSnapshot) void startCheck();
       return;
@@ -335,16 +368,22 @@ export function ClientRegistration({
     >
       <div className="form-body client-registration">
         <ol className="registration-steps" aria-label="Registration steps">
-          <li aria-current={step === "identity" ? "step" : undefined}>1 · Identity</li>
-          <li aria-current={step === "assignment" ? "step" : undefined}>2 · Assignment</li>
-          <li aria-current={step === "review" ? "step" : undefined}>3 · Review</li>
+          {([["identity", "Person"], ["assignment", "Care team"], ["review", "Review"]] as const).map(([id, title], index) => {
+            const at = ["identity", "assignment", "review"].indexOf(step);
+            return (
+              <li key={id} aria-current={step === id ? "step" : undefined} data-done={index < at ? "" : undefined}>
+                <span className="nx-step" aria-hidden="true">{index < at ? <NxIcon name="check" size={12} /> : index + 1}</span>
+                {title}
+              </li>
+            );
+          })}
         </ol>
         {step === "identity" ? <>
         <fieldset disabled={busy}>
-          <legend>Identity</legend>
+          <legend>Legal name and date of birth</legend>
           <div className="form-grid">
             {initial?.id && (
-              <div className="form-field">
+              <div className="form-field full">
                 <label htmlFor={fieldId("mrn")}>Medical record number</label>
                 <input
                   id={fieldId("mrn")}
@@ -352,6 +391,7 @@ export function ClientRegistration({
                   readOnly
                   aria-readonly="true"
                 />
+                <small>Assigned by Nexus. It never changes.</small>
               </div>
             )}
             <TextField
@@ -359,6 +399,7 @@ export function ClientRegistration({
               label="First name"
               required
               value={values.first_name}
+              error={fieldErrors.first_name}
               autoComplete="off"
               onChange={(next) => update("first_name", next)}
             />
@@ -367,39 +408,44 @@ export function ClientRegistration({
               label="Last name"
               required
               value={values.last_name}
+              error={fieldErrors.last_name}
               autoComplete="off"
               onChange={(next) => update("last_name", next)}
             />
-            <div className="form-field">
+            <div className="form-field" data-invalid={fieldErrors.birth_date ? "" : undefined}>
               <label htmlFor={fieldId("birth_date")}>
-                Date of birth<span className="required"> *</span>
+                Date of birth<span className="required" aria-hidden="true"> *</span>
               </label>
               <FieldInput
                 id={fieldId("birth_date")}
                 type="date"
                 required
                 aria-required="true"
+                aria-invalid={fieldErrors.birth_date ? true : undefined}
                 aria-describedby={fieldId("birth-hint")}
                 value={values.birth_date}
                 max={birthMax}
                 onChange={(event) => update("birth_date", event.target.value)}
                 onInput={(event) => update("birth_date", event.currentTarget.value)}
               />
+              {fieldErrors.birth_date && <span className="nx-field-error" role="alert"><NxIcon name="error" size={14} />{fieldErrors.birth_date}</span>}
               <small id={fieldId("birth-hint")}>
-                Adults 18+ only.
+                Adults 18 and over.
                 {localToday
-                  ? ` Age is checked as of ${localToday} at the selected facility.`
-                  : " Choose a facility so age uses that location’s date."}
+                  ? ` Age is checked as of ${formatDateText(localToday)} at the chosen facility.`
+                  : " Age is checked against the facility's date on the next step."}
               </small>
             </div>
           </div>
         </fieldset>
-        <details className="form-disclosure"><summary>Names, pronouns and language</summary>
-          <fieldset disabled={busy} aria-label="Preferences"><div className="form-grid">
+        <fieldset disabled={busy}>
+          <legend>How to address them <small className="optional-mark">Optional</small></legend>
+          <div className="form-grid">
             <TextField
               id={fieldId("preferred_name")}
               label="Preferred name"
               value={values.preferred_name}
+              hint="Shown as “Goes by” on the chart."
               autoComplete="off"
               onChange={(next) => update("preferred_name", next)}
             />
@@ -407,6 +453,7 @@ export function ClientRegistration({
               id={fieldId("pronouns")}
               label="Pronouns"
               value={values.pronouns}
+              suggest={["she/her", "he/him", "they/them"]}
               autoComplete="off"
               onChange={(next) => update("pronouns", next)}
             />
@@ -414,23 +461,17 @@ export function ClientRegistration({
               id={fieldId("preferred_language")}
               label="Preferred language"
               value={values.preferred_language}
-              hint="Language the person prefers for care conversations."
+              hint="For care conversations."
+              suggest={["English", "Spanish"]}
               onChange={(next) => update("preferred_language", next)}
             />
-          </div></fieldset>
-        </details>
-        <details className="form-disclosure"><summary>Contact and address</summary>
+          </div>
+        </fieldset>
+        <details className="form-disclosure" open={contactOpen} onToggle={(event) => setContactOpen(event.currentTarget.open)}>
+          <summary>Contact and address<small>{contactKeys.some((key) => values[key].trim()) ? "On file" : "Optional"}</small></summary>
         <fieldset disabled={busy}>
           <legend>Contact</legend>
           <div className="form-grid">
-            <TextField
-              id={fieldId("email")}
-              label="Email"
-              type="email"
-              value={values.email}
-              autoComplete="off"
-              onChange={(next) => update("email", next)}
-            />
             <TextField
               id={fieldId("phone")}
               label="Phone"
@@ -440,10 +481,19 @@ export function ClientRegistration({
               onChange={(next) => update("phone", next)}
             />
             <TextField
+              id={fieldId("email")}
+              label="Email"
+              type="email"
+              value={values.email}
+              error={fieldErrors.email}
+              autoComplete="off"
+              onChange={(next) => update("email", next)}
+            />
+            <TextField
               id={fieldId("emergency_contact")}
               label="Emergency contact"
               value={values.emergency_contact}
-              hint="Name, relationship, and contact number."
+              hint="Name, relationship and number."
               wide
               onChange={(next) => update("emergency_contact", next)}
             />
@@ -454,14 +504,14 @@ export function ClientRegistration({
           <div className="form-grid">
             <TextField
               id={fieldId("address_line1")}
-              label="Address line 1"
+              label="Street address"
               value={values.address_line1}
               wide
               onChange={(next) => update("address_line1", next)}
             />
             <TextField
               id={fieldId("address_line2")}
-              label="Address line 2"
+              label="Apartment, suite or unit"
               value={values.address_line2}
               wide
               onChange={(next) => update("address_line2", next)}
@@ -474,13 +524,13 @@ export function ClientRegistration({
             />
             <TextField
               id={fieldId("region")}
-              label="State or region"
+              label="State"
               value={values.region}
               onChange={(next) => update("region", next)}
             />
             <TextField
               id={fieldId("postal_code")}
-              label="Postal code"
+              label="ZIP code"
               value={values.postal_code}
               onChange={(next) => update("postal_code", next)}
             />
@@ -495,30 +545,32 @@ export function ClientRegistration({
         </details>
         </> : step === "assignment" ? <>
         <fieldset disabled={busy}>
-          <legend tabIndex={-1} ref={assignmentHeading}>Care assignment</legend>
+          <legend tabIndex={-1} ref={assignmentHeading}>Where care happens and who leads it</legend>
           <p className="registration-kicker">
             {initial?.id
-              ? "Editing keeps the current intake stage. Saving sends the loaded version so a newer edit is not overwritten."
-              : "New charts start as inquiry or intake."}
+              ? "Editing keeps the current intake stage. If someone else saved a newer version, Nexus tells you and keeps your entries."
+              : "A new chart starts as an inquiry or in intake. Admission comes later, from the chart."}
           </p>
           <div className="form-grid">
-            <div className="form-field">
+            <div className="form-field" data-invalid={fieldErrors.facility_id ? "" : undefined}>
               <label htmlFor={fieldId("facility_id")}>
-                Facility<span className="required"> *</span>
+                Facility<span className="required" aria-hidden="true"> *</span>
               </label>
               <Choice
                 id={fieldId("facility_id")}
                 value={values.facility_id}
-                aria-required="true"
+                required
+                aria-invalid={fieldErrors.facility_id ? true : undefined}
                 onChange={(event) => update("facility_id", event.target.value)}
               >
-                <option value="">Choose an active facility…</option>
+                <option value="">Choose…</option>
                 {facilityOptions.map((row) => (
                   <option value={row.id} key={row.id}>
                     {facilityOptionLabel(row)}
                   </option>
                 ))}
               </Choice>
+              {fieldErrors.facility_id && <span className="nx-field-error" role="alert"><NxIcon name="error" size={14} />{fieldErrors.facility_id}</span>}
             </div>
             <div className="form-field">
               <label htmlFor={fieldId("primary_clinician_id")}>Primary clinician</label>
@@ -527,13 +579,14 @@ export function ClientRegistration({
                 value={values.primary_clinician_id}
                 onChange={(event) => update("primary_clinician_id", event.target.value)}
               >
-                <option value="">Not assigned</option>
+                <option value="">Unassigned</option>
                 {clinicianOptions.map((row) => (
                   <option value={row.id} key={row.id}>
                     {staffOptionLabel(row)}
                   </option>
                 ))}
               </Choice>
+              <small>Can be assigned later. Clinicians see only their own clients.</small>
             </div>
             {initial?.id ? (
               <div className="form-field">
@@ -541,47 +594,55 @@ export function ClientRegistration({
                 <div aria-labelledby={fieldId("status-label")}>
                   <Badge status={initial.status || "not set"} />
                 </div>
-                <small>This form does not change the current stage.</small>
+                <small>Changed from the chart's intake tab, not here.</small>
               </div>
             ) : (
               <div className="form-field">
                 <label htmlFor={fieldId("status")}>
-                  Intake stage<span className="required"> *</span>
+                  Intake stage<span className="required" aria-hidden="true"> *</span>
                 </label>
                 <Choice
                   id={fieldId("status")}
                   value={values.status}
-                  aria-required="true"
+                  required
                   onChange={(event) => update("status", event.target.value)}
                 >
                   <option value="inquiry">Inquiry</option>
                   <option value="intake">Intake</option>
                 </Choice>
+                <small>Inquiry: a first contact. Intake: referral and paperwork are under way.</small>
               </div>
             )}
           </div>
         </fieldset>
         </> : <>
-          <h3 tabIndex={-1} ref={reviewHeading}>Review patient details</h3>
+          <h3 className="registration-review-title" tabIndex={-1} ref={reviewHeading}>Check the details</h3>
           <dl className="registration-summary">
-            <dt>Legal name</dt><dd>{values.first_name} {values.last_name}</dd>
-            <dt>Date of birth</dt><dd>{values.birth_date}</dd>
+            <dt>Legal name</dt><dd>{values.first_name.trim()} {values.last_name.trim()}</dd>
+            {values.preferred_name.trim() && <><dt>Goes by</dt><dd>{values.preferred_name.trim()}</dd></>}
+            {values.pronouns.trim() && <><dt>Pronouns</dt><dd>{values.pronouns.trim()}</dd></>}
+            <dt>Date of birth</dt><dd>{formatDateText(values.birth_date) || values.birth_date}</dd>
+            {values.preferred_language.trim() && <><dt>Language</dt><dd>{values.preferred_language.trim()}</dd></>}
+            {(values.phone.trim() || values.email.trim()) && <><dt>Contact</dt><dd>{[values.phone.trim(), values.email.trim()].filter(Boolean).join(" · ")}</dd></>}
+            {values.emergency_contact.trim() && <><dt>Emergency contact</dt><dd>{values.emergency_contact.trim()}</dd></>}
+            {[values.address_line1, values.city, values.region, values.postal_code].some((part) => part.trim()) && <><dt>Address</dt><dd>{[values.address_line1, values.address_line2, values.city, [values.region, values.postal_code].filter((part) => part.trim()).join(" "), values.country].map((part) => part.trim()).filter(Boolean).join(", ")}</dd></>}
             <dt>Facility</dt><dd>{value(facilityOptions.find(row => row.id === values.facility_id), "name") || "Facility unavailable"}</dd>
-            <dt>Intake stage</dt><dd>{label(values.status)}</dd>
+            <dt>Primary clinician</dt><dd>{value(clinicianOptions.find(row => row.id === values.primary_clinician_id), "name") || "Unassigned"}</dd>
+            <dt>Intake stage</dt><dd>{label(initial?.id ? String(initial.status || "not set") : values.status)}</dd>
           </dl>
         {mustReview && (
           <fieldset disabled={busy}>
-            <legend>Possible matches</legend>
+            <legend>Is there already a chart?</legend>
             <p className="registration-kicker">
-              Check for an existing chart using the name, date of birth, and contact details.
-              Review any matches before creating a separate record.
+              Nexus looks for an existing chart by name, date of birth and contact details.
+              Look at any match before creating a second record.
             </p>
             <Button
               variant="secondary"
               onClick={() => void startCheck()}
               disabled={checking || busy}
             >
-              {checking ? "Checking…" : "Check possible matches"}
+              {checking ? "Checking" : currentSnapshot ? "Check again" : "Check for an existing chart"}
             </Button>
             <p className="registration-status" aria-live="polite">
               {matchSummary(currentSnapshot, checking)}
@@ -614,7 +675,7 @@ export function ClientRegistration({
                         variant="secondary"
                         onClick={() => onOpenExisting(match.id)}
                       >
-                        {`Discard this entry and open ${title}`}
+                        {`Open ${title} instead`}
                       </Button>
                     </li>
                   );
@@ -624,7 +685,7 @@ export function ClientRegistration({
             {currentSnapshot && currentSnapshot.matches.length > 0 && !currentSnapshot.restricted_matches && (
               <div className="form-field full registration-reason">
                 <label htmlFor={fieldId("review-reason")}>
-                  Duplicate review note<span className="required"> *</span>
+                  Why this is a different person<span className="required" aria-hidden="true"> *</span>
                 </label>
                 <textarea
                   id={fieldId("review-reason")}
@@ -641,8 +702,8 @@ export function ClientRegistration({
                 />
                 <small id={fieldId("review-hint")}>
                   {currentSnapshot.matches.length
-                    ? "Required to create a separate chart. Explain why each visible match is not this person. 10 to 2000 characters."
-                    : "Required to record that this match result was reviewed. 10 to 2000 characters."}
+                    ? "Needed to create a separate chart. Say why each match shown is not this person. 10 to 2,000 characters."
+                    : "Needed to record that this result was reviewed. 10 to 2,000 characters."}
                 </small>
               </div>
             )}
@@ -658,18 +719,19 @@ export function ClientRegistration({
             ref={alertRef}
             id={fieldId("error")}
           >
-            {error}
+            <NxIcon name="error" size={17} />
+            <span>{error}</span>
           </div>
         )}
       </div>
       <div className="modal-foot">
         <span className="form-assurance">
-          <Icon name="shield" size={15} /> Review possible matches before saving.
+          <Icon name="shield" size={15} /> {step === "review" ? "Checked for an existing chart before saving." : "Nothing is saved until the last step."}
         </span>
         {discardArmed ? (
           <div className="registration-confirm" role="group" aria-label="Confirm discard">
-            <p>Discard unsaved registration entries? This does not delete a saved chart.</p>
-            <Button onClick={discard}>Discard now</Button>
+            <p>Discard what you have entered? A saved chart is not affected.</p>
+            <Button onClick={discard}>Discard entries</Button>
             <button type="button" className="button secondary" ref={keepRef} onClick={() => setDiscardArmed(false)}>
               Keep editing
             </button>
@@ -680,14 +742,13 @@ export function ClientRegistration({
             onClick={() => setDiscardArmed(true)}
             disabled={!canDiscard || busy}
           >
-            {initial?.id ? "Discard changes" : "Reset form"}
+            {initial?.id ? "Discard changes" : "Start over"}
           </Button>
         )}
         {step !== "identity" && <Button variant="secondary" disabled={busy} onClick={() => { setStep(step === "review" ? "assignment" : "identity"); setError(""); }}>Back</Button>}
-        <Button type="submit" disabled={busy || checking}>
-          {busy ? "Saving…" : step === "identity" ? "Continue to assignment" : step === "assignment" ? "Review details" : initial?.id ? "Save changes" : "Save client"}
-          <Icon name="arrow" size={16} />
-        </Button>
+        <button type="submit" className="button" data-busy={busy ? "" : undefined} disabled={busy || checking}>
+          {busy ? <><NxIcon name="sun" size={16} className="nx-spin" />Saving</> : <>{step === "identity" ? "Next: care team" : step === "assignment" ? "Next: review" : initial?.id ? "Save changes" : "Create client"}<Icon name="arrow" size={16} /></>}
+        </button>
       </div>
     </form>
   );
@@ -729,6 +790,8 @@ function TextField({
   hint,
   wide = false,
   autoComplete,
+  error,
+  suggest,
 }: {
   id: string;
   label: string;
@@ -739,23 +802,38 @@ function TextField({
   hint?: string;
   wide?: boolean;
   autoComplete?: string;
+  /** A sentence that says what to enter. The text already typed stays. */
+  error?: string;
+  /** Common answers; one click fills the field. */
+  suggest?: string[];
 }) {
+  const describedBy = [hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined;
   return (
-    <div className={`form-field${wide ? " full" : ""}`}>
+    <div className={`form-field${wide ? " full" : ""}`} data-invalid={error ? "" : undefined}>
       <label htmlFor={id}>
         {title}
-        {required && <span className="required"> *</span>}
+        {required && <span className="required" aria-hidden="true"> *</span>}
       </label>
       <FieldInput
         id={id}
         type={type}
         value={fieldValue}
         aria-required={required || undefined}
-        aria-describedby={hint ? `${id}-hint` : undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
         autoComplete={autoComplete}
+        inputMode={type === "tel" ? "tel" : type === "email" ? "email" : undefined}
         spellCheck={type === "text" ? false : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
+      {suggest && (
+        <div className="nx-suggest" role="group" aria-label={`Common answers for ${title.toLowerCase()}`}>
+          {suggest.map((item) => (
+            <button type="button" key={item} className="nx-chip" aria-pressed={fieldValue === item} onClick={() => onChange(item)}>{item}</button>
+          ))}
+        </div>
+      )}
+      {error && <span className="nx-field-error" id={`${id}-error`} role="alert"><NxIcon name="error" size={14} />{error}</span>}
       {hint && <small id={`${id}-hint`}>{hint}</small>}
     </div>
   );

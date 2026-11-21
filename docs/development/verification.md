@@ -375,3 +375,26 @@ Verified on macOS arm64 on `feature/clinical-workspace-interactions`, based on d
 - The synthetic clinical home showed five patient appointments over seven days, including two enrolled patient visits in today's single group. Taylor’s intake showed seven of nine required checks complete. Continue draft opened the existing versioned response with its saved answer. The consent and signed records were left untouched.
 - An isolated browser fixture expanded the synthetic draft to six questions. Answers survived forward and backward navigation. A captured draft PATCH included answers from both pages, the ISO date and the original version guard. A simulated conflict preserved the entries. This fixture intercepted the write before it reached the API.
 - Targeted tests cover short and overlapping visits, overnight clipping, invalid manual dates, boundary months and an explicit repeated-hour selection. The browser walkthrough used Chrome and the Codex in-app browser. Other browser engines, assistive technology, and a hosted rollout remain unverified.
+
+### November 21, 2026 — forms, profile pictures and superbills
+
+Verified on macOS arm64 on `feature/forms-brand-profile-photos`, cut from dev merge `9fed857`, with the work uncommitted. Everything ran against an isolated database, `nexus_formwork`, restored from a copy of the synthetic walkthrough, with its own API on loopback port 8095 and frontend on 5175. Earlier the same day, at the owner's request, the two local workspaces were backed up to `.local/backups/` and their APIs restarted, which applied migrations 022 and 023 to `nexus` and `nexus_walkthrough`. This change adds migration 024, which has been applied only to `nexus_formwork` and to disposable test schemas. The full account is in [forms and flows](../product/forms-and-flows-2026-11-21.md).
+
+Automated, on the final tree:
+
+- Frontend: `tsc --noEmit` clean; all 157 tests (15 new: typed dates and times, default pictures); Vite production build. Vite reports the entry chunk at 544 kB, above its 500 kB advisory.
+- API: `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo test --locked --workspace` (158 library tests and 12 token tests; eight new).
+- PostgreSQL in `nexus_test`: every suite CI names passed, including the new `profile_pictures_postgres` and `superbill_postgres`, and `service_code_upgrade_postgres` after its three migration counts moved from 23 to 24.
+- Not run: the six ignored `worker::tests` cases. An `emr-api` process started on November 18 (loopback port 8098) holds both worker advisory locks in `nexus_test`, and the tests refuse to run beside it. They were not affected by this change and were not rerun.
+
+Browser, in the built-in browser pane at 1280 × 860 light, with spot checks in dark and at 375 × 812:
+
+- As support, registered a synthetic client through the three steps. A malformed email was reported on its own field on step one. Chose a default picture, started intake, recorded an identity check and three consents.
+- As clinical lead, answered, reviewed and signed the required intake form, moved the intake through screening and ready, and admitted the client. An intake entered with a start date two days ahead could not be corrected and had to be withdrawn and re-entered.
+- As clinician, created and signed a plan with one goal, scheduled a session whose episode, clinician and service filled themselves, opened the telehealth visit in one tab and the client's invitation in another, admitted the client from the waiting room and ended the visit for everyone. Completing the session before its end time was refused; after correcting the times it completed. Wrote and signed a note.
+- As billing, added a policy and an authorization, created a claim whose policy, code and charge filled from the session, passed nine of nine readiness checks, marked it ready, recorded a submission and a $120.00 payment, and opened the superbill (balance $30.00). Created a task for the executive.
+- As executive, saw census 3 of 12, charges $450.00, cash $220.00 and outstanding $80.00, and had no write actions on claims or clients.
+- As admin, uploaded a photo to a client (stored as a 4 kB JPEG, audited) and opened the group, team member, access exception, facility, form template and program forms. Created a form template with two questions.
+- The superbill's print layout was shown on screen by applying its print class. It was not sent to a printer or saved as a PDF.
+
+Unverified: camera, microphone and media in the visit (the pane has no devices; both sides joined without them); the system print dialog; Safari, Firefox and assistive technology; a physical phone; hosted mode. The owner's walkthrough at port 5174 still runs the earlier API, so pictures and superbills do not work there until it is restarted and migration 024 applied.

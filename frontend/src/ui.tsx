@@ -130,18 +130,29 @@ export function Panel({
     </section>
   );
 }
+/** The icon that says what kind of record a dialog is about. */
+export const recordIcon: Record<string, NexusIconName> = {
+  clients: "clients", episodes: "encounter", sessions: "schedule", groups: "group", group_attendance: "group",
+  notes: "documentation", form_responses: "documentation", templates: "documentation", tasks: "tasks",
+  policies: "shield", authorizations: "consent", claims: "claim", payments: "payment", payment_reversals: "history",
+  staff: "clients", facilities: "overview", consents: "consent", exceptions: "lock",
+  treatment_plans: "care-plan", goals: "care-plan", plan_reviews: "care-plan",
+};
 export function Modal({
   title,
   description,
   children,
   onClose,
   wide = false,
+  icon,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  /** Shown in a tile beside the title. Icons support the words; they never replace them. */
+  icon?: NexusIconName;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -169,6 +180,7 @@ export function Modal({
       aria-labelledby="modal-title"
     >
       <div className="modal-head">
+        {icon && <span className="modal-mark" aria-hidden="true"><NxIcon name={icon} size={22} /></span>}
         <div>
           <h2 id="modal-title">{title}</h2>
           {description && <p>{description}</p>}

@@ -1,0 +1,243 @@
+/*
+ * The superbill: a document that holds data, so it stays square. On screen it follows the
+ * theme; on paper it is always dark ink on white, whatever theme the workspace is in.
+ */
+.superbill {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-panel);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: 400 14px/1.45 var(--nx-font-ui);
+}
+.superbill-wait {
+  margin: 0;
+  color: var(--nx-text-secondary);
+}
+.superbill-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--nx-brand);
+}
+.superbill-head > div {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+.superbill-practice {
+  font: 600 19px/1.25 var(--nx-font-display);
+  letter-spacing: var(--nx-tracking-display);
+  color: var(--nx-brand);
+}
+.superbill-title {
+  justify-items: end;
+  text-align: right;
+  color: var(--nx-text-secondary);
+}
+.superbill-title h3 {
+  margin: 0;
+  font: 600 24px/1.1 var(--nx-font-display);
+  letter-spacing: var(--nx-tracking-display);
+  color: var(--nx-text);
+}
+.superbill-title span:first-of-type {
+  font: 700 13.5px/1.3 var(--nx-font-figure);
+  color: var(--nx-text);
+}
+.superbill-parties {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.superbill-parties section,
+.superbill-money section {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-width: 0;
+}
+.superbill h4,
+.superbill caption {
+  margin: 0 0 4px;
+  padding: 0;
+  font: 600 11px/1.3 var(--nx-font-ui);
+  letter-spacing: var(--nx-tracking-label);
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--nx-text-secondary);
+}
+.superbill-missing {
+  color: var(--nx-text-secondary);
+  font-style: italic;
+}
+.superbill-lines {
+  width: 100%;
+  border-collapse: collapse;
+}
+.superbill-lines th {
+  padding: 7px 10px;
+  border: solid var(--nx-border);
+  border-width: 1px 0;
+  background: var(--nx-surface-subtle);
+  font: 600 11px/1.3 var(--nx-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--nx-text-secondary);
+}
+.superbill-lines td {
+  padding: 10px;
+  border-bottom: 1px solid var(--nx-border);
+  font-size: 14px;
+  vertical-align: top;
+}
+.superbill-lines td small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--nx-text-secondary);
+}
+.superbill .num {
+  text-align: right;
+  font-family: var(--nx-font-figure);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+.superbill-money {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.6fr);
+  gap: 24px;
+  align-items: start;
+}
+.superbill-money ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.superbill-money li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.superbill-money li[data-reversed] {
+  color: var(--nx-text-secondary);
+  text-decoration: line-through;
+}
+.superbill-totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--nx-border);
+  border-radius: 3px 12px 3px 3px;
+  background: var(--nx-surface-subtle);
+}
+.superbill-totals dt {
+  color: var(--nx-text-secondary);
+}
+.superbill-totals dd {
+  margin: 0;
+  text-align: right;
+  font: 700 14px/1.4 var(--nx-font-figure);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.superbill-totals .due {
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--nx-border-control);
+  font-weight: 600;
+  color: var(--nx-text);
+}
+.superbill-totals dd.due {
+  font: 800 19px/1.2 var(--nx-font-figure);
+  letter-spacing: var(--nx-tracking-figure);
+}
+.superbill-foot {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--nx-border);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--nx-text-secondary);
+}
+.superbill-foot p {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .superbill-parties,
+  .superbill-money {
+    grid-template-columns: 1fr;
+  }
+  .superbill-head {
+    flex-direction: column;
+  }
+  .superbill-title {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+/* ---------------------------------------------------------------- on paper */
+/* Set by Superbill.tsx just before printing, so the same rules can be seen on screen. */
+html.nx-printing,
+html.nx-printing body {
+  background: #fff !important;
+}
+html.nx-printing .app-shell {
+  display: block;
+  min-height: 0;
+  background: #fff;
+}
+html.nx-printing .app-shell > :not(dialog),
+html.nx-printing dialog.modal:not(:has(.superbill)) {
+  display: none !important;
+}
+html.nx-printing dialog.modal:has(.superbill) {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  background: #fff;
+}
+html.nx-printing dialog.modal:has(.superbill)::backdrop {
+  background: #fff;
+}
+html.nx-printing dialog.modal:has(.superbill) > :not(.form-body) {
+  display: none !important;
+}
+html.nx-printing dialog.modal:has(.superbill) > .form-body {
+  padding: 0;
+  overflow: visible;
+  max-height: none;
+}
+html.nx-printing .superbill {
+  --nx-text: #232b1e;
+  --nx-text-secondary: #4a5142;
+  --nx-brand: #2f4631;
+  --nx-border: #b9b29c;
+  --nx-border-control: #7a8066;
+  --nx-surface: #fff;
+  --nx-surface-subtle: #f1ede2;
+  padding: 0;
+  border: 0;
+  background: #fff;
+  color: #232b1e;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+@page {
+  margin: 16mm 14mm;
+}

@@ -1,11 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { initials } from "./api";
 import ThemeControl from "./ThemeControl";
+import { Avatar } from "./nexus-ui/Avatar";
 import { Icon } from "./ui";
 import "./profileMenu.css";
 
 type Props = {
   name: string;
+  /** The signed-in staff member, for their picture. */
+  actorId: string;
+  /** Opens the picture picker. Returns false when the page cannot be left. */
+  onChangePicture: () => boolean;
   roleLabel: string;
   canOpenSettings: boolean;
   onOpenSettings: () => boolean;
@@ -15,7 +19,7 @@ type Props = {
 };
 
 /** Disclosure controls existing local routes; it grants no new permissions. */
-export default function ProfileMenu({ name, roleLabel, canOpenSettings, onOpenSettings, onLeaveLocalOperator, signedIn = false }: Props) {
+export default function ProfileMenu({ name, actorId, onChangePicture, roleLabel, canOpenSettings, onOpenSettings, onLeaveLocalOperator, signedIn = false }: Props) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState({ left: 8, bottom: 8, width: 280, maxHeight: 400 });
   const root = useRef<HTMLDivElement>(null);
@@ -63,13 +67,16 @@ export default function ProfileMenu({ name, roleLabel, canOpenSettings, onOpenSe
     <button ref={trigger} type="button" className="profile-trigger" aria-expanded={open}
       aria-controls={panelId} aria-label={`Profile and settings for ${name || (signedIn ? "your account" : "local operator")}`}
       onClick={() => { if (open) close(); else { position(); setOpen(true); } }}>
-      <span className="profile-avatar" aria-hidden="true">{initials(name) || "N"}</span>
+      <Avatar kind="staff" id={actorId} size="sm" />
       <span className="profile-identity"><strong>{name || (signedIn ? "Signed in" : "Local operator")}</strong><small>{roleLabel}</small></span>
       <Icon name="chevron" size={16} />
     </button>
     {/* Keep ThemeControl mounted so system-theme changes still work when closed. */}
     <div id={panelId} className="profile-panel" hidden={!open} style={box}>
       <strong>Profile and settings</strong>
+      <button type="button" className="button secondary profile-picture-action" onClick={() => { if (onChangePicture()) close(); }}>
+        <Avatar kind="staff" id={actorId} size="sm" />Change your picture
+      </button>
       <ThemeControl />
       {canOpenSettings && <button type="button" className="button secondary"
         onClick={() => { if (onOpenSettings()) close(); }}>Workspace settings</button>}

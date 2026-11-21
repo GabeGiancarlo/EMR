@@ -294,7 +294,7 @@ export default function PatientKnowledge({
   return (
     <Panel
       className="knowledge-panel"
-      title="Patient knowledge"
+      title="Client knowledge"
       subtitle="Find approved records, review their context, and select evidence for documentation."
       action={
         <Button
@@ -589,7 +589,7 @@ export default function PatientKnowledge({
                 <h3>Review an approved source</h3>
                 <p>
                   Choose “Read full source” to review the original wording, date
-                  and encounter context.
+                  and session context.
                 </p>
               </>
             )}

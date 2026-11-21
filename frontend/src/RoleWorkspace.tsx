@@ -29,6 +29,7 @@ import {
 } from "./workspace";
 import type { MoneyState, WorkspaceMode } from "./workspace";
 import { NxIcon } from "./nexus-ui/Icon";
+import { formatDateText, zoneLabel } from "./dateText";
 import { Avatar } from "./nexus-ui/Avatar";
 import { Badge } from "./ui";
 import { addDays, defaultFacilityId } from "./calendar";
@@ -60,7 +61,7 @@ function text(row: Row | undefined, key: string): string {
 }
 
 function patientName(row: Row): string {
-  return `${text(row, "first_name")} ${text(row, "last_name")}`.trim() || "Unnamed patient";
+  return `${text(row, "first_name")} ${text(row, "last_name")}`.trim() || "Unnamed client";
 }
 
 function MoneyFigure({ figure }: { figure: MoneyState }) {
@@ -89,9 +90,9 @@ function PatientLink({
   onOpenClient: (row: Row) => void;
 }) {
   const clients = visibleRows(data, "clients");
-  if (!clients) return <span className="ws-muted">Patient record not included</span>;
+  if (!clients) return <span className="ws-muted">Client record not included</span>;
   const row = clients.find((client) => client.id === id);
-  if (!row) return <span className="ws-muted">Patient unavailable</span>;
+  if (!row) return <span className="ws-muted">Client unavailable</span>;
   return (
     <button type="button" className="ws-link" onClick={() => onOpenClient(row)}>
       {patientName(row)}
@@ -207,11 +208,11 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
         >
           {schedule.rows.map(item => {
             const person = clients.find(row=>row.id===item.row.client_id);
-            const name = person ? patientName(person) : "Patient unavailable";
+            const name = person ? patientName(person) : "Client unavailable";
             const clinician = data.staff.find(row=>row.id===item.row.clinician_id);
             const group = data.groups.find(row=>row.id===item.row.group_id);
             return <article className="home-visit" key={item.row.id}>
-              <button type="button" className="home-visit-open" aria-label={`Open appointment for ${name} at ${item.localTime}`}
+              <button type="button" className="home-visit-open" aria-label={`Open session for ${name} at ${item.localTime}`}
                 onClick={()=>onNavigate("schedule",`record:${item.row.id}`)}><NxIcon name="chevron-right" size={17}/></button>
               <div className="visit-time"><strong>{item.localTime}</strong><small>{item.timeZone?.split("/").pop()?.replaceAll("_"," ")}</small></div>
               <div className="visit-patient"><span className="visit-kind">{group ? text(group,"title") : label(text(item.row,"kind"))}</span>
@@ -226,17 +227,17 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
           )}
         </Gated>
         {groups === null ? (
-          <p className="ws-muted">Group encounters are not included for this access.</p>
+          <p className="ws-muted">Group sessions are not included for this access.</p>
         ) : (
-          <p>{groups === 0 ? "No group encounters today." : `${groups} group encounter${groups === 1 ? "" : "s"} today.`}</p>
+          <p>{groups === 0 ? "No group sessions today." : `${groups} group session${groups === 1 ? "" : "s"} today.`}</p>
         )}
 
       </section>
       {appointments && today && <section className="schedule-activity">
         <div className="ws-split"><div className="ws-panel-title"><span className="ws-panel-icon"><NxIcon name="reporting"/></span>
-          <div><h2>Appointment volume</h2><small>{text(facility,"name") || zone} · Last 7 days</small></div></div>
-          <div className="volume-total"><b>{Array.from(counts.values()).reduce((n,v)=>n+v,0)}</b><small>patient appointments</small></div></div>
-        <div className="volume-plot" aria-label="Patient appointments by day">{week.map(day=><button type="button" key={day} aria-label={`Open calendar for ${day}, ${counts.get(day)} patient appointments`}
+          <div><h2>Sessions this week</h2><small>{text(facility,"name") || zoneLabel(zone)} · Last 7 days</small></div></div>
+          <div className="volume-total"><b>{Array.from(counts.values()).reduce((n,v)=>n+v,0)}</b><small>sessions</small></div></div>
+        <div className="volume-plot" aria-label="Sessions by day">{week.map(day=><button type="button" key={day} aria-label={`Open calendar for ${day}, ${counts.get(day)} sessions`}
           onClick={()=>onNavigate("schedule","date:"+day)}><span className="volume-track"><b>{counts.get(day)}</b><i style={{height:`${(counts.get(day)||0)/maxCount*72}%`}}/></span>
           <small>{new Date(day+"T12:00Z").toLocaleDateString("en-US",{weekday:"short",timeZone:"UTC"})}</small></button>)}</div>
       </section>}
@@ -282,7 +283,7 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
               return (
                 <article className="ws-row" key={plan.id}>
                   <strong>{text(plan, "title") || "Treatment plan"}</strong>
-                  <span>{overdue ? "Overdue" : "Scheduled"} {due}</span>
+                  <span>{overdue ? "Overdue since" : "Due"} {formatDateText(due) || due}</span>
                   <PatientLink data={data} id={plan.client_id} onOpenClient={onOpenClient} />
                 </article>
               );
@@ -313,7 +314,7 @@ function ClinicalHome(props: RoleWorkspaceProps & { now: Date; today: string | n
               >
                 <span className="queue-rank">{label(text(task,"priority"))}</span><strong>{text(task, "title") || "Untitled task"}</strong>
                 <small className="ws-muted">
-                  {label(text(task,"status"))} · {text(task, "due_date") || "No due date"}
+                  {label(text(task,"status"))} · {text(task, "due_date") ? `Due ${formatDateText(text(task, "due_date"))}` : "No due date"}
                 </small>
               </button>
             ))}
@@ -378,7 +379,7 @@ function BillingHome(props: RoleWorkspaceProps & { now: Date; today: string | nu
     <div className="ws-billing">
       <section className="ws-ledger" aria-labelledby="ws-ledger-heading">
         <div>
-          <span className="ws-kicker">Billing activity · {zone}</span>
+          <span className="ws-kicker">Billing activity · {zoneLabel(zone)}</span>
           <h2 id="ws-ledger-heading">Charges, cash, and adjustments</h2>
           <FlowControls
             from={activeRange.from}
@@ -632,7 +633,7 @@ function ExecutiveHome(props: RoleWorkspaceProps & { now: Date; today: string | 
           </p>
           <button type="button" className="ws-row" disabled={!workload.sessions.available} onClick={() => onNavigate("schedule", "pending")}>
             <strong>{workload.sessions.available ? workload.sessions.scheduled : "Not available"}</strong>
-            <span>Client appointments awaiting attendance</span>
+            <span>Sessions awaiting attendance</span>
           </button>
           <p>
             Draft notes: {workload.drafts.available ? workload.drafts.count : "Not available"}.
@@ -643,7 +644,7 @@ function ExecutiveHome(props: RoleWorkspaceProps & { now: Date; today: string | 
       </div>
       <section className="ws-ledger" aria-labelledby="ws-actuals-heading">
         <div>
-          <span className="ws-kicker">Financial actuals · {zone}</span>
+          <span className="ws-kicker">Financial actuals · {zoneLabel(zone)}</span>
           <h2 id="ws-actuals-heading">Financial activity</h2>
           <FlowControls
             from={activeRange.from}

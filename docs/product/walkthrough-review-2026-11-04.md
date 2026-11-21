@@ -3,9 +3,15 @@
 ## Open design work requested November 18, 2026
 
 - [x] Owner selected option B with one path through the wavy outer edge. Use three rings for the full mark and one wider ring for the small mark.
-- [ ] Review and redo every form. Walk through each form as the person who uses it, including field order, defaults, validation and recovery after an error.
-- [ ] Redesign all action buttons across the app. Review their labels, placement and interaction states in the workflows where people use them.
+- [ ] Review and redo every form. Walk through each form as the person who uses it, including field order, defaults, validation and recovery after an error. *Done on `feature/forms-brand-profile-photos` on November 21 and walked end to end; awaiting the owner's review. See [forms and flows](forms-and-flows-2026-11-21.md).*
+- [ ] Redesign all action buttons across the app. Review their labels, placement and interaction states in the workflows where people use them. *Form and dialog buttons were brought to the brand guide's states and named for what they do in the same pass. Buttons outside forms were not reviewed one by one.*
 - [ ] Review calendar cards in context. Check what is clickable, what opens, how selected and locked states look and behave, and what staff can customize.
+
+Added November 21, 2026:
+
+- [ ] Profile pictures, ways to add them, and several Nexus defaults. *Built in the same pass; awaiting review.*
+- [ ] Superbills. *Built in the same pass; awaiting review. Decisions open: who may issue one, and where provider and practice identifiers live.*
+- [ ] Animation and motion: the owner's stated next step after forms.
 
 ## Review outcome
 

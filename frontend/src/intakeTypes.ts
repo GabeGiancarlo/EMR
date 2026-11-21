@@ -29,10 +29,10 @@ function status(input: string): IntakeStatus {
 }
 export function parseIntake(input: unknown, clientId: string): IntakeData {
   const root = object(input);
-  if (text(root, "client_id") !== clientId) throw Error("The intake response belongs to a different patient. Refresh before continuing.");
+  if (text(root, "client_id") !== clientId) throw Error("The intake response belongs to a different client. Refresh before continuing.");
   const cases = array(root.cases, 100).map(raw => {
     const row = object(raw);
-    if (text(row, "client_id") !== clientId) throw Error("The intake case belongs to a different patient.");
+    if (text(row, "client_id") !== clientId) throw Error("The intake case belongs to a different client.");
     const fields = Object.fromEntries(["id", "client_id", "episode_id", "facility_id", "level_of_care", "starts_on", "owner_id", "referral_type", "referrer_name", "referrer_contact", "referral_reason", "received_on", "disposition_reason", "created_at", "updated_at"].map(k => [k, text(row, k)]));
     const checklist = array(row.checklist).map(raw => { const item = object(raw); return { code: text(item, "code"), title: text(item, "title"), detail: text(item, "detail"), required: bool(item, "required"), passed: bool(item, "passed") }; });
     const events = array(row.events).map(raw => { const e = object(raw); return { id: text(e, "id"), from_status: status(text(e, "from_status")), to_status: status(text(e, "to_status")), reason: text(e, "reason"), actor_id: text(e, "actor_id"), created_at: text(e, "created_at") }; });

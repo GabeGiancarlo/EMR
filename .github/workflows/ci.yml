@@ -107,6 +107,10 @@ jobs:
         run: cargo test --locked --test intake_postgres -- --ignored
       - name: PostgreSQL patient identity and admission integration
         run: cargo test --locked --test patient_identity_postgres --test admissions_postgres -- --ignored
+      - name: PostgreSQL profile picture access and storage integration
+        run: cargo test --locked --test profile_pictures_postgres -- --ignored
+      - name: PostgreSQL superbill access and totals integration
+        run: cargo test --locked --test superbill_postgres -- --ignored
       - name: PostgreSQL program configuration and routing integration
         run: cargo test --locked --test program_catalog_postgres --test program_admission_postgres --test program_services_postgres -- --ignored
       - name: PostgreSQL canonical claim identity and migration integration

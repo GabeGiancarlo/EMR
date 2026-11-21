@@ -1,0 +1,193 @@
+/*
+ * Profile pictures.
+ *
+ * A person's picture is a Nexus tile: three firm corners and one soft corner, top right,
+ * about a third of the side, as the brand guide sets for avatars. It holds an uploaded
+ * photo, a chosen motif, or the automatic default. Default tiles pair two role tokens, so
+ * they follow the light and dark themes.
+ */
+.nx-avatar {
+  --nx-avatar-size: 40px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--nx-avatar-size);
+  height: var(--nx-avatar-size);
+  overflow: hidden;
+  border-radius: calc(var(--nx-avatar-size) * 0.1) calc(var(--nx-avatar-size) * 0.34) calc(var(--nx-avatar-size) * 0.1) calc(var(--nx-avatar-size) * 0.1);
+  background: var(--nx-selected);
+  color: var(--nx-on-selected);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 16%, transparent);
+  line-height: 0;
+}
+.nx-avatar--sm { --nx-avatar-size: 32px; }
+.nx-avatar--lg { --nx-avatar-size: 52px; }
+.nx-avatar--xl { --nx-avatar-size: 96px; }
+.nx-avatar > svg {
+  width: 68%;
+  height: 68%;
+}
+.nx-avatar > img,
+.nx-avatar > .nx-avatar-portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.nx-avatar[data-picture="photo"] {
+  background: var(--nx-surface-subtle);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nx-text) 14%, transparent);
+}
+/* Six pairings from the palette's roles: lichen, oat, clay, creek, pollen, and solid pine. */
+.nx-avatar.tone-1 { background: var(--nx-surface-subtle); color: var(--nx-text-secondary); }
+.nx-avatar.tone-2 { background: var(--nx-accent-soft); color: var(--nx-accent); }
+.nx-avatar.tone-3 { background: var(--nx-info-bg); color: var(--nx-info); }
+.nx-avatar.tone-4 { background: var(--nx-warning-bg); color: var(--nx-warning); }
+.nx-avatar.tone-5 { background: var(--nx-brand); color: var(--nx-page); }
+
+/* A picture that opens the picker. */
+.avatar-button {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  padding: 0;
+  border: 0;
+  border-radius: 5px 18px 5px 5px;
+  background: transparent;
+  cursor: pointer;
+}
+.avatar-button .avatar-edit {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--nx-surface);
+  border-radius: 3px 8px 3px 3px;
+  background: var(--nx-action);
+  color: var(--nx-on-action);
+  transition: background-color var(--nx-motion-feedback) var(--nx-ease);
+}
+.avatar-button:hover .avatar-edit {
+  background: var(--nx-action-hover);
+}
+.chart-person > div strong {
+  font-size: 18px;
+}
+.visit-profile {
+  border-radius: 4px 14px 4px 4px;
+}
+.group-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 5px 18px 5px 5px;
+  background: var(--nx-selected);
+  color: var(--nx-on-selected);
+}
+.profile-trigger .nx-avatar {
+  flex: 0 0 auto;
+}
+.profile-panel .profile-picture-action {
+  gap: 10px;
+}
+.profile-panel .profile-picture-action .nx-avatar {
+  --nx-avatar-size: 24px;
+}
+
+/* ----------------------------------------------------------- the picker */
+.photo-current {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.photo-current > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.photo-current strong {
+  font: 600 19px/1.25 var(--nx-font-display);
+  letter-spacing: var(--nx-tracking-display);
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
+}
+.photo-current span[role="status"] {
+  font-size: 14px;
+  color: var(--nx-text-secondary);
+}
+.photo-drop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--nx-field-line);
+  border-radius: var(--nx-field-radius);
+  background: color-mix(in srgb, var(--nx-surface-subtle) 45%, var(--nx-surface));
+  transition: background-color var(--nx-motion-feedback) var(--nx-ease), border-color var(--nx-motion-feedback) var(--nx-ease);
+}
+.photo-drop[data-over] {
+  border-color: var(--nx-brand);
+  background: var(--nx-selected);
+}
+.photo-drop > svg {
+  color: var(--nx-brand-mid);
+}
+.photo-drop strong {
+  display: block;
+  font: 600 14.5px/1.3 var(--nx-font-ui);
+  color: var(--nx-text);
+}
+.photo-drop small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--nx-text-secondary);
+}
+.photo-defaults {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 8px;
+}
+.photo-default {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--nx-field-radius);
+  background: transparent;
+  color: var(--nx-text-secondary);
+  font: 400 12.5px/1.2 var(--nx-font-ui);
+  cursor: pointer;
+  transition: background-color var(--nx-motion-feedback) var(--nx-ease), border-color var(--nx-motion-feedback) var(--nx-ease);
+}
+.photo-default:hover:enabled {
+  background: var(--nx-surface-subtle);
+  color: var(--nx-text);
+}
+.photo-default[aria-checked="true"] {
+  border-color: var(--nx-brand);
+  background: color-mix(in srgb, var(--nx-selected) 55%, var(--nx-surface));
+  color: var(--nx-on-selected);
+  font-weight: 600;
+}
+.photo-note {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--nx-text-secondary);
+}
+@media (max-width: 640px) {
+  .photo-drop {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .photo-drop > .button {
+    grid-column: 1 / -1;
+  }
+}

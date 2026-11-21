@@ -352,6 +352,29 @@ def shield():
     return m & ~line([(8.3, 11.4), (11.0, 14.1), (15.8, 8.7)], 2.0)
 
 
+def leaf_icon():
+    """One leaf on its stem, midrib carved. Marks a chosen day and anything that grows from a date."""
+    m = leaf(4.6, 19.4, -45, 21.5, 12.4) | cap(3.2, 20.8, 6.6, 17.4, 2.3)
+    return m & ~cap(9.2, 14.8, 15.6, 8.4, 1.7)
+
+
+def upload():
+    return cap(12, 4.6, 12, 15.4, 2.7) | line([(6.6, 9.2), (12, 3.8), (17.4, 9.2)], 2.7) | cap(4.4, 20.3, 19.6, 20.3, 2.7)
+
+
+def camera():
+    """A profile photo: the tile with a lens carved out."""
+    m = tile(2.5, 6.8, 21.5, 20, soft=5) | cap(8.4, 5.6, 12.4, 5.6, 3.2)
+    return m & ~ring(12, 13.4, 3.3, 1.9)
+
+
+def print_():
+    """A printed page leaving the tile: superbills and anything else that goes on paper."""
+    body = tile(2.8, 8.4, 21.2, 18.0, soft=4.6)
+    sheets = ((X > 7.0) & (X < 17.0) & (Y > 3.0) & (Y < 9.0)) | ((X > 7.0) & (X < 17.0) & (Y > 14.6) & (Y < 21.2))
+    return (body & ~((X > 5.6) & (X < 18.4) & (Y > 13.0) & (Y < 14.7))) | sheets
+
+
 ICONS = {
     "overview": overview, "clients": clients, "group": group, "schedule": schedule,
     "documentation": documentation, "tasks": tasks, "billing": billing, "reporting": reporting,
@@ -364,6 +387,7 @@ ICONS = {
     "chevron-down": chevron("down"), "chevron-up": chevron("up"), "chevron-left": chevron("left"),
     "chevron-right": chevron("right"), "arrow-left": arrow_left, "arrow-right": arrow_right,
     "sun": sun, "moon": moon, "logout": logout, "menu": menu, "link": link, "shield": shield,
+    "leaf": leaf_icon, "upload": upload, "camera": camera, "print": print_,
 }
 
 

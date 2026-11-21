@@ -40,6 +40,8 @@ export type Bootstrap = Record<Resource, Row[]> & {
   care_programs?: Row[];
   program_services?: Row[];
   program_configuration?: boolean;
+  /** Chosen pictures by person id: a motif name or "photo:<tag>". Absent means the automatic default. */
+  avatars?: Record<string, string>;
   permissions?: Partial<Record<Resource | "audit" | "payment_reversals", { read: boolean; write: boolean }>>;
   metrics: {
     active_clients: number;
@@ -134,14 +136,15 @@ const acronyms: Record<string, string> = {
   oauth: "OAuth",
   cpt: "CPT",
 };
+/** A stored value as people read it: sentence case, as the brand voice asks ("No show", "In progress"). */
 export const label = (text: string): string =>
   text
     .replace(/_/g, " ")
     .replace(
       /\b\w+/g,
-      (word) =>
+      (word, at: number) =>
         acronyms[word.toLowerCase()] ||
-        word.charAt(0).toUpperCase() + word.slice(1),
+        (at === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word),
     );
 export const date = (input: unknown, time = false): string => {
   if (!input) return "Not set";

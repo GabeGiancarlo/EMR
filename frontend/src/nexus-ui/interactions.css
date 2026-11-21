@@ -3,175 +3,6 @@
   --ui-line: color-mix(in srgb, var(--nx-border) 66%, var(--nx-surface));
   --ui-shadow: 0 10px 32px color-mix(in srgb, var(--nx-night) 12%, transparent);
 }
-.nx-choice,
-.nx-date {
-  position: relative;
-  display: inline-flex;
-  min-width: 0;
-  max-width: 100%;
-  vertical-align: middle;
-}
-.form-field :is(.nx-choice, .nx-date),
-label > :is(.nx-choice, .nx-date) {
-  width: 100%;
-}
-.nx-choice > select,
-.nx-date > input {
-  appearance: none;
-  min-width: 0;
-  width: 100%;
-  margin: 0;
-  padding: 9px 38px 9px 12px;
-  border: 1px solid var(--nx-border-control);
-  border-radius: 6px;
-  background: var(--nx-surface);
-  color: var(--nx-text);
-  font: inherit;
-}
-.nx-choice > select {
-  cursor: pointer;
-}
-.nx-choice > svg {
-  position: absolute;
-  pointer-events: none;
-  inset-inline-end: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--nx-text-secondary);
-}
-.nx-date > button {
-  position: absolute;
-  right: 3px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  color: var(--nx-brand);
-  background: transparent;
-}
-.nx-date > button:hover {
-  background: var(--nx-brand-soft);
-}
-.nx-flyout {
-  position: fixed;
-  inset: auto;
-  margin: 0;
-  box-sizing: border-box;
-  z-index: 1000;
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--nx-border-control);
-  border-radius: 10px;
-  padding: 6px;
-  box-shadow: var(--ui-shadow);
-  color: var(--nx-text);
-  background: var(--nx-surface);
-  font: 400 15px/1.35 var(--nx-font-ui);
-  text-align: left;
-  letter-spacing: normal;
-  text-transform: none;
-}
-.nx-options [role="option"] {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 10px;
-  min-height: 36px;
-  border-radius: 5px;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.nx-options [aria-selected="true"] {
-  color: var(--nx-on-selected);
-  background: var(--nx-selected);
-  font-weight: 650;
-}
-.nx-options [data-active="true"] {
-  box-shadow: inset 0 0 0 1px var(--nx-border-control);
-  background: var(--nx-surface-subtle);
-}
-.nx-options [aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: default;
-}
-.nx-date-menu {
-  padding: 12px;
-}
-.nx-date-menu button {
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--nx-text);
-  min-height: 33px;
-  padding: 4px;
-  font: 600 14px/1.2 var(--nx-font-ui);
-}
-.nx-date-menu button:hover:enabled {
-  background: var(--nx-selected);
-  color: var(--nx-on-selected);
-}
-.nx-month-nav,
-.nx-picker-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.nx-month-nav > button {
-  width: 32px;
-  font-size: 22px;
-}
-.nx-date-menu .nx-month-nav input {
-  width: 70px;
-  min-width: 0;
-  height: 32px;
-  padding: 4px 6px;
-  border: 1px solid var(--ui-line);
-  border-radius: 4px;
-  font: inherit;
-  color: inherit;
-  background: var(--nx-page);
-}
-.nx-date-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 2px;
-  margin: 10px 0;
-}
-.nx-date-grid small {
-  text-align: center;
-  color: var(--nx-text-secondary);
-  font-size: 12px;
-  padding: 4px 0;
-}
-.nx-date-grid [aria-pressed="true"],
-.nx-date-grid [aria-pressed="true"]:hover:enabled {
-  background: var(--nx-action);
-  color: var(--nx-on-action);
-}
-.nx-date-grid [aria-current="date"] {
-  box-shadow: inset 0 0 0 1px var(--nx-brand);
-}
-.nx-date-grid [data-outside="true"] {
-  color: var(--nx-text-secondary);
-  font-weight: 400;
-}
-.nx-date-menu button:disabled {
-  opacity: 0.38;
-}
-.nx-picker-foot {
-  border-top: 1px solid var(--ui-line);
-  padding-top: 6px;
-}
-.nx-picker-foot button {
-  padding-inline: 10px;
-}
 .button,
 .ws-action,
 .icon-button,
@@ -183,22 +14,6 @@ label > :is(.nx-choice, .nx-date) {
     box-shadow 140ms ease,
     transform 140ms ease,
     border-color 140ms ease;
-}
-.button,
-.ws-action {
-  gap: 8px;
-  justify-content: center;
-  border-radius: 6px 11px 6px 6px;
-}
-.button:hover:enabled,
-.ws-action:hover:enabled {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px var(--nx-vein-strong);
-}
-.button:active:enabled,
-.ws-action:active:enabled,
-.icon-button:active:enabled {
-  transform: translateY(1px);
 }
 .button.text,
 .button.text.small,
@@ -264,121 +79,6 @@ tbody tr:hover {
   box-shadow: none;
   outline: 0;
   background: transparent;
-}
-.modal {
-  width: min(740px, calc(100vw - 28px));
-  max-height: calc(100dvh - 32px);
-  border-radius: 12px;
-}
-.modal-head {
-  padding: 20px clamp(16px, 3vw, 28px);
-  background: linear-gradient(
-    110deg,
-    var(--nx-surface),
-    color-mix(in srgb, var(--nx-brand-soft) 42%, var(--nx-surface))
-  );
-}
-.modal-head h2 {
-  font-size: clamp(22px, 2vw, 28px);
-}
-.modal-head p {
-  margin: 5px 0 0;
-  line-height: 1.45;
-}
-.form-body {
-  padding: 20px clamp(16px, 3vw, 28px);
-}
-.form-field label {
-  font-size: 14px;
-  color: var(--nx-text);
-  font-weight: 650;
-}
-.form-field small {
-  line-height: 1.4;
-  font-size: 13px;
-}
-.form-grid {
-  gap: 16px 20px;
-}
-.form-field
-  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
-  min-width: 0;
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-.form-field .nx-choice select,
-.form-field .nx-date > input {
-  padding-right: 38px;
-}
-.record-section,
-.client-registration fieldset {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.record-section + .record-section,
-.client-registration fieldset + fieldset {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid var(--ui-line);
-}
-.record-section legend,
-.client-registration legend {
-  padding: 0 0 9px;
-  color: var(--nx-brand);
-  font-size: 17px;
-  font-weight: 700;
-}
-.registration-steps {
-  display: flex;
-  gap: 8px;
-  list-style: none;
-  padding: 0;
-  margin: 0 0 20px;
-}
-.registration-steps li {
-  flex: 1;
-  border-bottom: 3px solid var(--ui-line);
-  padding: 0 0 7px;
-  font-size: 14px;
-  color: var(--nx-text-secondary);
-}
-.registration-steps [aria-current] {
-  border-color: var(--nx-brand);
-  font-weight: 700;
-  color: var(--nx-brand);
-}
-.form-disclosure {
-  margin-top: 12px;
-  padding: 10px 13px;
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
-}
-.form-disclosure summary {
-  cursor: pointer;
-  font-weight: 650;
-}
-.form-disclosure[open] summary {
-  margin-bottom: 12px;
-}
-.registration-summary {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px 18px;
-  margin: 12px 0 18px;
-}
-.registration-summary dd {
-  margin: 0;
-  font-weight: 650;
-}
-.registration-summary dt {
-  color: var(--nx-text-secondary);
-}
-.modal-foot {
-  gap: 8px;
-  padding: 14px clamp(16px, 3vw, 28px);
-  flex-wrap: wrap;
 }
 .brand .nx-logo {
   max-width: 100%;
@@ -851,17 +551,9 @@ button.cal-chip.state-cancelled strong {
   margin: 0 0 5px;
   font: 600 clamp(24px, 3vw, 33px) / 1.15 var(--nx-font-display);
 }
-.cal-event-person .person-avatar,
-.group-avatar {
-  width: 54px;
-  height: 54px;
-}
 .group-avatar {
   display: grid;
   place-items: center;
-  color: var(--chip-edge);
-  background: var(--nx-surface);
-  border-radius: 12px;
 }
 .cal-facts {
   display: grid;
@@ -1048,7 +740,6 @@ button.cal-chip.state-cancelled strong {
 .visit-profile {
   grid-area: avatar;
   display: inline-grid;
-  border-radius: 50%;
 }
 .home-visit > svg {
   grid-area: arrow;
@@ -1056,32 +747,6 @@ button.cal-chip.state-cancelled strong {
 }
 .home-visit > .badge {
   grid-area: status;
-}
-.person-avatar {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 41px;
-  height: 41px;
-  border-radius: 50%;
-  color: #234634;
-  background: #d9e9d8;
-  box-shadow: inset 0 0 0 1px #25332726;
-  font: 700 14px/1 var(--nx-font-ui);
-}
-.person-avatar.tone-1,
-.person-avatar.tone-4 {
-  background-color: #dce8f2;
-  color: #2a4b5c;
-}
-.person-avatar.tone-2,
-.person-avatar.tone-5 {
-  background-color: #eadfed;
-  color: #604861;
-}
-.person-avatar.tone-3 {
-  background-color: #f2dfc8;
-  color: #684b2d;
 }
 .volume-total {
   display: flex;
@@ -1256,9 +921,8 @@ button.cal-chip.state-cancelled strong {
   .home-visit > svg {
     display: none;
   }
-  .visit-profile .person-avatar {
-    width: 35px;
-    height: 35px;
+  .visit-profile .nx-avatar {
+    --nx-avatar-size: 34px;
   }
   .visit-time small {
     display: none;

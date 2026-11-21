@@ -25,7 +25,7 @@ export default function WorkspaceSearch({ data, onSelect }: { data: Bootstrap; o
     <button type="button" className="workspace-search-trigger" onClick={() => setOpen(true)} aria-label="Search workspace">
       <Icon name="search" size={17} /><span>Search workspace</span><kbd>Ctrl K</kbd>
     </button>
-    {open && <Modal title="Search your workspace" description="Find clients, appointments, documentation, financial records, and team members available to your role." onClose={close}>
+    {open && <Modal icon="search" title="Search your workspace" description="Find clients, appointments, documentation, financial records, and team members available to your role." onClose={close}>
       <div className="workspace-search-body">
         <label className="sr-only" htmlFor="global-workspace-query">Search records</label>
         <input ref={input} id="global-workspace-query" type="search" autoComplete="off" placeholder="Name, task, claim reference, or form…" value={query} onChange={event => setQuery(event.target.value)} />

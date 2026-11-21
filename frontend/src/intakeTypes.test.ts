@@ -4,9 +4,9 @@ import { allowedIntakeTransitions, parseIntake, transitionBlockers } from "./int
 
 const caseRow = { id: "case", client_id: "patient", episode_id: "episode", facility_id: "facility", level_of_care: "iop", starts_on: "2026-11-02", owner_id: "owner", referral_type: "self", referrer_name: "", referrer_contact: "", referral_reason: "Requested care", received_on: "2026-11-02", status: "screening", disposition_reason: "Reviewed referral", created_at: "2026-11-02T12:00:00Z", updated_at: "2026-11-02T12:00:00Z", checklist: [{ code: "identity_confirmation", title: "Identity", required: true, passed: false, detail: "Review identity" }, { code: "admission_start_date", title: "Start date", required: false, passed: false, detail: "Future date" }, { code: "open_tasks", title: "Tasks", required: false, passed: false, detail: "Informational" }], events: [] };
 const fixture = () => ({ client_id: "patient", cases: [structuredClone(caseRow)], identity_checks: [] });
-test("intake parsing refuses a different patient, malformed readiness, and unknown state", () => {
-  assert.throws(() => parseIntake(fixture(), "another"), /different patient/);
-  const wrong = fixture(); wrong.cases[0].client_id = "another"; assert.throws(() => parseIntake(wrong, "patient"), /different patient/);
+test("intake parsing refuses a different client, malformed readiness, and unknown state", () => {
+  assert.throws(() => parseIntake(fixture(), "another"), /different client/);
+  const wrong = fixture(); wrong.cases[0].client_id = "another"; assert.throws(() => parseIntake(wrong, "patient"), /different client/);
   const checks = fixture(); (checks.cases[0].checklist[0] as Record<string, unknown>).passed = "false"; assert.throws(() => parseIntake(checks, "patient"), /checks could not be read/);
   const state = fixture(); state.cases[0].status = "complete"; assert.throws(() => parseIntake(state, "patient"), /status is not recognized/);
   const duplicate = fixture(); duplicate.cases.push(structuredClone(caseRow)); assert.throws(() => parseIntake(duplicate, "patient"), /repeated cases/);
